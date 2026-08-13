@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
   normalizeVoiceWidgetAttributes,
+  claimIdleWorkUnit,
+  createVoiceWidgetQueueIdleEvent,
   parseVoiceWidgetEvent,
   parseVoiceWidgetEventDetail,
   VOICE_WIDGET_DEFAULT_STORAGE_KEY,
@@ -17,6 +19,7 @@ import {
   VOICE_WIDGET_BANNER_API_VERSION,
   VOICE_WIDGET_SPEECH_STARTED_EVENT,
   VOICE_WIDGET_SPEECH_ENDED_EVENT,
+  VOICE_WIDGET_QUEUE_IDLE_EVENT,
 } from "./voice-widget-contract.ts";
 
 const base = { source: VOICE_WIDGET_SOURCE, version: VOICE_WIDGET_VERSION } as const;
@@ -118,6 +121,12 @@ describe("voice widget Host Contract v2", () => {
       ),
     ).toBeNull();
     expect(parseVoiceWidgetEventDetail({ ...base, type: "unknown" })).toBeNull();
+    expect(
+      parseVoiceWidgetEventDetail({ ...base, type: "queue-idle", workUnitId: "turn-1" }),
+    ).toMatchObject({ type: "queue-idle", workUnitId: "turn-1" });
+    expect(
+      parseVoiceWidgetEventDetail({ ...base, type: "queue-idle", workUnitId: "  " }),
+    ).toBeNull();
   });
 
   it("requires the exact event name and preserves bubbling/composed host parsing", () => {
@@ -148,6 +157,20 @@ describe("voice widget Host Contract v2", () => {
       expect(parseVoiceWidgetEvent(new CustomEvent(removed, { detail }), "ses_123")).toBeNull();
     }
     expect(VOICE_WIDGET_PARK_SESSION_EVENT).toBe("say-to-me-park-session");
+    expect(VOICE_WIDGET_QUEUE_IDLE_EVENT).toBe("say-to-me-queue-idle");
+    const idle = createVoiceWidgetQueueIdleEvent(" turn-7 ");
+    expect(parseVoiceWidgetEvent(idle)).toMatchObject({
+      type: "queue-idle",
+      workUnitId: "turn-7",
+    });
+  });
+
+  it("claims each idle work unit once", () => {
+    const seen = new Set<string>();
+    expect(claimIdleWorkUnit(seen, "turn-1")).toBe("turn-1");
+    expect(claimIdleWorkUnit(seen, "turn-1")).toBeNull();
+    expect(claimIdleWorkUnit(seen, "  ")).toBeNull();
+    expect(claimIdleWorkUnit(seen, "turn-2")).toBe("turn-2");
   });
   it("accepts only versioned speech activity events with note ids", () => {
     expect(VOICE_WIDGET_BANNER_API_VERSION).toBe(2);
