@@ -1,0 +1,48 @@
+---
+import { renderExtraMarkdownHtml } from "../../../server/markdown/extra-markdown-html.ts";
+
+if (!import.meta.env.DEV) {
+  return new Response(null, { status: 404 });
+}
+
+Astro.response.headers.set("Cross-Origin-Opener-Policy", "same-origin");
+Astro.response.headers.set("Cross-Origin-Embedder-Policy", "require-corp");
+
+const galleryMarkdownHtml = renderExtraMarkdownHtml(`# Preservation sample
+
+Paragraph with *emphasis*, **strong**, ~~strike~~, \`inline code\`, and a [safe link](https://example.com).
+
+- [x] checked task
+- [ ] open task
+
+| Fixture | Value |
+| --- | ---: |
+| row | 42 |
+
+> A blockquote stays a blockquote.
+
+~~~ts
+const fixture = "fenced code";
+~~~
+
+<span onclick="alert('xss')">safe raw HTML</span> [unsafe](javascript:alert(1))`);
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>STM Voice Widget Components</title>
+  </head>
+  <body>
+    <main id="voice-widget-gallery" data-markdown-html={galleryMarkdownHtml}></main>
+    <script>
+      import { createRoot } from "solid-js";
+      import { mountVoiceWidgetGallery } from "../../dev/voice-widget-gallery.tsx";
+
+      const root = document.getElementById("voice-widget-gallery");
+      createRoot(() => mountVoiceWidgetGallery(root, { markdownHtml: root?.dataset.markdownHtml, mode: new URLSearchParams(location.search).get("mode") === "live" ? "live" : "fixture" }));
+    </script>
+  </body>
+</html>

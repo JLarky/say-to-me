@@ -1,0 +1,237 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1781566672002,
+      "tag": "0000_wonderful_nico_minoru",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1781571989510,
+      "tag": "0001_foamy_reaper",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1781616543699,
+      "tag": "0002_little_king_bedlam",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1781838193964,
+      "tag": "0003_amused_tusk",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1781849439945,
+      "tag": "0004_fat_dreadnoughts",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1781877360121,
+      "tag": "0005_clear_flatman",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1782014454890,
+      "tag": "0006_chunky_marvel_apes",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1782022523894,
+      "tag": "0007_cheerful_amphibian",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1782786252698,
+      "tag": "0008_sour_forgotten_one",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1782841226308,
+      "tag": "0009_cynical_magneto",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1782857295533,
+      "tag": "0010_nasty_skin",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1782929219694,
+      "tag": "0011_red_trauma",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1782954900000,
+      "tag": "0012_claude_delivery_jobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1783003965853,
+      "tag": "0013_romantic_rawhide_kid",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1783010000000,
+      "tag": "0014_cursor_delivery_jobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1783043536834,
+      "tag": "0015_premium_carlie_cooper",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1783281721479,
+      "tag": "0016_breezy_psynapse",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1783817370085,
+      "tag": "0017_nebulous_goliath",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1784223934908,
+      "tag": "0018_concerned_solo",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1784266142834,
+      "tag": "0019_natural_jocasta",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1784309745312,
+      "tag": "0020_sleepy_grandmaster",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1784316504917,
+      "tag": "0021_white_hobgoblin",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1784320915263,
+      "tag": "0022_grey_tana_nile",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1784320915264,
+      "tag": "0023_freezing_krista_starr",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1784450000024,
+      "tag": "0024_spaces_sort_order",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1784509200025,
+      "tag": "0025_external_cli_prompt_dispatched",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1784524400026,
+      "tag": "0026_external_cli_dispatch_key",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "6",
+      "when": 1784600000027,
+      "tag": "0027_t3_server_instances",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "6",
+      "when": 1785253734436,
+      "tag": "0028_shallow_hemingway",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1785334721428,
+      "tag": "0029_woozy_proteus",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1785513600030,
+      "tag": "0030_paseo_provider",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "6",
+      "when": 1785776662750,
+      "tag": "0031_paseo_message_author",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1785780000000,
+      "tag": "0032_paseo_message_author_name",
+      "breakpoints": true
+    }
+  ]
+}

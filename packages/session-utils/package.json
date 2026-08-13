@@ -1,0 +1,32 @@
+{
+  "name": "@say-to-me/session-utils",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./cli-resume-command": {
+      "import": "./src/cli-resume-command.ts",
+      "default": "./src/cli-resume-command.ts"
+    },
+    "./opencode-context-usage": {
+      "import": "./src/opencode-context-usage.ts",
+      "default": "./src/opencode-context-usage.ts"
+    },
+    "./jarvis-ordering": {
+      "import": "./src/jarvis-ordering.ts",
+      "default": "./src/jarvis-ordering.ts"
+    },
+    "./session-list-sections": {
+      "import": "./src/session-list-sections.ts",
+      "default": "./src/session-list-sections.ts"
+    },
+    "./jarvis-timer-labels": {
+      "import": "./src/jarvis-timer-labels.ts",
+      "default": "./src/jarvis-timer-labels.ts"
+    },
+    "./waiting-state-classify": {
+      "import": "./src/waiting-state-classify.ts",
+      "default": "./src/waiting-state-classify.ts"
+    }
+  }
+}

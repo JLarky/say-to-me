@@ -1,0 +1,80 @@
+import { describe, expect, it } from "vite-plus/test";
+import { buildSayToMeOpenApiSpec } from "./merged-api.ts";
+
+const HTTP_METHODS = new Set(["get", "post", "put", "patch", "delete", "head", "options"]);
+
+function listOperations(spec: ReturnType<typeof buildSayToMeOpenApiSpec>) {
+  const ops: Array<{
+    operationId: string;
+    method: string;
+    path: string;
+    summary?: string;
+    description?: string;
+    parameters: Array<{ name: string; description?: string }>;
+  }> = [];
+  for (const [path, methods] of Object.entries(spec.paths ?? {})) {
+    for (const [method, operation] of Object.entries(methods ?? {})) {
+      if (!HTTP_METHODS.has(method)) continue;
+      const op = operation as {
+        operationId?: string;
+        summary?: string;
+        description?: string;
+        parameters?: Array<{ name?: string; description?: string }>;
+      };
+      ops.push({
+        operationId: op.operationId ?? `${method} ${path}`,
+        method,
+        path,
+        summary: op.summary,
+        description: op.description,
+        parameters: (op.parameters ?? []).map((p) => ({
+          name: p.name ?? "",
+          description: p.description,
+        })),
+      });
+    }
+  }
+  return ops;
+}
+
+describe("generated OpenAPI operation metadata", () => {
+  const spec = buildSayToMeOpenApiSpec();
+  const ops = listOperations(spec);
+
+  it("includes the full Effect API surface", () => {
+    expect(ops.length).toBeGreaterThanOrEqual(80);
+  });
+
+  it("requires a non-empty summary and description on every operation", () => {
+    const missing = ops.filter(
+      (op) =>
+        !op.summary?.trim() ||
+        !op.description?.trim() ||
+        !op.operationId ||
+        op.operationId.includes(" "),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it("documents representative health and session operations", () => {
+    const byId = Object.fromEntries(ops.map((op) => [op.operationId, op]));
+
+    expect(byId["health.getHealth"]?.summary).toMatch(/health/i);
+    expect(byId["health.getHealth"]?.description?.length).toBeGreaterThan(20);
+
+    expect(byId["sessions.listSessions"]?.summary).toMatch(/session/i);
+    expect(byId["sessions.listSessions"]?.description?.length).toBeGreaterThan(20);
+
+    expect(byId["queue.getSessionQueue"]?.summary).toMatch(/queue|message/i);
+    expect(byId["message-create.createSessionMessage"]?.summary).toMatch(/message|send|create/i);
+  });
+
+  it("adds descriptions for non-obvious query parameters on listSessions", () => {
+    const list = ops.find((op) => op.operationId === "sessions.listSessions");
+    expect(list).toBeDefined();
+    const byName = Object.fromEntries(list!.parameters.map((p) => [p.name, p.description]));
+    // These flags are not self-explanatory from the name alone.
+    expect(byName.includeCachedStatus?.length).toBeGreaterThan(10);
+    expect(byName.jarvisOverviewDetails?.length).toBeGreaterThan(10);
+  });
+});

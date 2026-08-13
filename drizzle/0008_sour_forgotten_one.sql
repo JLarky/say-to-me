@@ -1,0 +1,1 @@
+ALTER TABLE `opencode_delivery_jobs` ADD `force` integer DEFAULT 0 NOT NULL;

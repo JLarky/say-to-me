@@ -1,0 +1,19 @@
+{
+  "name": "@say-to-me/provider-models",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "dependencies": {
+    "@say-to-me/runtime-validation": "0.1.0",
+    "arktype": "^2.2.0"
+  },
+  "peerDependencies": {
+    "effect": "^3.21.0"
+  }
+}

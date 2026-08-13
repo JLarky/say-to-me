@@ -1,0 +1,60 @@
+export type ApiMessage = {
+  id: number;
+  text: string;
+  extraMarkdown?: string | null;
+  author: string;
+  status: string;
+  pinned?: number;
+  sessionId: string;
+  parentId: number | null;
+  attachedSessionId: string | null;
+  opencodeDeliveryStatus: string | null;
+  opencodeDeliveryError?: string | null;
+  opencodeMessageId: string | null;
+  clientMessageId: string | null;
+  mergedIntoMessageId: number | null;
+  forwardRole?: string | null;
+  forwardSourceSessionId?: string | null;
+  forwardSourceMessageId?: number | null;
+  forwardTargetSessionId?: string | null;
+  forwardTargetMessageId?: number | null;
+  forwardStatus?: string | null;
+  completionWatchStatus?: string | null;
+  completionWatchWorkSeen?: number;
+  sessions?: Array<{
+    id: string;
+    alias: string | null;
+    title: string | null;
+    summary: string | null;
+    summaryUpdatedAt: string | null;
+    waitingState: string | null;
+    latestMessageAuthor: "agent" | "user" | null;
+    latestMessageText: string | null;
+    state: string | null;
+    projectName: string | null;
+    workspaceId: string | null;
+    latestActivity: string | null;
+    messageCount: number | null;
+    opencodeStatus?: string | null;
+    opencodeActivitySnippet?: string | null;
+  }>;
+  attachments?: Array<{
+    id: number;
+    filePath: string;
+    originalName: string;
+    mimeType: string;
+    url?: string;
+    thumbnailDataUrl?: string;
+  }>;
+};
+
+export type ApiSession = {
+  id: string;
+  alias?: string | null;
+  state?: string;
+  opencodeStatus?: string;
+  opencodeTitle?: string | null;
+  opencodeAgent?: string | null;
+  opencodeModelProvider?: string | null;
+  opencodeModel?: string | null;
+};

@@ -1,0 +1,175 @@
+:root {
+  color: #17202a;
+  background: #f5f0e8;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+html {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-x: clip;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 100vh;
+  overflow-x: hidden;
+  overflow-x: clip;
+}
+
+#root {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-x: clip;
+}
+
+.opencode-activity-markdown > :first-child {
+  margin-top: 0;
+}
+
+.opencode-activity-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.opencode-activity-markdown p,
+.opencode-activity-markdown ul,
+.opencode-activity-markdown ol,
+.opencode-activity-markdown pre,
+.opencode-activity-markdown blockquote,
+.opencode-activity-markdown table {
+  margin-block: 0.45rem;
+}
+
+.opencode-activity-markdown table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.opencode-activity-markdown th,
+.opencode-activity-markdown td {
+  border: 1px solid rgba(138, 75, 32, 0.18);
+  padding: 0.28rem 0.45rem;
+  text-align: left;
+}
+
+.opencode-activity-markdown th {
+  background: rgba(138, 75, 32, 0.08);
+  font-weight: 800;
+}
+
+.opencode-activity-markdown ul,
+.opencode-activity-markdown ol {
+  padding-left: 1.2rem;
+}
+
+.opencode-activity-markdown code {
+  border-radius: 0.35rem;
+  background: rgba(23, 32, 42, 0.08);
+  padding: 0.08rem 0.22rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.86em;
+}
+
+.opencode-activity-markdown pre {
+  overflow-x: auto;
+  border-radius: 0.75rem;
+  background: rgba(23, 32, 42, 0.92);
+  color: #fffdf8;
+  padding: 0.7rem;
+}
+
+.opencode-activity-markdown pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.opencode-activity-markdown a {
+  color: #8a4b20;
+  font-weight: 700;
+}
+
+.voice-note-markdown > :first-child {
+  margin-top: 0;
+}
+
+.voice-note-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.voice-note-markdown p,
+.voice-note-markdown ul,
+.voice-note-markdown ol,
+.voice-note-markdown pre,
+.voice-note-markdown blockquote,
+.voice-note-markdown table {
+  margin-block: 0.55rem;
+}
+
+.voice-note-markdown ul,
+.voice-note-markdown ol {
+  padding-left: 1.4rem;
+}
+
+.voice-note-markdown table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.voice-note-markdown th,
+.voice-note-markdown td {
+  border: 1px solid rgba(23, 32, 42, 0.14);
+  padding: 0.32rem 0.5rem;
+  text-align: left;
+}
+
+.voice-note-markdown th {
+  background: rgba(23, 32, 42, 0.06);
+  font-weight: 800;
+}
+
+.voice-note-markdown code {
+  border-radius: 0.35rem;
+  background: rgba(23, 32, 42, 0.08);
+  padding: 0.08rem 0.22rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.86em;
+}
+
+.voice-note-markdown pre {
+  overflow-x: auto;
+  border-radius: 0.75rem;
+  background: rgba(23, 32, 42, 0.92);
+  color: #fffdf8;
+  padding: 0.7rem;
+}
+
+.voice-note-markdown pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.voice-note-markdown a {
+  color: #1a56db;
+  font-weight: 700;
+}

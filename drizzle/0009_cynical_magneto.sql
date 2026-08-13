@@ -1,0 +1,1 @@
+ALTER TABLE `messages` ADD `push_notification_text` text;

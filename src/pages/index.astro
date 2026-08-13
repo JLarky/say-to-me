@@ -1,0 +1,26 @@
+---
+import SayApp from "../components/SayApp.tsx";
+---
+
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Say To Me</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📢</text></svg>"
+    />
+    {
+      import.meta.env.DEV ? (
+        <>
+          <link rel="stylesheet" href="/virtual:stylex.css" />
+          <script type="module">import("virtual:stylex:runtime");</script>
+        </>
+      ) : null
+    }
+  </head>
+  <body>
+    <SayApp client:only="react" />
+  </body>
+</html>

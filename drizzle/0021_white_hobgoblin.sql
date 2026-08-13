@@ -1,0 +1,1 @@
+ALTER TABLE `app_settings` ADD `preferred_jarvis_parent_path` text;

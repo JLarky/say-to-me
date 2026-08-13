@@ -1,0 +1,535 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+command="${1:-usage}"
+topic="${2:-}"
+
+usage() {
+  cat <<'EOF'
+say-to-me helper
+
+Say To Me app/api allows you to talk with the user using voice instead of text
+That means you have to be brief and not overload user with jargon.
+User might still be able to read your text responses or outputs of commands
+or look at git diffs, etc. If you don't know if that's possible you should ask.
+
+User will only hear messages that are sent using the correct session ID
+Say To Me messages belong to a specific session id.
+Use that same session id when sending replies back to the conversation.
+
+Always send voice replies to keep the user informed:
+- Send a reply BEFORE starting work (what you are about to do)
+- Send updates as needed during long-running tasks
+- Send a final reply when done (what was done / result)
+This ensures the user knows work has started, can follow progress, and knows when it is done.
+
+Examples use `say-to-me api`.
+
+Send an agent reply to a Say To Me session:
+
+  say-to-me api POST /api/sessions/<session-id>/messages \
+    -d '{"author":"agent","text":"please tell me how you want to proceed"}' | jq ".message.id"
+
+You can also attach links to a message. Links are displayed in the UI but NOT
+spoken aloud by TTS — use this to share URLs without polluting the voice output:
+
+  say-to-me api POST /api/sessions/<session-id>/messages \
+    -d '{"author":"agent","text":"I found the blog post you were looking for","links":["https://example.com/post"]}'
+
+You can include optional extra visual markdown with an "extraMarkdown" field.
+The "text" field is still the spoken message and is also shown in the UI;
+"extraMarkdown" renders below it but is NOT spoken aloud. Use it for tables,
+code, lists, etc. It also has "copy markdown" button on it:
+
+  say-to-me api POST /api/sessions/<session-id>/messages \
+    --data=- <<'JSON'
+  {"author":"agent","text":"I summarized the results in a small table.","extraMarkdown":"| Result | Count |\n|---|---:|\n| Passed | 12 |\n| Failed | 0 |"}
+  JSON
+
+You can attach one or more images with an "images" array. Images show in the UI
+but are NOT spoken aloud. Send them to the SAME session as your reply so the user
+sees them in context. Each entry must be a direct temp-dir image file
+(e.g. /tmp/foo.png; png/jpg/webp/gif; no nested folders).
+
+  say-to-me api POST /api/sessions/<session-id>/messages \
+    -d '{"author":"agent","text":"here are the screenshots","images":["/tmp/before.png","/tmp/after.png"]}'
+
+If you want to bring extra attention to a message, you can send an actual
+browser/phone push notification by setting "pushNotificationText" (agent
+messages only). Reserve it for high-signal events (build finished, needs input)
+so pushes stay rare. The text you provide is the push body; the spoken "text"
+field is unchanged:
+
+  say-to-me api POST /api/sessions/<session-id>/messages \
+    -d '{"author":"agent","text":"the build finished","pushNotificationText":"Build finished"}'
+
+Example:
+
+  say-to-me api POST /api/sessions/ses_1dd864100ffes6uqv2NbJatAKt/messages \
+    -d '{"author":"agent","text":"1+1 is 2"}'
+
+Some notes on how specific words like "PR" send "pull request" or "P R" instead, otherwise voice may pronouce it as Puerto Rico.
+If you refer to specific paths like /home/user/path/to/project don't try to send it as "slash home slash ..." becuase
+voice will take forever to say that, so either try to refer to it by something else like "this project folder" or if
+actual value is important just send it as the actual value, it's going to be pronounced better that way.
+
+Other examples "todo" -> "to-do", "CI" -> "C I"
+
+If you are not just replying to user but want to manage other sessions run:
+
+  say-to-me usage jarvis
+
+To call the HTTP API like OpenCode's api command (raw METHOD PATH):
+
+  say-to-me usage api
+  say-to-me api GET /api/queue
+  say-to-me api list
+
+Discoverability index:
+  say-to-me usage              Voice reply basics (this page)
+  say-to-me usage jarvis       Session cards, relay/targetSessionId, jarvis-status
+  say-to-me usage timers       Scheduled prompts / jarvis-timers CRUD
+  say-to-me usage api          HTTP API CLI (METHOD PATH + operationId)
+  say-to-me usage workflows    Multi-agent recipes (spaces, worktrees, coordinator)
+
+Capability families:
+  Create worker sessions     POST /api/cli-sessions (Claude/Codex/Cursor/Grok) or space Jarvis create
+  Space attach / move        POST /api/spaces/:spaceId/action claimSession | moveSession | createWorktree
+  Read session status        GET /api/sessions/:id/jarvis-status
+  Stop / force-send          POST /api/sessions/:id/stop-* ; message controls force/retry
+  Live OpenAPI catalog       GET /openapi.json  or  say-to-me api list
+EOF
+}
+
+api_usage() {
+  cat <<'EOF'
+say-to-me api usage
+
+Call a running Say To Me HTTP API without starting a server.
+
+Raw method and path:
+
+  say-to-me api GET /api/queue
+  say-to-me api GET /api/health
+  say-to-me api --server http://127.0.0.1:5411 GET /api/health
+
+List every OpenAPI operation (live /openapi.json):
+
+  say-to-me api list
+  say-to-me api list --server http://127.0.0.1:5411
+
+OpenAPI operation ID (live /openapi.json lookup):
+
+  say-to-me api health.getHealth
+  say-to-me api queue.getSessionQueue --param sessionId=ses_abc
+  say-to-me api help message-create.createSessionMessage
+
+Request body and headers:
+
+  say-to-me api POST /api/sessions/ses_abc/messages \
+    --data '{"author":"agent","text":"hello"}'
+
+  echo '{"author":"agent","text":"hello"}' | \
+    say-to-me api POST /api/sessions/ses_abc/messages --data=-
+
+  say-to-me api GET /api/health -H 'Accept: application/json'
+
+Server URL resolution (no auto-start):
+  --server <url>   Override base URL
+  SAY_TO_ME_URL    Env default when --server is omitted
+  default          https://say.local:1355
+
+Flags:
+  --param name=value   Path template or query parameter
+  --header / -H        Header as name:value
+  --data / -d          Body string; - or @- reads stdin
+
+Output:
+  Response body on stdout (pipe to jq). Non-2xx exits non-zero; stderr prints HTTP status + recovery hint.
+  Body defaults Content-Type to application/json when unset.
+
+Live OpenAPI document:
+
+  say-to-me api GET /openapi.json
+  say-to-me api list
+EOF
+}
+
+jarvis_usage() {
+  cat <<'EOF'
+say-to-me Jarvis/session management usage
+
+Use this when you are not just replying to the user, but need to manage other
+Say To Me sessions: forward work, reference sessions with cards, or pull Jarvis
+status.
+
+Forward/send a user message into another session:
+
+  say-to-me api POST /api/sessions/<source-session-id>/messages \
+    -d '{"author":"user","text":"please take a look at this","targetSessionId":"ses_target123"}'
+
+Relay rule: when relaying a user request from the current conversation to
+another session, do not post directly to the target session. Post to the
+current/source session's /messages endpoint with targetSessionId set. This keeps
+a visible source/provenance message in the current chat while the target receives
+the delivered user message.
+
+Reference other sessions with cards:
+
+Use this when Jarvis or another agent needs to talk about other Say To Me
+sessions without speaking long raw session IDs aloud.
+
+The spoken "text" should stay human. Put exact session identity in the
+"sessions" metadata field so the UI renders session cards.
+
+Reference a session by exact ID:
+
+  say-to-me api POST /api/sessions/<current-session-id>/messages \
+    --data=- <<'JSON'
+  {"author":"agent","text":"Morgan is waiting for your answer.","sessions":["ses_abc123"]}
+  JSON
+
+Reference a session with a human alias:
+
+  say-to-me api POST /api/sessions/<current-session-id>/messages \
+    --data=- <<'JSON'
+  {"author":"agent","text":"Morgan is waiting for your answer.","sessions":[{"id":"ses_abc123","alias":"Morgan"}]}
+  JSON
+
+Mention aliases label that card only. To rename a session:
+
+  say-to-me api PATCH /api/sessions/<session-id> \
+    -d '{"alias":"Desired Name"}'
+
+Rules:
+- The session ID is canonical. Alias is for humans.
+- Prefer the "sessions" array instead of saying raw session IDs in "text" when
+  you only need visual references/cards.
+- The "sessions" array only renders visual session cards/references. It does
+  not send or forward a message to those sessions.
+- Relay rule: if a user asks in the current conversation to send/forward/relay
+  work to another session, do not post directly to the target session. Post to
+  the current/source session's /messages endpoint with targetSessionId instead.
+  This keeps a visible source/provenance message in the current chat while the
+  target receives the delivered user message.
+- To actually forward/send a user message into another session, POST to
+  /api/sessions/<source-session-id>/messages with "targetSessionId" set to the
+  destination session ID.
+- targetSessionId creates a source/provenance message in the current session and
+  a target user message in the target session, using normal delivery, queueing,
+  force, and useCli behavior.
+- Failure mode to avoid: posting directly to the target session may make the
+  target agent act, but the source/current chat will not show that the relay
+  happened.
+- Cards show alias/title, freshness, status, summary, and collapsed details.
+- "Insert mention" writes a stable token like say-to-me(ses_abc123, Morgan).
+- The API also accepts say-to-me(ses_abc123) and say-to-me(ses_abc123, Morgan)
+  in text, but metadata is preferred for new agent replies.
+- If multiple sessions could match a name, show or ask about the exact card
+  instead of guessing.
+
+There's a dedicated API endpoint to read messages from running sessions optimized
+for better tool calls and token usage:
+
+  say-to-me api GET '/api/sessions/<session-id>/jarvis-status'
+
+Defaults:
+- extended=0
+- limit=3
+- wait=1000
+
+Wait briefly for the target to become idle before returning status:
+
+  say-to-me api GET '/api/sessions/<session-id>/jarvis-status?wait=5sec'
+
+Pull the newest matching messages after a known message id:
+
+  say-to-me api GET '/api/sessions/<session-id>/jarvis-status?since=<message-id>&limit=5'
+
+Use the response's nextPullCursor for the next pull:
+
+  say-to-me api GET "/api/sessions/<session-id>/jarvis-status<nextPullCursor>"
+
+Ask for fuller debug output:
+
+  say-to-me api GET '/api/sessions/<session-id>/jarvis-status?extended=1&limit=5'
+
+Look up Jarvis status from a message ID when you do not know the session ID:
+
+  say-to-me api GET '/api/messages/<message-id>/jarvis-status'
+
+This finds the message, derives its session, and returns the same shape as
+/api/sessions/<session-id>/jarvis-status. On the first call, the requested
+message is guaranteed to appear in messages, including idle system notices.
+
+Timers are scheduled prompts for sessions. To manage timers, run:
+
+  say-to-me usage timers
+
+Jarvis status notes:
+- limit must be 1 through 50.
+- wait must be at most 300000 ms, which is 5 minutes.
+- wait accepts ms, sec, seconds, min, and minutes; for example, wait=5sec works.
+- compact JSON omits null fields and empty arrays.
+- responses are pretty-printed JSON.
+EOF
+}
+
+timers_usage() {
+  cat <<'EOF'
+say-to-me timers usage
+
+Use timers when the user wants a future reminder or scheduled prompt delivered
+to a specific session. Timers always target a session.
+
+List all timers:
+
+  say-to-me api GET '/api/jarvis-timers'
+
+List timers for one session:
+
+  say-to-me api GET '/api/jarvis-timers?sessionId=<session-id>'
+
+Create a timer. dueAt is a Unix timestamp in milliseconds. Use intervalMs for
+repeating timers, or null for a one-shot timer:
+
+  say-to-me api POST /api/jarvis-timers \
+    -d '{"sessionId":"ses_target123","title":"Check in","message":"Please continue if appropriate.","dueAt":1781880000000,"intervalMs":null}'
+
+Manage an existing timer:
+
+  say-to-me api PATCH /api/jarvis-timers/<timer-id> \
+    -d '{"title":"Updated title","dueAt":1781883600000}'
+
+  say-to-me api POST /api/jarvis-timers/<timer-id>/actions \
+    -d '{"action":"pause"}'
+
+Timer actions are: trigger, pause, resume, cancel. Delete removes the timer row:
+
+  say-to-me api DELETE '/api/jarvis-timers/<timer-id>'
+
+UI routes: /jarvis shows all timers, /ses/<session-id>/timers shows timers for
+one session, and /jarvis/timers/new?sessionId=<session-id> creates a timer with
+that session preselected.
+EOF
+}
+
+workflows_usage() {
+  cat <<'EOF'
+say-to-me workflows usage
+
+Multi-agent recipes for Spaces + worktrees + coordinator/validator patterns.
+Prefer idle notifications over polling. Always reply with voice in the session
+that owns the brief (`say-to-me usage`).
+
+────────────────────────────────────────
+1) Attach a worker session to a space + create a git worktree
+────────────────────────────────────────
+
+A. Create a CLI-backed worker (Claude / Codex / Cursor / Grok) in a workspace:
+
+  say-to-me api POST /api/cli-sessions \
+    -d '{"provider":"claude","path":"/absolute/workspace","modelID":"sonnet"}'
+
+  Response includes session.id (e.g. cc_… / cur_… / …).
+
+  For OpenCode/Jarvis workers prefer space Jarvis create instead:
+
+  say-to-me api POST /api/spaces/<space-id>/jarvis \
+    -d '{"name":"builder","provider":"opencode"}'
+
+B. Optional human alias:
+
+  say-to-me api PATCH /api/sessions/<session-id> \
+    -d '{"alias":"builder"}'
+
+C. Claim the session onto a space (attach to the Spaces roster):
+
+  say-to-me api POST /api/spaces/<space-id>/action \
+    -d '{"action":"claimSession","sessionId":"<session-id>"}'
+
+D. Create a worktree and attach it to the space (repo must already be on the space):
+
+  say-to-me api POST /api/spaces/<space-id>/action \
+    -d '{"action":"createWorktree","repoId":"<repo-id>","branch":"feat/my-branch","base":"main"}'
+
+  Fields: repoId (required), branch (required), base (optional, default HEAD),
+  parentPath (optional parent directory for the worktree checkout).
+
+E. Point the session cwd at the new worktree if needed (PATCH session cwd), then
+   send work with voice replies in that session.
+
+List spaces / repos to discover ids:
+
+  say-to-me api GET /api/spaces
+
+────────────────────────────────────────
+2) Timers for scheduled prompts
+────────────────────────────────────────
+
+Use timers when a session should wake later (or on an interval) with a prompt.
+Full CRUD: `say-to-me usage timers`.
+
+  say-to-me api POST /api/jarvis-timers \
+    -d '{"sessionId":"<session-id>","title":"Check in","message":"Please continue if appropriate.","dueAt":1781880000000,"intervalMs":null}'
+
+────────────────────────────────────────
+3) Coordinator pattern (builder + validator + reviewer)
+────────────────────────────────────────
+
+Roles (typical):
+  - Coordinator / supervisor: owns the user-facing session; relays briefs; does not
+    implement the feature itself when a builder exists.
+  - Builder: implements code in a worktree; replies by voice in its own session.
+  - Validator: browser / API checks; reports PASS/FAIL with FIX recipes.
+  - Reviewer (e.g. Codex Terra): blocks on P1/P2; recipes come back via the
+    coordinator session.
+
+Relay rule (critical):
+  When a user (or coordinator) asks to send work to another session, do NOT POST
+  directly to the target. POST to the *current/source* session with targetSessionId
+  so the source chat keeps provenance:
+
+  say-to-me api POST /api/sessions/<source-session-id>/messages \
+    -d '{"author":"user","text":"<full brief>","targetSessionId":"<builder-session-id>"}'
+
+  Brief delivery caveat:
+  - CLI workers (Claude / Cursor / Codex / Grok) only receive the message "text"
+    in their delivery prompt. Put the COMPLETE actionable brief in "text".
+  - "extraMarkdown" and attachments are NOT delivered to external CLI workers
+    (they may still show in the Say UI for humans / OpenCode-side agents).
+  - Do not relay a text stub + attachment/extraMarkdown when the target is a
+    CLI worker — the worker will never see the long form.
+
+Idle notifications instead of polling:
+  After relaying, wait for idle system notices / completion watches rather than
+  tight-looping jarvis-status. When you do need status:
+
+  say-to-me api GET '/api/sessions/<session-id>/jarvis-status?wait=5sec'
+
+  Or pull after a known message id with since= / nextPullCursor
+  (`say-to-me usage jarvis`).
+
+Reference sessions with cards (do not speak raw ids):
+
+  say-to-me api POST /api/sessions/<current>/messages \
+    --data=- <<'JSON'
+  {"author":"agent","text":"Builder is on it.","sessions":[{"id":"<builder-id>","alias":"builder"}]}
+  JSON
+
+Stop / force-send when a worker is stuck:
+  - OpenCode: POST /api/sessions/:id/stop-opencode
+  - Claude/Cursor/Codex/Grok: POST /api/sessions/:id/stop-<provider>
+  - Force / retry delivery: message-controls endpoints (see `say-to-me api list`)
+
+End-to-end checklist for a night-shift feature:
+  1. Coordinator creates/claims builder on a space + worktree branch
+  2. Relay FULL BRIEF in "text" via targetSessionId (CLI workers never get
+     attachments/extraMarkdown in delivery prompts)
+  3. Builder implements, voice-updates, runs vp run check && vp run test
+  4. Idle notice → coordinator/validator validates
+  5. Reviewer recipes → builder fixes → re-review
+  6. Draft PR only when the brief says to open one
+
+────────────────────────────────────────
+4) Local workflow library index
+────────────────────────────────────────
+
+If SAY_TO_ME_WORKFLOWS_DIR points at a directory of markdown recipes, this page
+lists title + path for each .md file (simple index; not a runner).
+
+EOF
+
+  local workflows_dir="${SAY_TO_ME_WORKFLOWS_DIR:-}"
+  if [ -n "$workflows_dir" ] && [ -d "$workflows_dir" ]; then
+    printf 'Workflow library (%s):\n' "$workflows_dir"
+    local found=0
+    local file
+    while IFS= read -r file; do
+      [ -n "$file" ] || continue
+      found=1
+      local title
+      title="$(awk 'BEGIN{t=""} /^# /{t=substr($0,3); exit} END{print t}' "$file" 2>/dev/null || true)"
+      if [ -z "$title" ]; then
+        title="$(basename "$file" .md)"
+      fi
+      printf '  - %s\n    %s\n' "$title" "$file"
+    done < <(find "$workflows_dir" -type f -name '*.md' | sort)
+    if [ "$found" -eq 0 ]; then
+      printf '  (no .md files found)\n'
+    fi
+  else
+    cat <<'EOF'
+Set SAY_TO_ME_WORKFLOWS_DIR to a folder of .md recipes to index them here.
+EOF
+  fi
+}
+
+# Probe before exec; keep paths quoted (HOME may contain spaces).
+exec_api_with_vite_node() {
+  local api_script="$1"
+  shift
+  local node_bin="${HOME}/.vite-plus/bin/node"
+  local vp_bin="${HOME}/.vite-plus/bin/vp"
+  if [ -x "$node_bin" ] && "$node_bin" -e '' >/dev/null 2>&1; then
+    exec "$node_bin" "$api_script" "$@"
+  fi
+  if [ -x "$vp_bin" ] && "$vp_bin" node -e '' >/dev/null 2>&1; then
+    exec "$vp_bin" node "$api_script" "$@"
+  fi
+  if command -v vp >/dev/null 2>&1 && vp node -e '' >/dev/null 2>&1; then
+    exec vp node "$api_script" "$@"
+  fi
+  return 1
+}
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+
+case "$command:$topic" in
+  usage:|help:|--help:|-h:)
+    usage
+    ;;
+  usage:sessions|usage:session|sessions:|session:)
+    jarvis_usage
+    ;;
+  usage:jarvis-status|usage:jarvis|usage:status|jarvis-status:|jarvis:|status:)
+    jarvis_usage
+    ;;
+  usage:timers|usage:timer|timers:|timer:)
+    timers_usage
+    ;;
+  usage:workflows|usage:workflow|workflows:|workflow:)
+    workflows_usage
+    ;;
+  usage:api|api:--help|api:-h)
+    api_usage
+    ;;
+  api:list)
+    shift
+    # `say-to-me api list …` leaves "list" as $1 after shifting off "api".
+    if [ "${1:-}" = "list" ]; then
+      shift
+    fi
+    api_script="$root/scripts/api.ts"
+    exec_api_with_vite_node "$api_script" list "$@" || {
+      printf '%s\n' \
+        "say-to-me api requires the Vite+ Node runtime (vp node)." \
+        "Add it to PATH: export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"" >&2
+      exit 127
+    }
+    ;;
+  api:*)
+    shift
+    # Project-managed Vite+ Node (TS-capable); do not rely on ambient system Node.
+    api_script="$root/scripts/api.ts"
+    exec_api_with_vite_node "$api_script" "$@" || {
+      printf '%s\n' \
+        "say-to-me api requires the Vite+ Node runtime (vp node)." \
+        "Add it to PATH: export PATH=\"\$HOME/.vite-plus/bin:\$PATH\"" >&2
+      exit 127
+    }
+    ;;
+  *)
+    usage
+    ;;
+esac

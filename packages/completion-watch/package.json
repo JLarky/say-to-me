@@ -1,0 +1,15 @@
+{
+  "name": "@say-to-me/completion-watch",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./workflow": {
+      "import": "./src/workflow.ts",
+      "default": "./src/workflow.ts"
+    }
+  },
+  "peerDependencies": {
+    "effect": "^3.21.0"
+  }
+}
