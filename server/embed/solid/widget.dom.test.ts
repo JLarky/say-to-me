@@ -90,6 +90,7 @@ afterEach(() => {
     Object.defineProperty(window, "speechSynthesis", originalSpeechDescriptor);
   else Reflect.deleteProperty(window, "speechSynthesis");
   if (originalUtterance) globalThis.SpeechSynthesisUtterance = originalUtterance;
+  window.localStorage.clear();
   document.body.replaceChildren();
   document.getElementById(WIDGET_STYLE_ELEMENT_ID)?.remove();
 });
@@ -213,6 +214,57 @@ describe("complete say-to-me-widget", () => {
       "Say To Me is unavailable.",
     );
     expect(unavailable.querySelector(".stm-voice-widget-missing")).toBeNull();
+  });
+  it.each([
+    { status: 404, label: "Create voice session" },
+    { status: 503, label: "Retry" },
+  ])("keeps $label available when its recovery state is collapsed", async ({ status, label }) => {
+    originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async () => new Response("", { status }));
+    const host = mount();
+    await flush();
+    (host.querySelector(".stm-voice-collapse") as HTMLButtonElement).click();
+    await flush();
+    expect((host.querySelector(".stm-voice-widget-content") as HTMLElement).hidden).toBe(true);
+    const actions = host.querySelector<HTMLElement>(".stm-voice-widget-critical-actions");
+    expect(actions?.hidden).toBe(false);
+    expect(actions?.querySelector("button")?.textContent).toBe(label);
+    expect(
+      Array.from(host.querySelectorAll("button")).filter((button) => button.textContent === label),
+    ).toHaveLength(1);
+  });
+
+  it("keeps usage instructions available when an empty session is collapsed", async () => {
+    originalFetch = globalThis.fetch;
+    originalEventSource = globalThis.EventSource;
+    globalThis.fetch = vi.fn(
+      async (input: RequestInfo | URL) =>
+        new Response(
+          JSON.stringify(
+            input instanceof Request && input.url.includes("timers")
+              ? { timers: [] }
+              : { revision: 1, messages: [] },
+          ),
+          { status: 200 },
+        ),
+    );
+    globalThis.EventSource = FakeEventSource as unknown as typeof EventSource;
+    const host = mount();
+    await flush();
+    await flush();
+    (host.querySelector(".stm-voice-collapse") as HTMLButtonElement).click();
+    await flush();
+    expect((host.querySelector(".stm-voice-widget-content") as HTMLElement).hidden).toBe(true);
+    const actions = host.querySelector<HTMLElement>(".stm-voice-widget-critical-actions");
+    expect(actions?.hidden).toBe(false);
+    expect(actions?.querySelector("button")?.textContent).toBe(
+      "Tell your agent how to use Say To Me",
+    );
+    expect(
+      Array.from(host.querySelectorAll("button")).filter((button) =>
+        button.textContent?.includes("Tell your agent how to use Say To Me"),
+      ),
+    ).toHaveLength(1);
   });
   it("serializes audio and releases a queued task after the 120s-style timeout", async () => {
     vi.useFakeTimers();

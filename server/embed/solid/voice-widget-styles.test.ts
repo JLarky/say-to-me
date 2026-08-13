@@ -31,6 +31,7 @@ describe("collapsed voice widget shell", () => {
     );
     expect(VOICE_WIDGET_STYLESHEET).toContain("width: min(calc(100% - 20px), 32rem)");
     expect(VOICE_WIDGET_STYLESHEET).toContain("pointer-events: auto");
+    expect(VOICE_WIDGET_STYLESHEET).toContain(".stm-voice-widget-critical-actions");
     expect(VOICE_WIDGET_STYLESHEET).toContain("line-height: 1.25");
     expect(VOICE_WIDGET_STYLESHEET).toContain(
       "say-to-me-widget[hidden] { display: none !important; }",
@@ -38,6 +39,19 @@ describe("collapsed voice widget shell", () => {
     expect(VOICE_WIDGET_STYLESHEET).toContain("min-width: 2rem");
     expect(VOICE_WIDGET_STYLESHEET).toContain("min-height: 2rem");
     expect(VOICE_WIDGET_STYLESHEET).toContain("say-to-me-widget { position: relative");
+  });
+
+  it("keeps collapsed recovery actions full width outside the hidden content pane", () => {
+    expect(VOICE_WIDGET_STYLESHEET).toContain(
+      '.stm-voice-widget[data-collapsed="true"] .stm-voice-widget-content { display: none; }',
+    );
+    expect(VOICE_WIDGET_STYLESHEET).toContain(
+      ".stm-voice-widget-critical-actions .stm-voice-action { width: 100%; }",
+    );
+    expect(VOICE_WIDGET_STYLESHEET).not.toContain("stm-voice-widget--collapsed-action");
+    expect(VOICE_WIDGET_STYLESHEET).not.toContain(
+      ".stm-voice-widget-critical-actions .stm-voice-action { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }",
+    );
   });
 
   it("keeps the collapsed mobile header in one shrink-to-fit row", () => {
