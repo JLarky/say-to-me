@@ -14,6 +14,7 @@ import {
   createEmptyT3ServerInstance,
   createEmptyPaseoInstance,
   DEFAULT_JARVIS_PARENT_PATH,
+  DEFAULT_PASEO_HOST,
   DEFAULT_WORKTREE_PARENT_PATH,
   displayLocationPath,
   fetchSettings,
@@ -176,6 +177,42 @@ export function NewSettingsPage() {
       current.map((instance, i) => (i === index ? { ...instance, ...patch } : instance)),
     );
     setPaseoSettingsSaved(false);
+  }
+
+  async function removePaseoInstance(index: number) {
+    const instance = paseoInstances[index];
+    if (!instance) return;
+    const label = instance.id.trim() || `instance ${index + 1}`;
+    const fallbackNotice =
+      paseoInstances.length === 1
+        ? `\n\nA default Paseo instance for ${DEFAULT_PASEO_HOST} will be created.`
+        : "";
+    if (
+      !window.confirm(
+        `Remove Paseo instance "${label}"?\n\nExisting sessions assigned to this instance might stop working.${fallbackNotice}`,
+      )
+    ) {
+      return;
+    }
+
+    const previous = paseoInstances;
+    const next = previous.filter((_, i) => i !== index);
+    setPaseoInstances(next);
+    setPaseoSettingsSaved(false);
+    setPaseoSettingsError(null);
+    setPaseoSettingsSaving(true);
+    try {
+      const value = await updateSettings({ paseoInstances: next });
+      setPaseoInstances(value.paseoInstances);
+      setPaseoSettingsSaved(true);
+    } catch (error) {
+      setPaseoInstances(previous);
+      setPaseoSettingsError(
+        error instanceof Error ? error.message : "Unable to remove Paseo instance.",
+      );
+    } finally {
+      setPaseoSettingsSaving(false);
+    }
   }
 
   async function savePaseoSettings() {
@@ -345,10 +382,7 @@ export function NewSettingsPage() {
                         {...stylex.props(settings.removeButton)}
                         type="button"
                         disabled={paseoSettingsSaving}
-                        onClick={() => {
-                          setPaseoInstances((current) => current.filter((_, i) => i !== index));
-                          setPaseoSettingsSaved(false);
-                        }}
+                        onClick={() => void removePaseoInstance(index)}
                       >
                         Remove
                       </button>

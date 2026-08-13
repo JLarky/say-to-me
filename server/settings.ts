@@ -8,6 +8,9 @@ import { appSettings } from "./db/drizzle-schema.ts";
 
 const SETTINGS_ID = 1;
 
+export const DEFAULT_PASEO_INSTANCE_ID = "default";
+export const DEFAULT_PASEO_HOST = "127.0.0.1:6767";
+
 /** Refresh a little early so callers rarely hit an already-expired token. */
 export const ACCESS_TOKEN_EXPIRY_SKEW_MS = 30_000;
 
@@ -204,6 +207,12 @@ function parseStoredPaseoInstances(raw: string | null | undefined): PaseoInstanc
   });
 }
 
+function effectivePaseoInstances(instances: readonly PaseoInstance[]): PaseoInstance[] {
+  return instances.length > 0
+    ? [...instances]
+    : [{ id: DEFAULT_PASEO_INSTANCE_ID, host: DEFAULT_PASEO_HOST }];
+}
+
 function writeAppSettingsRow(input: {
   preferredWorktreeParentPath: string | null;
   preferredJarvisParentPath: string | null;
@@ -240,7 +249,7 @@ export function getAppSettings(): AppSettings {
     preferredWorktreeParentPath: settings?.preferredWorktreeParentPath ?? null,
     preferredJarvisParentPath: settings?.preferredJarvisParentPath ?? null,
     t3ServerInstances: listStoredT3ServerInstances().map(toPublicT3ServerInstance),
-    paseoInstances: parseStoredPaseoInstances(settings?.paseoInstances),
+    paseoInstances: effectivePaseoInstances(parseStoredPaseoInstances(settings?.paseoInstances)),
   };
 }
 
@@ -346,16 +355,17 @@ export function updateAppSettings(patch: AppSettingsPatch): AppSettings {
     "t3ServerInstances" in patch
       ? normalizeT3ServerInstances(patch.t3ServerInstances, currentStoredInstances)
       : currentStoredInstances;
-  const paseoInstances =
+  const storedPaseoInstances =
     "paseoInstances" in patch
       ? normalizePaseoInstances(patch.paseoInstances)
       : currentPaseoInstances;
+  const paseoInstances = effectivePaseoInstances(storedPaseoInstances);
 
   writeAppSettingsRow({
     preferredWorktreeParentPath,
     preferredJarvisParentPath,
     t3ServerInstances,
-    paseoInstances,
+    paseoInstances: storedPaseoInstances,
   });
 
   return {
@@ -375,11 +385,7 @@ export function getStoredT3ServerInstance(instanceId: string): T3ServerInstanceS
 export function getPaseoInstance(instanceId: string): PaseoInstance | null {
   const id = instanceId.trim();
   if (!id) return null;
-  return (
-    parseStoredPaseoInstances(readStoredSettingsRow()?.paseoInstances).find(
-      (instance) => instance.id === id,
-    ) ?? null
-  );
+  return getAppSettings().paseoInstances.find((instance) => instance.id === id) ?? null;
 }
 
 export function isT3AccessTokenValid(

@@ -36,14 +36,14 @@ describe("Settings API", () => {
     rmSync(testDbDir, { force: true, recursive: true });
   });
 
-  it("returns null location preferences and empty T3 instances before any are configured", async () => {
+  it("returns the default Paseo instance before any are configured", async () => {
     const response = await settingsRequest();
     expect(response?.status).toBe(200);
     expect(await response!.json()).toEqual({
       preferredWorktreeParentPath: null,
       preferredJarvisParentPath: null,
       t3ServerInstances: [],
-      paseoInstances: [],
+      paseoInstances: [{ id: "default", host: "127.0.0.1:6767" }],
     });
   });
 
@@ -56,7 +56,7 @@ describe("Settings API", () => {
       preferredWorktreeParentPath: "/home/example/worktrees",
       preferredJarvisParentPath: null,
       t3ServerInstances: [],
-      paseoInstances: [],
+      paseoInstances: [{ id: "default", host: "127.0.0.1:6767" }],
     });
 
     const persisted = await settingsRequest();
@@ -64,7 +64,7 @@ describe("Settings API", () => {
       preferredWorktreeParentPath: "/home/example/worktrees",
       preferredJarvisParentPath: null,
       t3ServerInstances: [],
-      paseoInstances: [],
+      paseoInstances: [{ id: "default", host: "127.0.0.1:6767" }],
     });
 
     const cleared = await settingsRequest("PATCH", { preferredWorktreeParentPath: "   " });
@@ -72,7 +72,7 @@ describe("Settings API", () => {
       preferredWorktreeParentPath: null,
       preferredJarvisParentPath: null,
       t3ServerInstances: [],
-      paseoInstances: [],
+      paseoInstances: [{ id: "default", host: "127.0.0.1:6767" }],
     });
   });
 
@@ -89,7 +89,7 @@ describe("Settings API", () => {
       preferredWorktreeParentPath: "/home/example/worktrees",
       preferredJarvisParentPath: "~/.say-to-me/jarvis",
       t3ServerInstances: [],
-      paseoInstances: [],
+      paseoInstances: [{ id: "default", host: "127.0.0.1:6767" }],
     });
 
     const cleared = await settingsRequest("PATCH", { preferredJarvisParentPath: null });
@@ -97,7 +97,7 @@ describe("Settings API", () => {
       preferredWorktreeParentPath: "/home/example/worktrees",
       preferredJarvisParentPath: null,
       t3ServerInstances: [],
-      paseoInstances: [],
+      paseoInstances: [{ id: "default", host: "127.0.0.1:6767" }],
     });
   });
 
@@ -122,7 +122,7 @@ describe("Settings API", () => {
     expect(await created!.json()).toEqual({
       preferredWorktreeParentPath: "/home/example/worktrees",
       preferredJarvisParentPath: "~/.say-to-me/jarvis",
-      paseoInstances: [],
+      paseoInstances: [{ id: "default", host: "127.0.0.1:6767" }],
       t3ServerInstances: [
         {
           id: "default",
@@ -221,6 +221,17 @@ describe("Settings API", () => {
       ],
     });
     expect(response?.status).toBe(400);
+  });
+
+  it("restores the default Paseo instance after the list is cleared", async () => {
+    await settingsRequest("PATCH", {
+      paseoInstances: [{ id: "local", host: "127.0.0.1:6768" }],
+    });
+    const cleared = await settingsRequest("PATCH", { paseoInstances: [] });
+    expect(cleared?.status).toBe(200);
+    expect(await cleared!.json()).toMatchObject({
+      paseoInstances: [{ id: "default", host: "127.0.0.1:6767" }],
+    });
   });
 
   it("rejects duplicate T3 server instance ids", async () => {
