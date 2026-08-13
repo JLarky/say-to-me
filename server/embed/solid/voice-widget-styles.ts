@@ -382,6 +382,12 @@ say-to-me-widget[hidden] { display: none !important; }
 .stm-voice-widget-toolbar-buttons .stm-park-btn { width: 2rem; min-width: 2rem; height: 2rem; min-height: 2rem; }
 .stm-voice-widget-title:hover { text-decoration: underline; }
 .stm-voice-speaker, .stm-voice-timer-toggle, .stm-voice-collapse { display: inline-flex; align-items: center; justify-content: center; min-height: 2rem; gap: 0.25rem; border: 1px solid color-mix(in oklab, var(--border, #d4d4d8) 60%, transparent); border-radius: 0.375rem; background: transparent; color: inherit; padding: 0.35rem 0.5rem; cursor: pointer; }
+.stm-voice-speaker[data-speaking="true"] { background: color-mix(in oklab, var(--color-sky-500, #0ea5e9) 45%, transparent); animation: stm-voice-speaking-pulse 2s infinite; }
+@keyframes stm-voice-speaking-pulse {
+  0%, 40% { opacity: 1; }
+  50% { opacity: 0.5; }
+  90%, 100% { opacity: 1; }
+}
 .stm-voice-widget-content { display: grid; gap: 0.75rem; min-width: 0; max-height: 24rem; overflow: auto; }
 .stm-voice-widget-critical-actions { display: grid; min-width: 0; }
 .stm-voice-widget-critical-actions .stm-voice-action { width: 100%; }

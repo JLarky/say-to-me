@@ -66,6 +66,14 @@ describe("collapsed voice widget shell", () => {
   });
 });
 
+describe("speaking indicator", () => {
+  it("pulses the speaker button while a note is playing", () => {
+    expect(VOICE_WIDGET_STYLESHEET).toContain('.stm-voice-speaker[data-speaking="true"]');
+    expect(VOICE_WIDGET_STYLESHEET).toContain("animation: stm-voice-speaking-pulse 2s infinite");
+    expect(VOICE_WIDGET_STYLESHEET).toContain("@keyframes stm-voice-speaking-pulse");
+  });
+});
+
 describe("voice widget badge stylesheet", () => {
   it("targets only the registered voice-widget host and supports shadow context", () => {
     expect(VOICE_WIDGET_STYLESHEET).toContain(VOICE_WIDGET_STYLE_MARKER);
