@@ -31,6 +31,7 @@ describe("collapsed voice widget shell", () => {
     );
     expect(VOICE_WIDGET_STYLESHEET).toContain("width: min(calc(100% - 20px), 32rem)");
     expect(VOICE_WIDGET_STYLESHEET).toContain("pointer-events: auto");
+    expect(VOICE_WIDGET_STYLESHEET).toContain(".stm-voice-widget-critical-actions");
     expect(VOICE_WIDGET_STYLESHEET).toContain("line-height: 1.25");
     expect(VOICE_WIDGET_STYLESHEET).toContain(
       "say-to-me-widget[hidden] { display: none !important; }",
@@ -40,18 +41,16 @@ describe("collapsed voice widget shell", () => {
     expect(VOICE_WIDGET_STYLESHEET).toContain("say-to-me-widget { position: relative");
   });
 
-  it("keeps create, usage, and retry actions in the collapsed shell", () => {
+  it("keeps collapsed recovery actions full width outside the hidden content pane", () => {
     expect(VOICE_WIDGET_STYLESHEET).toContain(
-      '.stm-voice-widget[data-collapsed="true"]:not(.stm-voice-widget--collapsed-action) .stm-voice-widget-content { display: none; }',
-    );
-    expect(VOICE_WIDGET_STYLESHEET).toContain(
-      ".stm-voice-widget.stm-voice-widget--collapsed.stm-voice-widget--collapsed-action .stm-voice-widget-content { display: grid;",
-    );
-    expect(VOICE_WIDGET_STYLESHEET).toContain(
-      ".stm-voice-widget-content > :not(.stm-voice-primary-action) { display: none; }",
-    );
-    expect(VOICE_WIDGET_STYLESHEET).not.toContain(
       '.stm-voice-widget[data-collapsed="true"] .stm-voice-widget-content { display: none; }',
+    );
+    expect(VOICE_WIDGET_STYLESHEET).toContain(
+      ".stm-voice-widget-critical-actions .stm-voice-action { width: 100%; }",
+    );
+    expect(VOICE_WIDGET_STYLESHEET).not.toContain("stm-voice-widget--collapsed-action");
+    expect(VOICE_WIDGET_STYLESHEET).not.toContain(
+      ".stm-voice-widget-critical-actions .stm-voice-action { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }",
     );
   });
 

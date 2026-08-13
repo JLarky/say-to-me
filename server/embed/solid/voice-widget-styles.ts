@@ -383,15 +383,14 @@ say-to-me-widget[hidden] { display: none !important; }
 .stm-voice-widget-title:hover { text-decoration: underline; }
 .stm-voice-speaker, .stm-voice-timer-toggle, .stm-voice-collapse { display: inline-flex; align-items: center; justify-content: center; min-height: 2rem; gap: 0.25rem; border: 1px solid color-mix(in oklab, var(--border, #d4d4d8) 60%, transparent); border-radius: 0.375rem; background: transparent; color: inherit; padding: 0.35rem 0.5rem; cursor: pointer; }
 .stm-voice-widget-content { display: grid; gap: 0.75rem; min-width: 0; max-height: 24rem; overflow: auto; }
+.stm-voice-widget-critical-actions { display: grid; min-width: 0; }
+.stm-voice-widget-critical-actions .stm-voice-action { width: 100%; }
 .stm-voice-note-row-mount { min-width: 0; }
 .stm-voice-timer-panel { display: grid; gap: 0.5rem; padding: 0.625rem; border: 1px solid color-mix(in oklab, var(--border, #d4d4d8) 60%, transparent); border-radius: 0.5rem; background: var(--muted, #f4f4f5); }
 .stm-voice-timer-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: baseline; }
 .stm-voice-action { border: 1px solid color-mix(in oklab, var(--border, #d4d4d8) 60%, transparent); border-radius: 0.375rem; background: var(--background, #fff); color: inherit; padding: 0.4rem 0.6rem; cursor: pointer; }
 .stm-voice-sound-prompt { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; color: var(--muted-foreground, #71717a); }
-.stm-voice-widget[data-collapsed="true"]:not(.stm-voice-widget--collapsed-action) .stm-voice-widget-content { display: none; }
-.stm-voice-widget.stm-voice-widget--collapsed.stm-voice-widget--collapsed-action .stm-voice-widget-content { display: grid; gap: 0.375rem; max-height: none; overflow: visible; }
-.stm-voice-widget.stm-voice-widget--collapsed.stm-voice-widget--collapsed-action .stm-voice-widget-content > :not(.stm-voice-primary-action) { display: none; }
-.stm-voice-widget.stm-voice-widget--collapsed.stm-voice-widget--collapsed-action .stm-voice-primary-action { width: 100%; }
+.stm-voice-widget[data-collapsed="true"] .stm-voice-widget-content { display: none; }
 @media (max-width: 560px) {
   .stm-voice-widget { padding: 0.625rem; }
   .stm-voice-widget-toolbar { align-items: stretch; }

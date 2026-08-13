@@ -244,9 +244,11 @@ function createOwnedWidget(props: VoiceWidgetProps): HTMLElement {
   soundPrompt.append(soundText, enableSound);
   const timerPanel = document.createElement("div");
   timerPanel.className = "stm-voice-timer-panel";
+  const criticalActions = document.createElement("div");
+  criticalActions.className = "stm-voice-widget-critical-actions";
   const content = document.createElement("div");
   content.className = "stm-voice-widget-content";
-  root.append(toolbar, soundPrompt, timerPanel, content);
+  root.append(toolbar, criticalActions, soundPrompt, timerPanel, content);
 
   const emitUsagePrompt = () => {
     props.el.dispatchEvent(
@@ -616,6 +618,33 @@ function createOwnedWidget(props: VoiceWidgetProps): HTMLElement {
     }
     timerPanel.append(footer);
   };
+  const retryLoad = () => {
+    setSessionState("loading");
+    setLoaded(false);
+    setReloadToken((value: number) => value + 1);
+  };
+  const stateAction = (): HTMLButtonElement | null => {
+    if (sessionState() === "missing") {
+      const create = button(
+        creating() ? "Creating..." : "Create voice session",
+        "stm-voice-action",
+      );
+      create.disabled = creating();
+      create.addEventListener("click", createSession);
+      return create;
+    }
+    if (sessionState() === "unavailable") {
+      const retry = button("Retry", "stm-voice-action");
+      retry.addEventListener("click", retryLoad);
+      return retry;
+    }
+    if (loaded() && notes().length === 0) {
+      const usage = button("Tell your agent how to use Say To Me", "stm-voice-action");
+      usage.addEventListener("click", emitUsagePrompt);
+      return usage;
+    }
+    return null;
+  };
   const renderState = () => {
     const isCollapsed = collapsed();
     root.dataset.collapsed = String(isCollapsed);
@@ -644,50 +673,39 @@ function createOwnedWidget(props: VoiceWidgetProps): HTMLElement {
     );
     soundPrompt.hidden = !showEnableSound();
     timerPanel.hidden = !timersOpen() || isCollapsed;
-    const showCollapsedAction =
-      sessionState() === "missing" ||
-      sessionState() === "unavailable" ||
-      (sessionState() === "ready" && loaded() && notes().length === 0);
-    root.classList.toggle("stm-voice-widget--collapsed-action", isCollapsed && showCollapsedAction);
-    content.hidden = isCollapsed && !showCollapsedAction;
+    content.hidden = isCollapsed;
+    criticalActions.replaceChildren();
     content.replaceChildren();
-    if (sessionState() === "missing") {
-      const message = document.createElement("p");
-      message.textContent = "No voice session exists for this thread yet.";
-      message.className = "stm-voice-widget-missing";
-      const create = button(
-        creating() ? "Creating..." : "Create voice session",
-        "stm-voice-action stm-voice-primary-action",
-      );
-      create.disabled = creating();
-      create.addEventListener("click", createSession);
-      content.append(message, create);
-    } else if (sessionState() === "unavailable") {
-      const message = document.createElement("p");
-      message.textContent = "Say To Me is unavailable.";
-      message.className = "stm-voice-widget-unavailable";
-      const retry = button("Retry", "stm-voice-action stm-voice-primary-action");
-      retry.addEventListener("click", () => {
-        setSessionState("loading");
-        setLoaded(false);
-        setReloadToken((value: number) => value + 1);
-      });
-      content.append(message, retry);
-    } else if (!loaded()) {
-      const message = document.createElement("p");
-      message.textContent = "Loading voice notes...";
-      content.append(message);
-    } else if (notes().length === 0) {
-      const message = document.createElement("p");
-      message.textContent = "No voice notes yet.";
-      const usage = button(
-        "Tell your agent how to use Say To Me",
-        "stm-voice-action stm-voice-primary-action",
-      );
-      usage.addEventListener("click", emitUsagePrompt);
-      content.append(message, usage);
+    const action = stateAction();
+    if (isCollapsed) {
+      criticalActions.hidden = action === null;
+      if (action) criticalActions.append(action);
     } else {
-      renderRows(notes());
+      criticalActions.hidden = true;
+      if (sessionState() === "missing") {
+        const message = document.createElement("p");
+        message.textContent = "No voice session exists for this thread yet.";
+        message.className = "stm-voice-widget-missing";
+        content.append(message);
+        if (action) content.append(action);
+      } else if (sessionState() === "unavailable") {
+        const message = document.createElement("p");
+        message.textContent = "Say To Me is unavailable.";
+        message.className = "stm-voice-widget-unavailable";
+        content.append(message);
+        if (action) content.append(action);
+      } else if (!loaded()) {
+        const message = document.createElement("p");
+        message.textContent = "Loading voice notes...";
+        content.append(message);
+      } else if (notes().length === 0) {
+        const message = document.createElement("p");
+        message.textContent = "No voice notes yet.";
+        content.append(message);
+        if (action) content.append(action);
+      } else {
+        renderRows(notes());
+      }
     }
     renderTimerPanel(timers());
   };
