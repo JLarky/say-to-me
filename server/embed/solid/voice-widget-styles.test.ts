@@ -40,6 +40,21 @@ describe("collapsed voice widget shell", () => {
     expect(VOICE_WIDGET_STYLESHEET).toContain("say-to-me-widget { position: relative");
   });
 
+  it("keeps create, usage, and retry actions in the collapsed shell", () => {
+    expect(VOICE_WIDGET_STYLESHEET).toContain(
+      '.stm-voice-widget[data-collapsed="true"]:not(.stm-voice-widget--collapsed-action) .stm-voice-widget-content { display: none; }',
+    );
+    expect(VOICE_WIDGET_STYLESHEET).toContain(
+      ".stm-voice-widget.stm-voice-widget--collapsed.stm-voice-widget--collapsed-action .stm-voice-widget-content { display: grid;",
+    );
+    expect(VOICE_WIDGET_STYLESHEET).toContain(
+      ".stm-voice-widget-content > :not(.stm-voice-primary-action) { display: none; }",
+    );
+    expect(VOICE_WIDGET_STYLESHEET).not.toContain(
+      '.stm-voice-widget[data-collapsed="true"] .stm-voice-widget-content { display: none; }',
+    );
+  });
+
   it("keeps the collapsed mobile header in one shrink-to-fit row", () => {
     const collapsedMobile = section(
       ".stm-voice-widget.stm-voice-widget--collapsed .stm-voice-widget-toolbar {",

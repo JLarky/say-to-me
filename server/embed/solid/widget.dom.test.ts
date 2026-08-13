@@ -413,4 +413,55 @@ describe("complete say-to-me-widget", () => {
     await flush();
     expect(host.querySelector(".stm-voice-widget")?.getAttribute("data-collapsed")).toBe("false");
   });
+
+  it("keeps create, usage, and retry actions visible when collapsed", async () => {
+    originalFetch = globalThis.fetch;
+    originalEventSource = globalThis.EventSource;
+    globalThis.EventSource = FakeEventSource as unknown as typeof EventSource;
+    const cases = [
+      { status: 404, body: "", label: "Create voice session" },
+      { status: 503, body: "", label: "Retry" },
+      {
+        status: 200,
+        body: JSON.stringify({ revision: 1, messages: [] }),
+        label: "Tell your agent how to use Say To Me",
+      },
+    ] as const;
+    for (const fixture of cases) {
+      document.body.replaceChildren();
+      globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+        const url = input instanceof Request ? input.url : String(input);
+        if (url.includes("timers"))
+          return new Response(JSON.stringify({ timers: [] }), { status: 200 });
+        return new Response(fixture.body, {
+          status: fixture.status,
+          headers: { "content-type": "application/json" },
+        });
+      });
+      const host = mount({
+        "session-id": `t3_${fixture.label.replaceAll(" ", "_")}`,
+        "notes-base-url": "/api/voice-notes",
+        "storage-key": `t3code:collapsed-action:${fixture.label}`,
+      });
+      await flush();
+      await flush();
+      const action = Array.from(host.querySelectorAll("button")).find((button) =>
+        button.textContent?.includes(fixture.label),
+      ) as HTMLButtonElement | undefined;
+      expect(action).toBeDefined();
+      host.querySelector<HTMLButtonElement>(".stm-voice-collapse")?.click();
+      await flush();
+      const widget = host.querySelector(".stm-voice-widget");
+      const content = host.querySelector<HTMLElement>(".stm-voice-widget-content");
+      expect(widget?.classList.contains("stm-voice-widget--collapsed")).toBe(true);
+      expect(widget?.classList.contains("stm-voice-widget--collapsed-action")).toBe(true);
+      expect(content?.hidden).toBe(false);
+      expect(content ? getComputedStyle(content).display : "").not.toBe("none");
+      expect(action?.classList.contains("stm-voice-primary-action")).toBe(true);
+      expect(action?.hidden).toBe(false);
+      expect(action ? getComputedStyle(action).display : "").not.toBe("none");
+      const copy = content?.querySelector("p");
+      expect(copy ? getComputedStyle(copy).display : "").toBe("none");
+    }
+  });
 });

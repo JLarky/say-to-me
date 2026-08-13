@@ -644,11 +644,12 @@ function createOwnedWidget(props: VoiceWidgetProps): HTMLElement {
     );
     soundPrompt.hidden = !showEnableSound();
     timerPanel.hidden = !timersOpen() || isCollapsed;
-    if (isCollapsed) {
-      content.hidden = true;
-    } else {
-      content.hidden = false;
-    }
+    const showCollapsedAction =
+      sessionState() === "missing" ||
+      sessionState() === "unavailable" ||
+      (sessionState() === "ready" && loaded() && notes().length === 0);
+    root.classList.toggle("stm-voice-widget--collapsed-action", isCollapsed && showCollapsedAction);
+    content.hidden = isCollapsed && !showCollapsedAction;
     content.replaceChildren();
     if (sessionState() === "missing") {
       const message = document.createElement("p");
@@ -656,7 +657,7 @@ function createOwnedWidget(props: VoiceWidgetProps): HTMLElement {
       message.className = "stm-voice-widget-missing";
       const create = button(
         creating() ? "Creating..." : "Create voice session",
-        "stm-voice-action",
+        "stm-voice-action stm-voice-primary-action",
       );
       create.disabled = creating();
       create.addEventListener("click", createSession);
@@ -665,7 +666,7 @@ function createOwnedWidget(props: VoiceWidgetProps): HTMLElement {
       const message = document.createElement("p");
       message.textContent = "Say To Me is unavailable.";
       message.className = "stm-voice-widget-unavailable";
-      const retry = button("Retry", "stm-voice-action");
+      const retry = button("Retry", "stm-voice-action stm-voice-primary-action");
       retry.addEventListener("click", () => {
         setSessionState("loading");
         setLoaded(false);
@@ -679,7 +680,10 @@ function createOwnedWidget(props: VoiceWidgetProps): HTMLElement {
     } else if (notes().length === 0) {
       const message = document.createElement("p");
       message.textContent = "No voice notes yet.";
-      const usage = button("Tell your agent how to use Say To Me", "stm-voice-action");
+      const usage = button(
+        "Tell your agent how to use Say To Me",
+        "stm-voice-action stm-voice-primary-action",
+      );
       usage.addEventListener("click", emitUsagePrompt);
       content.append(message, usage);
     } else {
