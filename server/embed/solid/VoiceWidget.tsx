@@ -5,6 +5,7 @@ import { createRenderEffect, createRoot, createSignal, onCleanup } from "solid-j
 import { Widget } from "./components/Widget.tsx";
 import { VoiceNoteRow } from "./components/VoiceNoteRow.tsx";
 import { enqueueVoiceAudio, resetVoiceAudioQueue } from "./voice-widget-audio.ts";
+import { bindVoiceWidgetIdleQueue } from "./voice-widget-idle.ts";
 import { hasAutoplayPermission, playSendDing, warmSendDing } from "./voice-widget-sound.ts";
 import {
   VOICE_WIDGET_DEFAULT_STORAGE_KEY,
@@ -823,6 +824,7 @@ function createOwnedWidget(props: VoiceWidgetProps): HTMLElement {
       setCollapsed(event.newValue === "true");
   };
   window.addEventListener("storage", onStorage);
+  const unbindIdleQueue = bindVoiceWidgetIdleQueue(props.el);
   if (hasConfig) void loadTimers();
   timerRefresh = setInterval(() => {
     void loadTimers();
@@ -834,6 +836,7 @@ function createOwnedWidget(props: VoiceWidgetProps): HTMLElement {
     resetVoiceAudioQueue();
     disposed = true;
     window.removeEventListener("storage", onStorage);
+    unbindIdleQueue();
     clearInterval(timerRefresh);
     clearInterval(timerClock);
     eventSource?.close();

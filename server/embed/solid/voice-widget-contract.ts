@@ -15,6 +15,7 @@ export const VOICE_WIDGET_PARK_SESSION_VERSION = EMBED_WIDGET_VERSION;
 export const VOICE_WIDGET_BANNER_API_VERSION = 2 as const;
 export const VOICE_WIDGET_SPEECH_STARTED_EVENT = "say-to-me-speech-started" as const;
 export const VOICE_WIDGET_SPEECH_ENDED_EVENT = "say-to-me-speech-ended" as const;
+export const VOICE_WIDGET_QUEUE_IDLE_EVENT = "say-to-me-queue-idle" as const;
 
 /** The widget owns one ID/Park toolbar; hosts must not compose a second one. */
 export const VOICE_WIDGET_OWNS_ID_AND_PARK_CONTROLS = true as const;
@@ -103,7 +104,8 @@ export type VoiceWidgetEventDetail =
   | (VoiceWidgetBaseDetail<"park-session", typeof VOICE_WIDGET_PARK_SESSION_VERSION> & {
       readonly sessionId: string;
     })
-  | (VoiceWidgetBaseDetail<"speech-started" | "speech-ended"> & { readonly noteId: string });
+  | (VoiceWidgetBaseDetail<"speech-started" | "speech-ended"> & { readonly noteId: string })
+  | (VoiceWidgetBaseDetail<"queue-idle"> & { readonly workUnitId: string });
 
 export type VoiceWidgetEventType = VoiceWidgetEventDetail["type"];
 
@@ -150,6 +152,11 @@ export function parseVoiceWidgetEventDetail(
       ? { ...detail, noteId: detail.noteId }
       : null;
   }
+  if (hasBase(detail, VOICE_WIDGET_VERSION, "queue-idle")) {
+    return typeof detail.workUnitId === "string" && detail.workUnitId.trim()
+      ? { ...detail, workUnitId: detail.workUnitId.trim() }
+      : null;
+  }
   return null;
 }
 
@@ -168,6 +175,30 @@ export function parseVoiceWidgetEvent(
         ? VOICE_WIDGET_SPEECH_STARTED_EVENT
         : detail.type === "speech-ended"
           ? VOICE_WIDGET_SPEECH_ENDED_EVENT
-          : VOICE_WIDGET_INSERT_USAGE_PROMPT_EVENT;
+          : detail.type === "queue-idle"
+            ? VOICE_WIDGET_QUEUE_IDLE_EVENT
+            : VOICE_WIDGET_INSERT_USAGE_PROMPT_EVENT;
   return event.type === expectedName ? detail : null;
+}
+
+/** Host → widget: enqueue the idle chime for one work unit. */
+export function createVoiceWidgetQueueIdleEvent(workUnitId: string): CustomEvent {
+  return new CustomEvent(VOICE_WIDGET_QUEUE_IDLE_EVENT, {
+    bubbles: true,
+    composed: true,
+    detail: {
+      source: VOICE_WIDGET_SOURCE,
+      version: VOICE_WIDGET_VERSION,
+      type: "queue-idle",
+      workUnitId: workUnitId.trim(),
+    } satisfies Extract<VoiceWidgetEventDetail, { type: "queue-idle" }>,
+  });
+}
+
+/** First claim wins. Blank or already-seen ids are ignored. */
+export function claimIdleWorkUnit(seen: Set<string>, workUnitId: string): string | null {
+  const id = workUnitId.trim();
+  if (!id || seen.has(id)) return null;
+  seen.add(id);
+  return id;
 }

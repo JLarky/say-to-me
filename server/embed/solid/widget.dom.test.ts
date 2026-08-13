@@ -2,6 +2,7 @@
 import { execFileSync } from "node:child_process";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 import { EMBED_WIDGET_PARK_SESSION_EVENT, EMBED_WIDGET_TAG } from "./widget-shared.ts";
+import { createVoiceWidgetQueueIdleEvent } from "./voice-widget-contract.ts";
 import { WIDGET_STYLE_ELEMENT_ID } from "./widget-styles.ts";
 import { VOICE_WIDGET_STYLE_MARKER } from "./voice-widget-styles.ts";
 import { enqueueVoiceAudio, resetVoiceAudioQueue } from "./voice-widget-audio.ts";
@@ -214,6 +215,22 @@ describe("complete say-to-me-widget", () => {
       "Say To Me is unavailable.",
     );
     expect(unavailable.querySelector(".stm-voice-widget-missing")).toBeNull();
+  });
+  it("queues an idle chime once per work unit from the host event", async () => {
+    originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify(payload(1)), { status: 200 }));
+    const host = mount();
+    await flush();
+    await flush();
+    host.dispatchEvent(createVoiceWidgetQueueIdleEvent("turn-1"));
+    await flush();
+    expect(host.dataset.lastQueuedIdleWorkUnit).toBe("turn-1");
+    host.dispatchEvent(createVoiceWidgetQueueIdleEvent("turn-1"));
+    await flush();
+    expect(host.dataset.lastQueuedIdleWorkUnit).toBe("turn-1");
+    host.dispatchEvent(createVoiceWidgetQueueIdleEvent("turn-2"));
+    await flush();
+    expect(host.dataset.lastQueuedIdleWorkUnit).toBe("turn-2");
   });
   it.each([
     { status: 404, label: "Create voice session" },

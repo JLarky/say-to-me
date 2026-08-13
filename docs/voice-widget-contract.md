@@ -14,8 +14,11 @@ open is a direct STM-owned anchor using the existing `sayToMeSessionUrl`/
 `sayToMeSessionLink` helpers, not a host event. Notes/timers base URL path
 composition is deferred and must preserve the existing authenticated proxy shapes.
 
-The only versioned events are `insert-usage-prompt` and `park-session`. No
-generic widget aliases or additional host events are part of this contract.
+The versioned widget→host events are `insert-usage-prompt`, `park-session`,
+`speech-started`, and `speech-ended`. Hosts may send one inbound command,
+`queue-idle`, with a non-empty `workUnitId`. The widget enqueues the idle
+chime on its speech queue and ignores duplicate ids. No generic widget
+aliases are part of this contract.
 
 The remaining migration work is deferred: banner composition/registration,
 fetch/SSE, timers, storage implementation, audio, and T3/Paseo adapters are
