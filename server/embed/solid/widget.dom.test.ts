@@ -10,7 +10,9 @@ class FakeEventSource {
   static instances: FakeEventSource[] = [];
   readonly listeners = new Map<string, EventListener[]>();
   closed = false;
-  constructor(readonly url: string) {
+  readonly url: string;
+  constructor(url: string) {
+    this.url = url;
     FakeEventSource.instances.push(this);
   }
   addEventListener(type: string, listener: EventListener) {
@@ -376,8 +378,10 @@ describe("complete say-to-me-widget", () => {
       lang = "";
       onend: (() => void) | null = null;
       onerror: ((event: { error: string }) => void) | null = null;
-      constructor(readonly text: string) {
+      readonly text: string;
+      constructor(text: string) {
         super();
+        this.text = text;
       }
     }
     Object.defineProperty(window, "speechSynthesis", { configurable: true, value: speech });
