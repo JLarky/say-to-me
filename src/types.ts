@@ -260,6 +260,7 @@ export const Session = type({
   "cwd?": "string | null",
   "t3InstanceId?": "string | null",
   "paseoInstanceId?": "string | null",
+  "paseoUiUrl?": "string | null",
   "organizePath?": OrganizePathCrumb.array(),
 });
 

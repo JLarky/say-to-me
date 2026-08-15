@@ -221,6 +221,7 @@ export { ReasoningEffortSelect } from "./ReasoningEffortSelect.tsx";
 export function SessionLinks({
   localUrl,
   tailscaleUrl,
+  paseoUrl,
   sessionId,
   onCannedMessage = () => {},
   recentLinks = [],
@@ -229,6 +230,7 @@ export function SessionLinks({
 }: {
   localUrl: string | null;
   tailscaleUrl: string | null;
+  paseoUrl?: string | null;
   sessionId: string | undefined;
   onCannedMessage?: (text: string) => void;
   recentLinks?: string[];
@@ -266,6 +268,11 @@ export function SessionLinks({
     }
     saveLastOpenCodeLink(which);
     setLastUsed(which);
+    setOpen(false);
+  }
+
+  function openPaseoLink(url: string) {
+    window.open(url, `paseo-${sessionId}`);
     setOpen(false);
   }
 
@@ -395,6 +402,19 @@ export function SessionLinks({
               {lastUsed === "tailscale" ? (
                 <span {...stylex.props(linksDropdown.lastUsedTag)}>(last used)</span>
               ) : null}
+            </a>
+          ) : null}
+          {paseoUrl ? (
+            <a
+              href={paseoUrl}
+              {...stylex.props(linksDropdown.dropdownItem)}
+              data-paseo-link="true"
+              onClick={(event) => {
+                event.preventDefault();
+                openPaseoLink(paseoUrl);
+              }}
+            >
+              Open Paseo
             </a>
           ) : null}
           <div {...stylex.props(canned.section)}>
@@ -555,6 +575,7 @@ export function SessionStatusControls({
           tailscaleUrl={
             hasOpenCodeLinks && opencodeTailscaleBase ? makeUrl(opencodeTailscaleBase) : null
           }
+          paseoUrl={isPaseoSession ? (session?.paseoUiUrl ?? null) : null}
           sessionId={sessionId}
           onCannedMessage={onCannedMessage}
           recentLinks={recentLinks}
