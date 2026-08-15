@@ -8,8 +8,10 @@ export const playedStatuses = new Set(["played", "done", "skipped"]);
 export type AgentReplyMode = "speak" | "shush" | "manual";
 
 const lastOpenCodeLinkKey = "say-to-me-last-opencode-link";
+const lastPaseoLinkKey = "say-to-me-last-paseo-link";
 
 export type LastOpenCodeLink = "local" | "tailscale";
+export type LastPaseoLink = "local" | "tailscale";
 
 export function getLastOpenCodeLink(): LastOpenCodeLink | null {
   try {
@@ -23,6 +25,23 @@ export function getLastOpenCodeLink(): LastOpenCodeLink | null {
 export function saveLastOpenCodeLink(value: LastOpenCodeLink): void {
   try {
     localStorage.setItem(lastOpenCodeLinkKey, value);
+  } catch {
+    // localStorage may be unavailable; ignore
+  }
+}
+
+export function getLastPaseoLink(): LastPaseoLink | null {
+  try {
+    const value = localStorage.getItem(lastPaseoLinkKey);
+    return value === "local" || value === "tailscale" ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveLastPaseoLink(value: LastPaseoLink): void {
+  try {
+    localStorage.setItem(lastPaseoLinkKey, value);
   } catch {
     // localStorage may be unavailable; ignore
   }

@@ -15,8 +15,11 @@ import type {
 import { type OpenCodeStatus } from "../types.ts";
 import {
   compactLinkLabel,
+  getLastPaseoLink,
   getLastOpenCodeLink,
   type LastOpenCodeLink,
+  type LastPaseoLink,
+  saveLastPaseoLink,
   saveLastOpenCodeLink,
 } from "../utils.ts";
 import { fetchDashboardPlacement, type DashboardPlacement } from "../spaces-api.ts";
@@ -221,7 +224,8 @@ export { ReasoningEffortSelect } from "./ReasoningEffortSelect.tsx";
 export function SessionLinks({
   localUrl,
   tailscaleUrl,
-  paseoUrl,
+  paseoLocalUrl,
+  paseoTailscaleUrl,
   sessionId,
   onCannedMessage = () => {},
   recentLinks = [],
@@ -230,7 +234,8 @@ export function SessionLinks({
 }: {
   localUrl: string | null;
   tailscaleUrl: string | null;
-  paseoUrl?: string | null;
+  paseoLocalUrl?: string | null;
+  paseoTailscaleUrl?: string | null;
   sessionId: string | undefined;
   onCannedMessage?: (text: string) => void;
   recentLinks?: string[];
@@ -239,6 +244,7 @@ export function SessionLinks({
 }) {
   const [open, setOpen] = useState(false);
   const [lastUsed, setLastUsed] = useState<LastOpenCodeLink | null>(null);
+  const [lastPaseoUsed, setLastPaseoUsed] = useState<LastPaseoLink | null>(null);
   const [dashboardBusy, setDashboardBusy] = useState(false);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [placement, setPlacement] = useState<DashboardPlacement | null>(null);
@@ -249,6 +255,7 @@ export function SessionLinks({
 
   useEffect(() => {
     setLastUsed(getLastOpenCodeLink());
+    setLastPaseoUsed(getLastPaseoLink());
   }, []);
 
   useEffect(() => {
@@ -271,8 +278,10 @@ export function SessionLinks({
     setOpen(false);
   }
 
-  function openPaseoLink(url: string) {
+  function openPaseoLink(url: string, which: LastPaseoLink) {
     window.open(url, `paseo-${sessionId}`);
+    saveLastPaseoLink(which);
+    setLastPaseoUsed(which);
     setOpen(false);
   }
 
@@ -404,17 +413,36 @@ export function SessionLinks({
               ) : null}
             </a>
           ) : null}
-          {paseoUrl ? (
+          {paseoLocalUrl ? (
             <a
-              href={paseoUrl}
+              href={paseoLocalUrl}
               {...stylex.props(linksDropdown.dropdownItem)}
-              data-paseo-link="true"
+              data-paseo-link="local"
               onClick={(event) => {
                 event.preventDefault();
-                openPaseoLink(paseoUrl);
+                openPaseoLink(paseoLocalUrl, "local");
               }}
             >
-              Open Paseo
+              Open Paseo local
+              {lastPaseoUsed === "local" ? (
+                <span {...stylex.props(linksDropdown.lastUsedTag)}>(last used)</span>
+              ) : null}
+            </a>
+          ) : null}
+          {paseoTailscaleUrl ? (
+            <a
+              href={paseoTailscaleUrl}
+              {...stylex.props(linksDropdown.dropdownItem)}
+              data-paseo-link="tailscale"
+              onClick={(event) => {
+                event.preventDefault();
+                openPaseoLink(paseoTailscaleUrl, "tailscale");
+              }}
+            >
+              Open Paseo Tailscale
+              {lastPaseoUsed === "tailscale" ? (
+                <span {...stylex.props(linksDropdown.lastUsedTag)}>(last used)</span>
+              ) : null}
             </a>
           ) : null}
           <div {...stylex.props(canned.section)}>
@@ -552,7 +580,13 @@ export function SessionStatusControls({
   const shouldReserve = !session?.opencodeStatus && session?.backend === "opencode";
   const showStatus = isVoiceSession || session?.opencodeStatus || shouldReserve;
   const status = session?.opencodeStatus || "unavailable";
-  const { opencodeLocalBase, opencodeTailscaleBase, opencodeDirB64: capDirB64 } = capabilities;
+  const {
+    opencodeLocalBase,
+    opencodeTailscaleBase,
+    paseoLocalBase,
+    paseoTailscaleBase,
+    opencodeDirB64: capDirB64,
+  } = capabilities;
   const opencodeDirB64 = session?.opencodeDirB64 || capDirB64;
   const hasOpenCodeLinks =
     session?.backend === "opencode" &&
@@ -567,6 +601,16 @@ export function SessionStatusControls({
     return `${base}/${opencodeDirB64}/session/${sessionId}`;
   }
 
+  function makePaseoUrl(base: string | null | undefined) {
+    if (!base || !session?.paseoUiUrl) return null;
+    try {
+      const source = new URL(session.paseoUiUrl);
+      return `${new URL(base).origin}${source.pathname}${source.search}${source.hash}`;
+    } catch {
+      return null;
+    }
+  }
+
   return (
     <>
       {showLinks ? (
@@ -575,7 +619,10 @@ export function SessionStatusControls({
           tailscaleUrl={
             hasOpenCodeLinks && opencodeTailscaleBase ? makeUrl(opencodeTailscaleBase) : null
           }
-          paseoUrl={isPaseoSession ? (session?.paseoUiUrl ?? null) : null}
+          paseoLocalUrl={
+            isPaseoSession ? (makePaseoUrl(paseoLocalBase) ?? session?.paseoUiUrl ?? null) : null
+          }
+          paseoTailscaleUrl={isPaseoSession ? makePaseoUrl(paseoTailscaleBase) : null}
           sessionId={sessionId}
           onCannedMessage={onCannedMessage}
           recentLinks={recentLinks}
