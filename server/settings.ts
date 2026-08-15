@@ -45,6 +45,8 @@ export interface T3ServerInstanceStored extends T3ServerInstance, T3ServerInstan
 
 export interface PaseoInstance {
   id: string;
+  /** Paseo daemon server ID used by browser routes (auto-detected when omitted). */
+  serverId?: string;
   /** Paseo executable or checkout containing the `cli` package script. */
   binPath?: string;
   /** Optional PASEO_HOME override. */
@@ -85,6 +87,7 @@ const T3ServerInstanceStoredSchema = arktype({
 const T3ServerInstancesStoredSchema = T3ServerInstanceStoredSchema.array();
 const PaseoInstanceSchema = arktype({
   id: "string",
+  "serverId?": "string",
   "binPath?": "string",
   "home?": "string",
   host: "string",
@@ -330,7 +333,14 @@ export function normalizePaseoInstances(
     seen.add(id);
     const binPath = typeof entry.binPath === "string" ? entry.binPath.trim() : "";
     const home = typeof entry.home === "string" ? entry.home.trim() : "";
-    return { id, ...(binPath ? { binPath } : {}), ...(home ? { home } : {}), host };
+    const serverId = typeof entry.serverId === "string" ? entry.serverId.trim() : "";
+    return {
+      id,
+      ...(serverId ? { serverId } : {}),
+      ...(binPath ? { binPath } : {}),
+      ...(home ? { home } : {}),
+      host,
+    };
   });
 }
 

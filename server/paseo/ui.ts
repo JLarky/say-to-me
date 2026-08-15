@@ -1,20 +1,42 @@
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import path from "node:path";
+
 import { getPaseoInstance, type PaseoInstance } from "../settings.ts";
 
 function paseoWebOrigin(host: string): string {
   const value = host.trim();
-  if (/^https?:\/\//i.test(value)) return new URL(value).origin;
-  if (/^tcp:\/\//i.test(value)) return `http://${new URL(value).host}`;
-  return `http://${value.split("?")[0]}`;
+  const origin = /^https?:\/\//i.test(value)
+    ? new URL(value).origin
+    : /^tcp:\/\//i.test(value)
+      ? `http://${new URL(value).host}`
+      : `http://${value.split("?")[0]}`;
+  return origin.replace("127.0.0.1", "localhost");
 }
 
-export function paseoParkUrl(
-  instance: Pick<PaseoInstance, "id" | "host">,
+function paseoServerId(instance: Pick<PaseoInstance, "home" | "serverId">): string | null {
+  if (instance.serverId?.trim()) return instance.serverId.trim();
+  const home = instance.home?.trim()
+    ? instance.home.replace(/^~(?=\/|$)/, homedir())
+    : path.join(homedir(), ".paseo");
+  try {
+    const serverId = readFileSync(path.join(home, "server-id"), "utf8").trim();
+    return serverId || null;
+  } catch {
+    return null;
+  }
+}
+
+export function paseoAgentUrl(
+  instance: Pick<PaseoInstance, "id" | "host" | "home" | "serverId">,
   threadId: string,
 ): string {
-  const url = new URL("/park.html", paseoWebOrigin(instance.host));
-  url.searchParams.set("environmentId", instance.id);
-  url.searchParams.set("threadId", threadId);
-  return url.toString();
+  const serverId = paseoServerId(instance);
+  if (!serverId) throw new Error(`Paseo server ID is unavailable for instance "${instance.id}".`);
+  return new URL(
+    `/h/${serverId}/agent/${encodeURIComponent(threadId)}`,
+    paseoWebOrigin(instance.host),
+  ).toString();
 }
 
 export function paseoUiUrlForSession(session: {
@@ -23,5 +45,10 @@ export function paseoUiUrlForSession(session: {
 }): string | null {
   if (!session.id.startsWith("pa_") || !session.paseoInstanceId) return null;
   const instance = getPaseoInstance(session.paseoInstanceId);
-  return instance ? paseoParkUrl(instance, session.id.slice(3)) : null;
+  if (!instance) return null;
+  try {
+    return paseoAgentUrl(instance, session.id.slice(3));
+  } catch {
+    return null;
+  }
 }
