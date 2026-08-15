@@ -290,10 +290,21 @@ export function SessionLinks({
     };
   }, [open, sessionId]);
 
-  function openSpaceChooser() {
-    if (!placement) return;
-    setOpen(false);
-    setAttachPlacement(placement);
+  async function openSpaceChooser() {
+    if (placement) {
+      setOpen(false);
+      setAttachPlacement(placement);
+      return;
+    }
+    if (!sessionId) return;
+    try {
+      const fetched = await fetchDashboardPlacement(sessionId);
+      setPlacement(fetched);
+      setOpen(false);
+      setAttachPlacement(fetched);
+    } catch (error) {
+      setDashboardError(error instanceof Error ? error.message : "Unable to open Dashboard.");
+    }
   }
 
   return (
@@ -320,7 +331,7 @@ export function SessionLinks({
             <button
               type="button"
               {...stylex.props(linksDropdown.dropdownItem)}
-              onClick={openSpaceChooser}
+              onClick={() => void openSpaceChooser()}
             >
               Set space
             </button>
@@ -328,8 +339,8 @@ export function SessionLinks({
             <button
               type="button"
               {...stylex.props(linksDropdown.dropdownItem)}
-              disabled={!placement || !sessionId}
-              onClick={openSpaceChooser}
+              disabled={!sessionId}
+              onClick={() => void openSpaceChooser()}
             >
               {dashboardBusy ? "Dashboard…" : "Dashboard"}
             </button>
