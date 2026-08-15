@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import * as stylex from "@stylexjs/stylex";
-import { Link, useNavigate } from "react-router";
+import { Link } from "react-router";
 import { cliResumeCommand } from "@say-to-me/session-utils/cli-resume-command";
 
 import { controls } from "../styles/controls.stylex.ts";
@@ -235,11 +235,11 @@ export function SessionLinks({
   recentSessions?: MessageSessionReference[];
   cliResumeCommand?: string | null;
 }) {
-  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [lastUsed, setLastUsed] = useState<LastOpenCodeLink | null>(null);
   const [dashboardBusy, setDashboardBusy] = useState(false);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const [placement, setPlacement] = useState<DashboardPlacement | null>(null);
   const [attachPlacement, setAttachPlacement] = useState<DashboardPlacement | null>(null);
   const ref = useRef<HTMLSpanElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
@@ -269,41 +269,41 @@ export function SessionLinks({
     setOpen(false);
   }
 
-  async function openDashboard() {
-    if (!sessionId || dashboardBusy) return;
+  useEffect(() => {
+    if (!open || !sessionId) return;
+    let cancelled = false;
     setDashboardBusy(true);
     setDashboardError(null);
+    void fetchDashboardPlacement(sessionId)
+      .then((next) => {
+        if (cancelled) return;
+        setPlacement(next);
+        setDashboardBusy(false);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setDashboardError(error instanceof Error ? error.message : "Unable to open Dashboard.");
+        setDashboardBusy(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, sessionId]);
+
+  async function openSpaceChooser() {
+    if (placement) {
+      setOpen(false);
+      setAttachPlacement(placement);
+      return;
+    }
+    if (!sessionId) return;
     try {
-      const placement = await fetchDashboardPlacement(sessionId);
-      if (!placement.placementPossible) {
-        setDashboardError(
-          placement.placementBlockReason === "no-spaces"
-            ? "Create a space from Dashboard first."
-            : placement.placementBlockReason === "cwd-deleted"
-              ? "Session working directory no longer exists."
-              : "Dashboard placement is not available for this session.",
-        );
-        setDashboardBusy(false);
-        return;
-      }
-      if (placement.needsChooser) {
-        setOpen(false);
-        setAttachPlacement(placement);
-        setDashboardBusy(false);
-        return;
-      }
-      if (placement.canonicalDashboardPath) {
-        setOpen(false);
-        setDashboardBusy(false);
-        // SPA navigate — avoid full document reload (especially painful after HMR).
-        void navigate(placement.canonicalDashboardPath);
-        return;
-      }
-      setDashboardError("Dashboard placement is not available for this session.");
-      setDashboardBusy(false);
+      const fetched = await fetchDashboardPlacement(sessionId);
+      setPlacement(fetched);
+      setOpen(false);
+      setAttachPlacement(fetched);
     } catch (error) {
       setDashboardError(error instanceof Error ? error.message : "Unable to open Dashboard.");
-      setDashboardBusy(false);
     }
   }
 
@@ -319,14 +319,28 @@ export function SessionLinks({
       </button>
       {open ? (
         <div {...stylex.props(linksDropdown.dropdown)}>
-          <button
-            type="button"
-            {...stylex.props(linksDropdown.dropdownItem)}
-            disabled={dashboardBusy || !sessionId}
-            onClick={() => void openDashboard()}
-          >
-            {dashboardBusy ? "Dashboard…" : "Dashboard"}
-          </button>
+          {placement && placement.canonicalDashboardPath && !placement.needsChooser ? (
+            <Link
+              to={placement.canonicalDashboardPath}
+              {...stylex.props(linksDropdown.dropdownItem)}
+              onClick={() => setOpen(false)}
+            >
+              Dashboard
+            </Link>
+          ) : (
+            <button
+              type="button"
+              {...stylex.props(linksDropdown.dropdownItem)}
+              disabled={!sessionId}
+              onClick={() => void openSpaceChooser()}
+            >
+              {placement && !placement.placementPossible
+                ? "Set space"
+                : dashboardBusy
+                  ? "Dashboard…"
+                  : "Dashboard"}
+            </button>
+          )}
           {dashboardError ? (
             <p {...stylex.props(linksDropdown.dashboardError)}>{dashboardError}</p>
           ) : null}
