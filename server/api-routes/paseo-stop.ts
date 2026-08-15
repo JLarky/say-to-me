@@ -42,7 +42,7 @@ export function stopPaseoSessionProgram(
 ): Effect.Effect<unknown, StopPaseoRouteError, StopPaseoService> {
   return Effect.gen(function* () {
     const sessionId = normalizeSessionId(rawSessionId);
-    if (!sessionId || !["paseo", "paseo-chat"].includes(detectSessionBackend(sessionId))) {
+    if (!sessionId || detectSessionBackend(sessionId) !== "paseo") {
       return yield* Effect.fail({
         _tag: "StopPaseoError" as const,
         error: "Invalid Paseo session id.",
@@ -69,7 +69,9 @@ export const PaseoStopGroup = HttpApiGroup.make("paseo-stop").add(
       openApiDocs("Stop Paseo session", "Interrupts the running Paseo agent for the session."),
     )
     .addSuccess(Schema.Unknown)
-    .addError(StopError, { status: 400 }),
+    .addError(StopError, { status: 400 })
+    .addError(StopError, { status: 404 })
+    .addError(StopError, { status: 500 }),
 );
 
 export function buildPaseoStopHandlers<

@@ -63,7 +63,6 @@ export function layerForBackend(
     case "cursor":
       return CursorSessionLayers;
     case "paseo":
-    case "paseo-chat":
       return PaseoSessionLayers;
     default:
       return undefined;
