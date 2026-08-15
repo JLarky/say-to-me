@@ -57,11 +57,11 @@ export const PASEO_AGENT_ID = "say-to-me";
 const PASEO_COMMAND_TIMEOUT_MS = Number(process.env.SAY_TO_ME_PASEO_COMMAND_TIMEOUT_MS || 15_000);
 
 export class PaseoCommandError extends Error {
-  constructor(
-    message: string,
-    readonly retryable: boolean,
-  ) {
+  readonly retryable: boolean;
+
+  constructor(message: string, retryable: boolean) {
     super(message);
+    this.retryable = retryable;
     this.name = "PaseoCommandError";
   }
 }

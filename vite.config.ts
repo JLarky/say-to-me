@@ -34,6 +34,10 @@ export default defineConfig({
       "@stylexjs/no-unused": "error",
       "@stylexjs/valid-styles": "error",
       "@stylexjs/valid-shorthands": "error",
+      // Worker scripts run through Node's strip-only type stripping, which rejects
+      // parameter properties at import time. One in a shared module takes down every
+      // worker whose import graph reaches it. Assign in the constructor body instead.
+      "typescript/parameter-properties": "error",
       "no-restricted-properties": [
         "error",
         {

@@ -30,7 +30,10 @@ describe("OpenCodeActivityPreview", () => {
     let latestOnError: (() => void) | null = null;
     let fetchCount = 0;
     class MockEventSource {
-      constructor(public url: string) {}
+      url: string;
+      constructor(url: string) {
+        this.url = url;
+      }
       set onerror(handler: (() => void) | null) {
         latestOnError = handler;
       }
@@ -91,7 +94,10 @@ describe("OpenCodeActivityPreview", () => {
     const statuses: string[] = [];
     let snapshotHandler: ((event: MessageEvent) => void) | null = null;
     class MockEventSource {
-      constructor(public url: string) {}
+      url: string;
+      constructor(url: string) {
+        this.url = url;
+      }
       addEventListener(type: string, handler: (event: MessageEvent) => void) {
         if (type === "snapshot") snapshotHandler = handler;
       }
