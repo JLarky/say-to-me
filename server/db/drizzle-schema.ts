@@ -35,6 +35,8 @@ export const appSettings = sqliteTable("app_settings", {
   t3ServerInstances: text("t3_server_instances").notNull().default("[]"),
   /** JSON array of Paseo instances: { id, binPath?, home?, host }[] */
   paseoInstances: text("paseo_instances").notNull().default("[]"),
+  /** JSON array of OpenCode instances: { id, localUrl?, tailscaleUrl? }[] */
+  opencodeInstances: text("opencode_instances").notNull().default("[]"),
   updatedAt: text("updated_at")
     .notNull()
     .default(sql`CURRENT_TIMESTAMP`),

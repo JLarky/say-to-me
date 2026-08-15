@@ -20,6 +20,7 @@ import {
   fetchSettings,
   type T3ServerInstance,
   type PaseoInstance,
+  type OpenCodeInstance,
   updateSettings,
 } from "../../settings-api.ts";
 
@@ -31,19 +32,23 @@ export function NewSettingsPage() {
   const [jarvisParent, setJarvisParent] = useState(DEFAULT_JARVIS_PARENT_PATH);
   const [t3Instances, setT3Instances] = useState<T3ServerInstance[]>([]);
   const [paseoInstances, setPaseoInstances] = useState<PaseoInstance[]>([]);
+  const [opencodeInstances, setOpenCodeInstances] = useState<OpenCodeInstance[]>([]);
   const [locationSettingsLoading, setLocationSettingsLoading] = useState(true);
   const [worktreeSettingsSaving, setWorktreeSettingsSaving] = useState(false);
   const [jarvisSettingsSaving, setJarvisSettingsSaving] = useState(false);
   const [t3SettingsSaving, setT3SettingsSaving] = useState(false);
   const [paseoSettingsSaving, setPaseoSettingsSaving] = useState(false);
+  const [opencodeSettingsSaving, setOpenCodeSettingsSaving] = useState(false);
   const [worktreeSettingsSaved, setWorktreeSettingsSaved] = useState(false);
   const [jarvisSettingsSaved, setJarvisSettingsSaved] = useState(false);
   const [t3SettingsSaved, setT3SettingsSaved] = useState(false);
   const [paseoSettingsSaved, setPaseoSettingsSaved] = useState(false);
+  const [opencodeSettingsSaved, setOpenCodeSettingsSaved] = useState(false);
   const [worktreeSettingsError, setWorktreeSettingsError] = useState<string | null>(null);
   const [jarvisSettingsError, setJarvisSettingsError] = useState<string | null>(null);
   const [t3SettingsError, setT3SettingsError] = useState<string | null>(null);
   const [paseoSettingsError, setPaseoSettingsError] = useState<string | null>(null);
+  const [opencodeSettingsError, setOpenCodeSettingsError] = useState<string | null>(null);
   const name = draftName.trim();
 
   useEffect(() => {
@@ -63,10 +68,12 @@ export function NewSettingsPage() {
         );
         setT3Instances(value.t3ServerInstances);
         setPaseoInstances(value.paseoInstances);
+        setOpenCodeInstances(value.opencodeInstances ?? []);
         setWorktreeSettingsError(null);
         setJarvisSettingsError(null);
         setT3SettingsError(null);
         setPaseoSettingsError(null);
+        setOpenCodeSettingsError(null);
       })
       .catch((error: unknown) => {
         if (!active) return;
@@ -76,6 +83,7 @@ export function NewSettingsPage() {
         setJarvisSettingsError(message);
         setT3SettingsError(message);
         setPaseoSettingsError(message);
+        setOpenCodeSettingsError(message);
       })
       .finally(() => {
         if (active) setLocationSettingsLoading(false);
@@ -231,6 +239,22 @@ export function NewSettingsPage() {
     }
   }
 
+  async function saveOpenCodeSettings() {
+    setOpenCodeSettingsSaving(true);
+    setOpenCodeSettingsError(null);
+    try {
+      const value = await updateSettings({ opencodeInstances });
+      setOpenCodeInstances(value.opencodeInstances ?? []);
+      setOpenCodeSettingsSaved(true);
+    } catch (error) {
+      setOpenCodeSettingsError(
+        error instanceof Error ? error.message : "Unable to save OpenCode settings.",
+      );
+    } finally {
+      setOpenCodeSettingsSaving(false);
+    }
+  }
+
   return (
     <div {...stylex.props(chrome.root, chrome.shell)}>
       <Sidebar active="settings" initials={profileInitials(profile.name)} />
@@ -300,6 +324,86 @@ export function NewSettingsPage() {
               with other browsers.
             </span>
           </div>
+
+          <section {...stylex.props(settings.intro, settings.preferenceIntro)}>
+            <span {...stylex.props(settings.eyebrow)}>OPENCODE</span>
+            <h2 {...stylex.props(settings.preferenceHeading)}>Configure OpenCode links.</h2>
+            <p {...stylex.props(settings.lede)}>
+              Set the local and Tailscale hosts used by OpenCode session links.
+            </p>
+          </section>
+          <section {...stylex.props(settings.card, settings.preferenceCard)}>
+            <form
+              {...stylex.props(settings.form)}
+              onSubmit={(event) => {
+                event.preventDefault();
+                void saveOpenCodeSettings();
+              }}
+            >
+              {opencodeInstances.map((instance, index) => (
+                <div key={`opencode-${index}`} {...stylex.props(settings.instanceCard)}>
+                  <div {...stylex.props(settings.instanceHeader)}>
+                    <span {...stylex.props(settings.instanceTitle)}>
+                      INSTANCE {index + 1} · {instance.id}
+                    </span>
+                  </div>
+                  <div {...stylex.props(settings.fieldStack)}>
+                    <label {...stylex.props(settings.label)}>
+                      LOCAL URL
+                      <input
+                        {...stylex.props(settings.input)}
+                        value={instance.localUrl ?? ""}
+                        placeholder="http://localhost:4096"
+                        onChange={(event) =>
+                          setOpenCodeInstances((current) =>
+                            current.map((entry, entryIndex) =>
+                              entryIndex === index
+                                ? { ...entry, localUrl: event.target.value }
+                                : entry,
+                            ),
+                          )
+                        }
+                      />
+                    </label>
+                    <label {...stylex.props(settings.label)}>
+                      TAILSCALE URL
+                      <input
+                        {...stylex.props(settings.input)}
+                        value={instance.tailscaleUrl ?? ""}
+                        placeholder="https://opencode.example.ts.net"
+                        onChange={(event) =>
+                          setOpenCodeInstances((current) =>
+                            current.map((entry, entryIndex) =>
+                              entryIndex === index
+                                ? { ...entry, tailscaleUrl: event.target.value }
+                                : entry,
+                            ),
+                          )
+                        }
+                      />
+                    </label>
+                  </div>
+                </div>
+              ))}
+              {opencodeSettingsError ? (
+                <p {...stylex.props(settings.error)} role="alert">
+                  {opencodeSettingsError}
+                </p>
+              ) : null}
+              <div {...stylex.props(settings.actions)}>
+                <span {...stylex.props(settings.saved)}>
+                  {opencodeSettingsSaved ? "OpenCode settings saved" : ""}
+                </span>
+                <button
+                  {...stylex.props(settings.saveButton)}
+                  type="submit"
+                  disabled={locationSettingsLoading || opencodeSettingsSaving}
+                >
+                  {opencodeSettingsSaving ? "Saving…" : "Save OpenCode links"}
+                </button>
+              </div>
+            </form>
+          </section>
 
           <section {...stylex.props(settings.intro, settings.preferenceIntro)}>
             <span {...stylex.props(settings.eyebrow)}>WORKTREES</span>

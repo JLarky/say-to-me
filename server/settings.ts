@@ -10,6 +10,7 @@ const SETTINGS_ID = 1;
 
 export const DEFAULT_PASEO_INSTANCE_ID = "default";
 export const DEFAULT_PASEO_HOST = "127.0.0.1:6767";
+export const DEFAULT_OPENCODE_INSTANCE_ID = "default";
 
 /** Refresh a little early so callers rarely hit an already-expired token. */
 export const ACCESS_TOKEN_EXPIRY_SKEW_MS = 30_000;
@@ -55,11 +56,18 @@ export interface PaseoInstance {
   host: string;
 }
 
+export interface OpenCodeInstance {
+  id: string;
+  localUrl?: string;
+  tailscaleUrl?: string;
+}
+
 export interface AppSettings {
   preferredWorktreeParentPath: string | null;
   preferredJarvisParentPath: string | null;
   t3ServerInstances: T3ServerInstance[];
   paseoInstances: PaseoInstance[];
+  opencodeInstances: OpenCodeInstance[];
 }
 
 export type AppSettingsPatch = {
@@ -68,6 +76,7 @@ export type AppSettingsPatch = {
   /** Public fields only; secrets are preserved by matching instance id. */
   t3ServerInstances?: readonly T3ServerInstance[];
   paseoInstances?: readonly PaseoInstance[];
+  opencodeInstances?: readonly OpenCodeInstance[];
 };
 
 export type MintedT3AccessToken = {
@@ -93,6 +102,12 @@ const PaseoInstanceSchema = arktype({
   host: "string",
 });
 const PaseoInstancesSchema = PaseoInstanceSchema.array();
+const OpenCodeInstanceSchema = arktype({
+  id: "string",
+  "localUrl?": "string",
+  "tailscaleUrl?": "string",
+});
+const OpenCodeInstancesSchema = OpenCodeInstanceSchema.array();
 
 export class SettingsValidationError extends Error {
   readonly status = 400;
@@ -165,6 +180,7 @@ function readStoredSettingsRow() {
       preferredJarvisParentPath: appSettings.preferredJarvisParentPath,
       t3ServerInstances: appSettings.t3ServerInstances,
       paseoInstances: appSettings.paseoInstances,
+      opencodeInstances: appSettings.opencodeInstances,
     })
     .from(appSettings)
     .where(eq(appSettings.id, SETTINGS_ID))
@@ -210,6 +226,32 @@ function parseStoredPaseoInstances(raw: string | null | undefined): PaseoInstanc
   });
 }
 
+function parseStoredOpenCodeInstances(raw: string | null | undefined): OpenCodeInstance[] {
+  if (!raw?.trim()) return [];
+  const parsed = safeJsonParse(OpenCodeInstancesSchema, raw);
+  if (!parsed) return [];
+  return parsed.flatMap((entry) => {
+    const id = entry.id.trim();
+    if (!id) return [];
+    const localUrl = entry.localUrl?.trim();
+    const tailscaleUrl = entry.tailscaleUrl?.trim();
+    return [{ id, ...(localUrl ? { localUrl } : {}), ...(tailscaleUrl ? { tailscaleUrl } : {}) }];
+  });
+}
+
+function effectiveOpenCodeInstances(instances: readonly OpenCodeInstance[]): OpenCodeInstance[] {
+  if (instances.length > 0) return [...instances];
+  const localUrl = process.env.SAY_TO_ME_OPENCODE_LOCAL_URL?.trim();
+  const tailscaleUrl = process.env.SAY_TO_ME_OPENCODE_TAILSCALE_URL?.trim();
+  return [
+    {
+      id: DEFAULT_OPENCODE_INSTANCE_ID,
+      ...(localUrl ? { localUrl } : {}),
+      ...(tailscaleUrl ? { tailscaleUrl } : {}),
+    },
+  ];
+}
+
 function effectivePaseoInstances(instances: readonly PaseoInstance[]): PaseoInstance[] {
   return instances.length > 0
     ? [...instances]
@@ -221,9 +263,11 @@ function writeAppSettingsRow(input: {
   preferredJarvisParentPath: string | null;
   t3ServerInstances: readonly T3ServerInstanceStored[];
   paseoInstances: readonly PaseoInstance[];
+  opencodeInstances: readonly OpenCodeInstance[];
 }): void {
   const t3ServerInstancesJson = JSON.stringify(input.t3ServerInstances);
   const paseoInstancesJson = JSON.stringify(input.paseoInstances);
+  const opencodeInstancesJson = JSON.stringify(input.opencodeInstances);
   drizzleDb
     .insert(appSettings)
     .values({
@@ -232,6 +276,7 @@ function writeAppSettingsRow(input: {
       preferredJarvisParentPath: input.preferredJarvisParentPath,
       t3ServerInstances: t3ServerInstancesJson,
       paseoInstances: paseoInstancesJson,
+      opencodeInstances: opencodeInstancesJson,
     })
     .onConflictDoUpdate({
       target: appSettings.id,
@@ -240,6 +285,7 @@ function writeAppSettingsRow(input: {
         preferredJarvisParentPath: input.preferredJarvisParentPath,
         t3ServerInstances: t3ServerInstancesJson,
         paseoInstances: paseoInstancesJson,
+        opencodeInstances: opencodeInstancesJson,
         updatedAt: sql`CURRENT_TIMESTAMP`,
       },
     })
@@ -253,6 +299,9 @@ export function getAppSettings(): AppSettings {
     preferredJarvisParentPath: settings?.preferredJarvisParentPath ?? null,
     t3ServerInstances: listStoredT3ServerInstances().map(toPublicT3ServerInstance),
     paseoInstances: effectivePaseoInstances(parseStoredPaseoInstances(settings?.paseoInstances)),
+    opencodeInstances: effectiveOpenCodeInstances(
+      parseStoredOpenCodeInstances(settings?.opencodeInstances),
+    ),
   };
 }
 
@@ -344,6 +393,27 @@ export function normalizePaseoInstances(
   });
 }
 
+export function normalizeOpenCodeInstances(
+  value: readonly OpenCodeInstance[] | undefined,
+): OpenCodeInstance[] {
+  if (!Array.isArray(value)) {
+    throw new SettingsValidationError("opencodeInstances must be an array.");
+  }
+  const seen = new Set<string>();
+  return value.map((entry, index) => {
+    const id = typeof entry?.id === "string" ? entry.id.trim() : "";
+    if (!id) throw new SettingsValidationError(`OpenCode instance at index ${index} needs an id.`);
+    if (seen.has(id)) throw new SettingsValidationError(`Duplicate OpenCode instance id "${id}".`);
+    const localUrl = typeof entry.localUrl === "string" ? entry.localUrl.trim() : "";
+    const tailscaleUrl = typeof entry.tailscaleUrl === "string" ? entry.tailscaleUrl.trim() : "";
+    if (!localUrl && !tailscaleUrl) {
+      throw new SettingsValidationError(`OpenCode instance "${id}" needs a host URL.`);
+    }
+    seen.add(id);
+    return { id, ...(localUrl ? { localUrl } : {}), ...(tailscaleUrl ? { tailscaleUrl } : {}) };
+  });
+}
+
 export function updateAppSettings(patch: AppSettingsPatch): AppSettings {
   const currentRow = readStoredSettingsRow();
   const currentPaths = {
@@ -352,6 +422,7 @@ export function updateAppSettings(patch: AppSettingsPatch): AppSettings {
   };
   const currentStoredInstances = parseStoredT3ServerInstances(currentRow?.t3ServerInstances);
   const currentPaseoInstances = parseStoredPaseoInstances(currentRow?.paseoInstances);
+  const currentOpenCodeInstances = parseStoredOpenCodeInstances(currentRow?.opencodeInstances);
 
   const preferredWorktreeParentPath =
     "preferredWorktreeParentPath" in patch
@@ -370,12 +441,18 @@ export function updateAppSettings(patch: AppSettingsPatch): AppSettings {
       ? normalizePaseoInstances(patch.paseoInstances)
       : currentPaseoInstances;
   const paseoInstances = effectivePaseoInstances(storedPaseoInstances);
+  const storedOpenCodeInstances =
+    "opencodeInstances" in patch
+      ? normalizeOpenCodeInstances(patch.opencodeInstances)
+      : currentOpenCodeInstances;
+  const opencodeInstances = effectiveOpenCodeInstances(storedOpenCodeInstances);
 
   writeAppSettingsRow({
     preferredWorktreeParentPath,
     preferredJarvisParentPath,
     t3ServerInstances,
     paseoInstances: storedPaseoInstances,
+    opencodeInstances: storedOpenCodeInstances,
   });
 
   return {
@@ -383,6 +460,7 @@ export function updateAppSettings(patch: AppSettingsPatch): AppSettings {
     preferredJarvisParentPath,
     t3ServerInstances: t3ServerInstances.map(toPublicT3ServerInstance),
     paseoInstances,
+    opencodeInstances,
   };
 }
 
@@ -459,6 +537,7 @@ export function setT3ServerInstanceAccessToken(
     preferredJarvisParentPath: currentRow?.preferredJarvisParentPath ?? null,
     t3ServerInstances: nextInstances,
     paseoInstances: parseStoredPaseoInstances(currentRow?.paseoInstances),
+    opencodeInstances: parseStoredOpenCodeInstances(currentRow?.opencodeInstances),
   });
 
   return updated;
