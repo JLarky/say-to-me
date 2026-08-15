@@ -641,6 +641,23 @@ export function SessionPage() {
     setError("");
   }
 
+  async function stopPaseo() {
+    if (!sessionId) return;
+    const response = await fetch(`/api/sessions/${sessionId}/stop-paseo`, { method: "POST" });
+
+    if (!response.ok) {
+      const payload = await safeResponseJson(response, ErrorPayload);
+      setError(payload.error || "Unable to stop Paseo session.");
+      return;
+    }
+
+    const payload = await safeResponseJson(response, MessagesPayload);
+    setMessages(payload.messages || []);
+    setSession(payload.session || null);
+    setSessions(payload.sessions || []);
+    setError("");
+  }
+
   async function saveSessionAlias(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!sessionId || sessionId === "default") return;
@@ -764,6 +781,7 @@ export function SessionPage() {
             onStopClaude={stopClaude}
             onStopCodex={stopCodex}
             onStopGrok={stopGrok}
+            onStopPaseo={stopPaseo}
             capabilities={capabilities}
             externalCliActivity={externalCliActivity}
             onCannedMessage={handleCannedMessage}

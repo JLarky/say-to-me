@@ -103,6 +103,7 @@ import { buildSpacesHandlers, SpacesGroup } from "./spaces.ts";
 import { buildSettingsHandlers, SettingsGroup } from "./settings.ts";
 import { buildT3DiscoverHandlers, T3DiscoverGroup } from "./t3-discover.ts";
 import { buildPaseoDiscoverHandlers, PaseoDiscoverGroup } from "./paseo-discover.ts";
+import { buildPaseoStopHandlers, PaseoStopGroup, StopPaseoLive } from "./paseo-stop.ts";
 
 export const SayToMeApi = HttpApi.make("say-to-me")
   .annotateContext(
@@ -119,6 +120,7 @@ export const SayToMeApi = HttpApi.make("say-to-me")
   .add(SettingsGroup)
   .add(T3DiscoverGroup)
   .add(PaseoDiscoverGroup)
+  .add(PaseoStopGroup)
   .add(SessionsGroup)
   .add(JarvisStatusGroup)
   .add(QueueGroup)
@@ -166,6 +168,7 @@ const SayToMeHandlers = Layer.mergeAll(
   buildSettingsHandlers(SayToMeApi),
   buildT3DiscoverHandlers(SayToMeApi),
   buildPaseoDiscoverHandlers(SayToMeApi),
+  buildPaseoStopHandlers(SayToMeApi),
   buildSessionsHandlers(SayToMeApi),
   buildJarvisStatusHandlers(SayToMeApi),
   buildQueueHandlers(SayToMeApi),
@@ -220,6 +223,7 @@ const SayToMeLive = Layer.mergeAll(
   StopClaudeLive,
   StopCodexLive,
   StopGrokLive,
+  StopPaseoLive,
   CompactOpenCodeLive,
   OpenCodeModelControlsLive,
   OpenCodeModelSessionLive,

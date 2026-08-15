@@ -16,6 +16,7 @@ import {
   CodexCurrentModelLayer,
   GrokCurrentModelLayer,
   CursorCurrentModelLayer,
+  PaseoSessionLayers,
 } from "./provider-layers.ts";
 import {
   SessionActivity,
@@ -61,6 +62,9 @@ export function layerForBackend(
       return GrokSessionLayers;
     case "cursor":
       return CursorSessionLayers;
+    case "paseo":
+    case "paseo-chat":
+      return PaseoSessionLayers;
     default:
       return undefined;
   }

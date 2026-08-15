@@ -67,7 +67,7 @@ export function ExternalCliStatusBadge({
   provider,
   busy,
 }: {
-  provider: "Cursor" | "Claude" | "Codex" | "Grok";
+  provider: "Cursor" | "Claude" | "Codex" | "Grok" | "Paseo";
   busy: boolean;
 }) {
   const status = busy ? "busy" : "idle";
@@ -501,6 +501,7 @@ export function SessionStatusControls({
   onStopClaude = () => {},
   onStopCodex = () => {},
   onStopGrok = () => {},
+  onStopPaseo = () => {},
   capabilities = {},
   externalCliActivity = null,
   onCannedMessage = () => {},
@@ -514,6 +515,7 @@ export function SessionStatusControls({
   onStopClaude?: () => void;
   onStopCodex?: () => void;
   onStopGrok?: () => void;
+  onStopPaseo?: () => void;
   capabilities?: Partial<Capabilities>;
   externalCliActivity?: ExternalCliActivitySnapshot | null;
   onCannedMessage?: (text: string) => void;
@@ -524,6 +526,7 @@ export function SessionStatusControls({
   const isClaudeSession = session?.backend === "claude";
   const isCodexSession = session?.backend === "codex";
   const isGrokSession = session?.backend === "grok";
+  const isPaseoSession = session?.backend === "paseo" || session?.backend === "paseo-chat";
   const isVoiceSession = session?.backend === "voice";
   const externalCliBusy = Boolean(externalCliActivity?.busy);
   const shouldReserve = !session?.opencodeStatus && session?.backend === "opencode";
@@ -625,6 +628,18 @@ export function SessionStatusControls({
             onClick={onStopGrok}
           >
             Stop Grok
+          </button>
+        </span>
+      ) : null}
+      {isPaseoSession && externalCliBusy ? (
+        <span {...stylex.props(sessionStyles.statusControls)} data-session-status-controls>
+          <ExternalCliStatusBadge provider="Paseo" busy />
+          <button
+            {...stylex.props(controls.button, controls.danger, controls.compact)}
+            type="button"
+            onClick={onStopPaseo}
+          >
+            Stop Paseo
           </button>
         </span>
       ) : null}
