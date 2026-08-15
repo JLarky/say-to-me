@@ -327,14 +327,6 @@ export function SessionLinks({
             >
               Dashboard
             </Link>
-          ) : placement && !placement.placementPossible ? (
-            <button
-              type="button"
-              {...stylex.props(linksDropdown.dropdownItem)}
-              onClick={() => void openSpaceChooser()}
-            >
-              Set space
-            </button>
           ) : (
             <button
               type="button"
@@ -342,7 +334,11 @@ export function SessionLinks({
               disabled={!sessionId}
               onClick={() => void openSpaceChooser()}
             >
-              {dashboardBusy ? "Dashboard…" : "Dashboard"}
+              {placement && !placement.placementPossible
+                ? "Set space"
+                : dashboardBusy
+                  ? "Dashboard…"
+                  : "Dashboard"}
             </button>
           )}
           {dashboardError ? (
