@@ -526,7 +526,7 @@ export function SessionStatusControls({
   const isClaudeSession = session?.backend === "claude";
   const isCodexSession = session?.backend === "codex";
   const isGrokSession = session?.backend === "grok";
-  const isPaseoSession = session?.backend === "paseo" || session?.backend === "paseo-chat";
+  const isPaseoSession = session?.backend === "paseo";
   const isVoiceSession = session?.backend === "voice";
   const externalCliBusy = Boolean(externalCliActivity?.busy);
   const shouldReserve = !session?.opencodeStatus && session?.backend === "opencode";
