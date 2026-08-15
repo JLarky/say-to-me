@@ -12,6 +12,7 @@ import { ClaudeActivity } from "../ClaudeActivity.tsx";
 import { CodexActivity } from "../CodexActivity.tsx";
 import { CursorActivity } from "../CursorActivity.tsx";
 import { GrokActivity } from "../GrokActivity.tsx";
+import { PaseoActivity } from "../PaseoActivity.tsx";
 import { OpenCodeActivityPreview } from "../OpenCodeActivityPreview.tsx";
 import { PageShell } from "../PageShell.tsx";
 import { SessionStatusControls } from "../SessionStatusControls.tsx";
@@ -640,6 +641,23 @@ export function SessionPage() {
     setError("");
   }
 
+  async function stopPaseo() {
+    if (!sessionId) return;
+    const response = await fetch(`/api/sessions/${sessionId}/stop-paseo`, { method: "POST" });
+
+    if (!response.ok) {
+      const payload = await safeResponseJson(response, ErrorPayload);
+      setError(payload.error || "Unable to stop Paseo session.");
+      return;
+    }
+
+    const payload = await safeResponseJson(response, MessagesPayload);
+    setMessages(payload.messages || []);
+    setSession(payload.session || null);
+    setSessions(payload.sessions || []);
+    setError("");
+  }
+
   async function saveSessionAlias(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!sessionId || sessionId === "default") return;
@@ -763,6 +781,7 @@ export function SessionPage() {
             onStopClaude={stopClaude}
             onStopCodex={stopCodex}
             onStopGrok={stopGrok}
+            onStopPaseo={stopPaseo}
             capabilities={capabilities}
             externalCliActivity={externalCliActivity}
             onCannedMessage={handleCannedMessage}
@@ -954,6 +973,7 @@ export function SessionPage() {
           <CursorActivity activity={externalCliActivity} sessionId={sessionId} />
           <CodexActivity activity={externalCliActivity} sessionId={sessionId} />
           <GrokActivity activity={externalCliActivity} sessionId={sessionId} />
+          <PaseoActivity activity={externalCliActivity} sessionId={sessionId} />
           {sessionId ? (
             <SessionTimerSummary
               createHref={`/jarvis/timers/new?sessionId=${encodeURIComponent(sessionId)}`}

@@ -18,6 +18,8 @@ import { getCursorActivitySnapshot, subscribeCursorActivity } from "../cursor/ac
 import { readCursorCurrentModel } from "../cursor/current-model.ts";
 import { enqueueCursorDeliveryJob } from "../cursor/durable-delivery.ts";
 import { stopCursorSession } from "../cursor/stop.ts";
+import { stopPaseoSession } from "../paseo/stop.ts";
+import { getPaseoActivitySnapshot, subscribePaseoActivity } from "../paseo/activity-hub.ts";
 import { readCursorTitle } from "../cursor/title.ts";
 import { externalCliTitleCacheMs } from "../config.ts";
 import { createSessionActivityAdapter } from "./activity-adapter.ts";
@@ -28,6 +30,7 @@ import {
   SessionCurrentModel,
   SessionDelivery,
   SessionStopper,
+  SessionTitle,
   type SessionActivityService,
   type SessionDeliveryService,
   type SessionCurrentModelService,
@@ -189,6 +192,21 @@ export const CursorSessionLayers = Layer.mergeAll(
 );
 
 export const CursorDeliveryLayer = Layer.succeed(SessionDelivery, CursorDeliveryLive);
+
+const PaseoActivityLive: SessionActivityService = createSessionActivityAdapter({
+  getSnapshot: getPaseoActivitySnapshot,
+  subscribe: subscribePaseoActivity,
+});
+
+const PaseoStopperLive: SessionStopperService = createSessionStopperAdapter({
+  stopSession: stopPaseoSession,
+});
+
+export const PaseoSessionLayers = Layer.mergeAll(
+  Layer.succeed(SessionActivity, PaseoActivityLive),
+  Layer.succeed(SessionStopper, PaseoStopperLive),
+  Layer.succeed(SessionTitle, { getTitle: () => Effect.succeed(null) }),
+);
 
 const GrokCurrentModelLive: SessionCurrentModelService = {
   getCurrentModel: (sessionId) => {
