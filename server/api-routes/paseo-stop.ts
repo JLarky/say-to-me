@@ -66,7 +66,10 @@ export const PaseoStopGroup = HttpApiGroup.make("paseo-stop").add(
   HttpApiEndpoint.post("stopPaseoSession", "/api/sessions/:sessionId/stop-paseo")
     .setPath(SessionPath)
     .annotateContext(
-      openApiDocs("Stop Paseo session", "Interrupts the running Paseo agent for the session."),
+      openApiDocs(
+        "Stop Paseo agent session",
+        "Interrupts a running Paseo agent session. Paseo Chat rooms are not supported.",
+      ),
     )
     .addSuccess(Schema.Unknown)
     .addError(StopError, { status: 400 })
