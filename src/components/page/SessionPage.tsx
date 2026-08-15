@@ -12,6 +12,7 @@ import { ClaudeActivity } from "../ClaudeActivity.tsx";
 import { CodexActivity } from "../CodexActivity.tsx";
 import { CursorActivity } from "../CursorActivity.tsx";
 import { GrokActivity } from "../GrokActivity.tsx";
+import { PaseoActivity } from "../PaseoActivity.tsx";
 import { OpenCodeActivityPreview } from "../OpenCodeActivityPreview.tsx";
 import { PageShell } from "../PageShell.tsx";
 import { SessionStatusControls } from "../SessionStatusControls.tsx";
@@ -954,6 +955,7 @@ export function SessionPage() {
           <CursorActivity activity={externalCliActivity} sessionId={sessionId} />
           <CodexActivity activity={externalCliActivity} sessionId={sessionId} />
           <GrokActivity activity={externalCliActivity} sessionId={sessionId} />
+          <PaseoActivity activity={externalCliActivity} sessionId={sessionId} />
           {sessionId ? (
             <SessionTimerSummary
               createHref={`/jarvis/timers/new?sessionId=${encodeURIComponent(sessionId)}`}
