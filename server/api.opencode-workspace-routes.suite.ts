@@ -20,7 +20,7 @@ import {
 } from "./api-routes/opencode-model-controls.ts";
 import type { DbSession } from "./db/schemas.ts";
 
-async function expectEffectFailure(effect: Effect.Effect<unknown, unknown>, expected: unknown) {
+async function expectEffectFailure<E>(effect: Effect.Effect<unknown, E>, expected: E) {
   const error = await Effect.runPromise(Effect.flip(effect));
   expect(error).toEqual(expected);
 }

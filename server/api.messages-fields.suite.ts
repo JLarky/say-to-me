@@ -338,7 +338,7 @@ describe("say API: message fields and lifecycle", () => {
         extraMarkdown: "| A | B |\n|---|---|\n| true | false |",
         text: "Here is a small truth table.",
       });
-      expect(typeof payload.message.extraMarkdownHtml).toBe("string");
+      expect(payload.message.extraMarkdownHtml).toEqual(expect.any(String));
       expect(payload.message.extraMarkdownHtml).toContain("<table");
       expect(payload.message.extraMarkdownHtml.toLowerCase()).not.toContain("<script");
       expect(queue.messages[0]).toMatchObject({

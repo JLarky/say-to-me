@@ -8,7 +8,7 @@ import { claudeSessionFilePath } from "./delivery.ts";
 
 const sessionUuid = "5c708e22-807e-4579-807a-b56d8e4341e1";
 const sessionId = `cc_${sessionUuid}`;
-const line = (obj: unknown) => JSON.stringify(obj);
+const line = <T>(obj: T) => JSON.stringify(obj);
 
 let testHome: string;
 let testCwd: string;

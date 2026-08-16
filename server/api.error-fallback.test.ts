@@ -7,6 +7,9 @@ import { closeTestServer } from "./test-http.ts";
 async function listen(app: express.Express) {
   const server = createServer(app);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  // SAFETY: server.address() returns string | AddressInfo | null, but only string when
+  // listening on a pipe/socket path. This server always listens on a TCP host/port, so
+  // the result is always an AddressInfo.
   const address = server.address() as { port: number };
   return { origin: `http://127.0.0.1:${address.port}`, server };
 }
