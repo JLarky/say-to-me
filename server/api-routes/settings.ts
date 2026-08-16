@@ -18,6 +18,8 @@ const T3ServerInstance = Schema.Struct({
 
 const PaseoInstance = Schema.Struct({
   id: Schema.String,
+  localUrl: Schema.optional(Schema.String),
+  tailscaleUrl: Schema.optional(Schema.String),
   binPath: Schema.optional(Schema.String),
   home: Schema.optional(Schema.String),
   host: Schema.String,

@@ -620,9 +620,16 @@ export function SessionStatusControls({
             hasOpenCodeLinks && opencodeTailscaleBase ? makeUrl(opencodeTailscaleBase) : null
           }
           paseoLocalUrl={
-            isPaseoSession ? (makePaseoUrl(paseoLocalBase) ?? session?.paseoUiUrl ?? null) : null
+            isPaseoSession
+              ? (session?.paseoLocalUrl ??
+                makePaseoUrl(paseoLocalBase) ??
+                session?.paseoUiUrl ??
+                null)
+              : null
           }
-          paseoTailscaleUrl={isPaseoSession ? makePaseoUrl(paseoTailscaleBase) : null}
+          paseoTailscaleUrl={
+            isPaseoSession ? (session?.paseoTailscaleUrl ?? makePaseoUrl(paseoTailscaleBase)) : null
+          }
           sessionId={sessionId}
           onCannedMessage={onCannedMessage}
           recentLinks={recentLinks}

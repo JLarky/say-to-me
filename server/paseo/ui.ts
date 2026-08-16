@@ -30,13 +30,37 @@ function paseoServerId(instance: Pick<PaseoInstance, "home" | "serverId">): stri
 export function paseoAgentUrl(
   instance: Pick<PaseoInstance, "id" | "host" | "home" | "serverId">,
   threadId: string,
+  host = instance.host,
 ): string {
   const serverId = paseoServerId(instance);
   if (!serverId) throw new Error(`Paseo server ID is unavailable for instance "${instance.id}".`);
   return new URL(
     `/h/${serverId}/agent/${encodeURIComponent(threadId)}`,
-    paseoWebOrigin(instance.host),
+    paseoWebOrigin(host),
   ).toString();
+}
+
+export function paseoUiUrlsForSession(session: {
+  id: string;
+  paseoInstanceId?: string | null;
+}): { paseoUiUrl: string; paseoLocalUrl?: string; paseoTailscaleUrl?: string } | null {
+  if (!session.id.startsWith("pa_") || !session.paseoInstanceId) return null;
+  const instance = getPaseoInstance(session.paseoInstanceId);
+  if (!instance) return null;
+  try {
+    const threadId = session.id.slice(3);
+    return {
+      paseoUiUrl: paseoAgentUrl(instance, threadId),
+      ...(instance.localUrl
+        ? { paseoLocalUrl: paseoAgentUrl(instance, threadId, instance.localUrl) }
+        : {}),
+      ...(instance.tailscaleUrl
+        ? { paseoTailscaleUrl: paseoAgentUrl(instance, threadId, instance.tailscaleUrl) }
+        : {}),
+    };
+  } catch {
+    return null;
+  }
 }
 
 export function paseoUiUrlForSession(session: {
@@ -44,11 +68,5 @@ export function paseoUiUrlForSession(session: {
   paseoInstanceId?: string | null;
 }): string | null {
   if (!session.id.startsWith("pa_") || !session.paseoInstanceId) return null;
-  const instance = getPaseoInstance(session.paseoInstanceId);
-  if (!instance) return null;
-  try {
-    return paseoAgentUrl(instance, session.id.slice(3));
-  } catch {
-    return null;
-  }
+  return paseoUiUrlsForSession(session)?.paseoUiUrl ?? null;
 }

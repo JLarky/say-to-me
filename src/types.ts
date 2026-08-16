@@ -261,6 +261,8 @@ export const Session = type({
   "t3InstanceId?": "string | null",
   "paseoInstanceId?": "string | null",
   "paseoUiUrl?": "string | null",
+  "paseoLocalUrl?": "string | null",
+  "paseoTailscaleUrl?": "string | null",
   "organizePath?": OrganizePathCrumb.array(),
 });
 

@@ -7,7 +7,7 @@ import { enrichSessionForList } from "./session-enrich.ts";
 import { getOrganization } from "./session-folders.ts";
 import { detectSessionBackend, sessionHref } from "./session-id.ts";
 import { startPaseoChatListener, stopPaseoChatListener } from "./paseo/chat-listener-lifecycle.ts";
-import { paseoUiUrlForSession } from "./paseo/ui.ts";
+import { paseoUiUrlsForSession } from "./paseo/ui.ts";
 
 const sessionSelectColumns = {
   id: sessionsTable.id,
@@ -224,12 +224,12 @@ export function listSessions({
     const session = validateDb(DbSession, sessionRow, "allSessions");
     const cachedStatus = includeCachedStatus ? getCachedOpenCodeStatus(session.id) : null;
     const enriched = enrichSessionForList(session.id, organization);
-    const paseoUiUrl = paseoUiUrlForSession(session);
+    const paseoUiUrls = paseoUiUrlsForSession(session);
     return {
       ...session,
       href: sessionHref(session.id),
       backend: detectSessionBackend(session.id),
-      ...(paseoUiUrl ? { paseoUiUrl } : {}),
+      ...paseoUiUrls,
       opencodeTitle: enriched.opencodeTitle,
       organizePath: enriched.organizePath,
       ...(cachedStatus ? { opencodeStatus: cachedStatus } : {}),

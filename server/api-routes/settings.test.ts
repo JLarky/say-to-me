@@ -44,6 +44,7 @@ describe("Settings API", () => {
       preferredJarvisParentPath: null,
       t3ServerInstances: [],
       paseoInstances: [{ id: "default", host: "127.0.0.1:6767" }],
+      opencodeInstances: [{ id: "default" }],
     });
   });
 
@@ -57,6 +58,7 @@ describe("Settings API", () => {
       preferredJarvisParentPath: null,
       t3ServerInstances: [],
       paseoInstances: [{ id: "default", host: "127.0.0.1:6767" }],
+      opencodeInstances: [{ id: "default" }],
     });
 
     const persisted = await settingsRequest();
@@ -65,6 +67,7 @@ describe("Settings API", () => {
       preferredJarvisParentPath: null,
       t3ServerInstances: [],
       paseoInstances: [{ id: "default", host: "127.0.0.1:6767" }],
+      opencodeInstances: [{ id: "default" }],
     });
 
     const cleared = await settingsRequest("PATCH", { preferredWorktreeParentPath: "   " });
@@ -73,6 +76,7 @@ describe("Settings API", () => {
       preferredJarvisParentPath: null,
       t3ServerInstances: [],
       paseoInstances: [{ id: "default", host: "127.0.0.1:6767" }],
+      opencodeInstances: [{ id: "default" }],
     });
   });
 
@@ -90,6 +94,7 @@ describe("Settings API", () => {
       preferredJarvisParentPath: "~/.say-to-me/jarvis",
       t3ServerInstances: [],
       paseoInstances: [{ id: "default", host: "127.0.0.1:6767" }],
+      opencodeInstances: [{ id: "default" }],
     });
 
     const cleared = await settingsRequest("PATCH", { preferredJarvisParentPath: null });
@@ -98,6 +103,7 @@ describe("Settings API", () => {
       preferredJarvisParentPath: null,
       t3ServerInstances: [],
       paseoInstances: [{ id: "default", host: "127.0.0.1:6767" }],
+      opencodeInstances: [{ id: "default" }],
     });
   });
 
@@ -123,6 +129,7 @@ describe("Settings API", () => {
       preferredWorktreeParentPath: "/home/example/worktrees",
       preferredJarvisParentPath: "~/.say-to-me/jarvis",
       paseoInstances: [{ id: "default", host: "127.0.0.1:6767" }],
+      opencodeInstances: [{ id: "default" }],
       t3ServerInstances: [
         {
           id: "default",

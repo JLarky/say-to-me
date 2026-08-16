@@ -46,6 +46,8 @@ export interface T3ServerInstanceStored extends T3ServerInstance, T3ServerInstan
 
 export interface PaseoInstance {
   id: string;
+  localUrl?: string;
+  tailscaleUrl?: string;
   /** Paseo daemon server ID used by browser routes (auto-detected when omitted). */
   serverId?: string;
   /** Paseo executable or checkout containing the `cli` package script. */
@@ -96,6 +98,8 @@ const T3ServerInstanceStoredSchema = arktype({
 const T3ServerInstancesStoredSchema = T3ServerInstanceStoredSchema.array();
 const PaseoInstanceSchema = arktype({
   id: "string",
+  "localUrl?": "string",
+  "tailscaleUrl?": "string",
   "serverId?": "string",
   "binPath?": "string",
   "home?": "string",
@@ -222,7 +226,18 @@ function parseStoredPaseoInstances(raw: string | null | undefined): PaseoInstanc
     if (!id || !host) return [];
     const binPath = entry.binPath?.trim();
     const home = entry.home?.trim();
-    return [{ id, ...(binPath ? { binPath } : {}), ...(home ? { home } : {}), host }];
+    const localUrl = entry.localUrl?.trim();
+    const tailscaleUrl = entry.tailscaleUrl?.trim();
+    return [
+      {
+        id,
+        ...(localUrl ? { localUrl } : {}),
+        ...(tailscaleUrl ? { tailscaleUrl } : {}),
+        ...(binPath ? { binPath } : {}),
+        ...(home ? { home } : {}),
+        host,
+      },
+    ];
   });
 }
 
@@ -383,8 +398,12 @@ export function normalizePaseoInstances(
     const binPath = typeof entry.binPath === "string" ? entry.binPath.trim() : "";
     const home = typeof entry.home === "string" ? entry.home.trim() : "";
     const serverId = typeof entry.serverId === "string" ? entry.serverId.trim() : "";
+    const localUrl = typeof entry.localUrl === "string" ? entry.localUrl.trim() : "";
+    const tailscaleUrl = typeof entry.tailscaleUrl === "string" ? entry.tailscaleUrl.trim() : "";
     return {
       id,
+      ...(localUrl ? { localUrl } : {}),
+      ...(tailscaleUrl ? { tailscaleUrl } : {}),
       ...(serverId ? { serverId } : {}),
       ...(binPath ? { binPath } : {}),
       ...(home ? { home } : {}),

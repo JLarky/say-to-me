@@ -9,7 +9,7 @@ import { getSession, listSessions, touchSessionRevision } from "./sessions.ts";
 import { sseSnapshotFrame, type SseClient } from "./sse/client.ts";
 import { recordSseBroadcast } from "./sse/diagnostics.ts";
 import { getExternalCliActivitySnapshot } from "./external-cli/activity-snapshot.ts";
-import { paseoUiUrlForSession } from "./paseo/ui.ts";
+import { paseoUiUrlsForSession } from "./paseo/ui.ts";
 
 let _refreshOpenCodeStatusImpl: ((session: DbSession) => Effect.Effect<void, unknown>) | undefined;
 
@@ -94,7 +94,7 @@ export async function queuePayload(sessionId = "default", { forceRefresh = false
     };
   }
   const externalCliActivity = await getExternalCliActivitySnapshot(sessionId, 8);
-  const paseoUiUrl = paseoUiUrlForSession(session);
+  const paseoUiUrls = paseoUiUrlsForSession(session);
   return {
     revision: session.revision,
     messages: listMessages(sessionId),
@@ -102,7 +102,7 @@ export async function queuePayload(sessionId = "default", { forceRefresh = false
     session: {
       ...(await addOpenCodeStatusReal(session, { forceRefresh })),
       organizePath: getOrganizePathForSession(sessionId),
-      ...(paseoUiUrl ? { paseoUiUrl } : {}),
+      ...paseoUiUrls,
     },
     sessions: listSessions(),
     lastNoteFirstLine: latestNoteFirstLine(sessionId),

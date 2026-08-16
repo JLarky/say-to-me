@@ -503,6 +503,28 @@ export function NewSettingsPage() {
                         />
                       </label>
                       <label {...stylex.props(settings.label)}>
+                        LOCAL URL
+                        <input
+                          {...stylex.props(settings.input)}
+                          value={instance.localUrl ?? ""}
+                          placeholder="http://localhost:6767"
+                          onChange={(event) =>
+                            updatePaseoInstance(index, { localUrl: event.target.value })
+                          }
+                        />
+                      </label>
+                      <label {...stylex.props(settings.label)}>
+                        TAILSCALE URL
+                        <input
+                          {...stylex.props(settings.input)}
+                          value={instance.tailscaleUrl ?? ""}
+                          placeholder="https://paseo.example.ts.net"
+                          onChange={(event) =>
+                            updatePaseoInstance(index, { tailscaleUrl: event.target.value })
+                          }
+                        />
+                      </label>
+                      <label {...stylex.props(settings.label)}>
                         BIN PATH (EXECUTABLE OR CHECKOUT)
                         <input
                           {...stylex.props(settings.input)}

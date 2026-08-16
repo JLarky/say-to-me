@@ -17,6 +17,8 @@ const T3ServerInstance = arktype({
 });
 const PaseoInstance = arktype({
   id: "string",
+  "localUrl?": "string",
+  "tailscaleUrl?": "string",
   "binPath?": "string",
   "home?": "string",
   host: "string",
