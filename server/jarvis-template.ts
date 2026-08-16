@@ -52,10 +52,16 @@ export function validJarvisAlias(input: string): string | null {
  * Resolve a stable workspace path under the preferred parent.
  * Rejects path traversal and paths that escape the parent.
  */
+export type JarvisWorkspacePath = {
+  parentDirectory: string;
+  slug: string;
+  workspaceDirectory: string;
+};
+
 export function resolveJarvisWorkspacePath(
   aliasOrSlug: string,
   preferredParentPath?: string | null,
-): { parentDirectory: string; slug: string; workspaceDirectory: string } {
+): JarvisWorkspacePath {
   const parentDirectory = resolveJarvisParentPath(preferredParentPath);
   const slug = jarvisWorkspaceName(aliasOrSlug);
   if (!slug || slug.includes("..") || slug.includes("/") || slug.includes("\\")) {

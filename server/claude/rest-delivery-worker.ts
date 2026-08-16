@@ -16,12 +16,13 @@ type ClaimedJob = {
 };
 
 type ClaimedJobWithMessage = ClaimedJob & { message: DbMessage };
+export type ClaudeStreamOutput = { isError?: boolean; text?: string };
 
 function deliveryPrompt(job: DbClaudeDeliveryJob, message: DbMessage): string {
   return buildAgentVoicePrompt(job.claudeSessionId, message.text);
 }
 
-export function parseClaudeStreamLine(line: string): { isError?: boolean; text?: string } {
+export function parseClaudeStreamLine(line: string): ClaudeStreamOutput {
   const entry = safeJsonParse(UnknownJson, line);
   if (!entry || typeof entry !== "object") return {};
   const record = entry as Record<string, unknown>;

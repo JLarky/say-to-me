@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  type ActivitySnapshot,
   type ActivitySignalHandlers,
   type ActivityListener,
   type ActivityHubConfig,
@@ -131,7 +132,7 @@ describe("activity hub", () => {
       await sleep(8);
       expect(hub.inspect("ses_6f7ff81a35dfGuQ6ZVL7cSlhhM")?.phase).toBe("HOT_IDLE");
 
-      let received: unknown = null;
+      let received: ActivitySnapshot | null = null;
       const second = hub.subscribe("ses_6f7ff81a35dfGuQ6ZVL7cSlhhM", {
         onSnapshot: (snapshot) => {
           received = snapshot;
@@ -162,7 +163,7 @@ describe("activity hub", () => {
       expect(hub.inspect("ses_6f7ff81a35dfGuQ6ZVL7cSlhhM")?.phase).toBe("WARM_IDLE");
       expect(hub.inspect("ses_6f7ff81a35dfGuQ6ZVL7cSlhhM")?.engineRunning).toBe(false);
 
-      let received: unknown = null;
+      let received: ActivitySnapshot | null = null;
       const second = hub.subscribe("ses_6f7ff81a35dfGuQ6ZVL7cSlhhM", {
         onSnapshot: (snapshot) => {
           received = snapshot;

@@ -13,12 +13,13 @@ type ClaimedJob = {
 };
 
 type ClaimedJobWithMessage = ClaimedJob & { message: DbMessage };
+export type CursorJsonOutput = { isError?: boolean; text?: string };
 
 function deliveryPrompt(job: DbCursorDeliveryJob, message: DbMessage): string {
   return buildAgentVoicePrompt(job.cursorSessionId, message.text);
 }
 
-export function parseCursorJsonOutput(stdout: string): { isError?: boolean; text?: string } {
+export function parseCursorJsonOutput(stdout: string): CursorJsonOutput {
   const entry = safeJsonParse(UnknownJson, stdout.trim());
   if (!entry || typeof entry !== "object") return {};
   const record = entry as Record<string, unknown>;

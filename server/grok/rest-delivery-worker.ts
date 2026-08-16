@@ -13,12 +13,13 @@ type ClaimedJob = {
 };
 
 type ClaimedJobWithMessage = ClaimedJob & { message: DbMessage };
+export type GrokJsonOutput = { isError?: boolean; text?: string };
 
 function deliveryPrompt(job: DbGrokDeliveryJob, message: DbMessage): string {
   return buildAgentVoicePrompt(job.grokSessionId, message.text);
 }
 
-export function parseGrokJsonOutput(stdout: string): { isError?: boolean; text?: string } {
+export function parseGrokJsonOutput(stdout: string): GrokJsonOutput {
   const trimmed = stdout.trim();
   if (!trimmed) return {};
   // Try JSON first (if --output-format json)

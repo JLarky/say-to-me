@@ -18,6 +18,17 @@ const workflow = makeExternalCliDeliveryWorkflow("say-to-me/unit-external-cli", 
   failureMessage: "unit delivery failed.",
 });
 
+type InMemoryStore = {
+  layer: Layer.Layer<MessageStoreService>;
+  get: (id: number) => DeliveryMessage | undefined;
+};
+
+type RecordingEffects = {
+  layer: Layer.Layer<DeliveryEffectsService>;
+  replies: string[];
+  broadcasts: string[];
+};
+
 function userMessage(
   overrides: Partial<DeliveryMessage> & { id: number; sessionId: string; text: string },
 ): DeliveryMessage {
@@ -52,10 +63,7 @@ function directJob(messageId: number, sessionId: string): ExternalCliDeliveryJob
   };
 }
 
-function inMemoryStore(seed: DeliveryMessage[]): {
-  layer: Layer.Layer<MessageStoreService>;
-  get: (id: number) => DeliveryMessage | undefined;
-} {
+function inMemoryStore(seed: DeliveryMessage[]): InMemoryStore {
   const rows = new Map(seed.map((row) => [row.id, row]));
   const patch = (id: number, fields: Partial<DeliveryMessage>) => {
     const current = rows.get(id);
@@ -75,11 +83,7 @@ function inMemoryStore(seed: DeliveryMessage[]): {
   return { layer: Layer.succeed(workflow.MessageStore, service), get: (id) => rows.get(id) };
 }
 
-function recordingEffects(): {
-  layer: Layer.Layer<DeliveryEffectsService>;
-  replies: string[];
-  broadcasts: string[];
-} {
+function recordingEffects(): RecordingEffects {
   const replies: string[] = [];
   const broadcasts: string[] = [];
   const service: DeliveryEffectsService = {

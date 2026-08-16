@@ -322,13 +322,13 @@ function makeId(prefix: string): string {
   return `${prefix}-${crypto.randomUUID()}`;
 }
 
-const seededSessionGitContexts: Record<string, Pick<PrototypeSession, "repoId" | "worktree">> = {
-  "session-jarvis": { repoId: "repo-say-to-me", worktree: "new-system" },
-  "session-codex": { repoId: "repo-say-to-me", worktree: "session-import" },
-  "session-morgan": { repoId: "repo-agent-tools", worktree: "__primary__" },
-  "session-voice-review": { repoId: "repo-voice-child", worktree: "__primary__" },
-  "session-voice-fix": { repoId: "repo-voice-child", worktree: "__primary__" },
-};
+const seededSessionGitContexts = new Map<string, Pick<PrototypeSession, "repoId" | "worktree">>([
+  ["session-jarvis", { repoId: "repo-say-to-me", worktree: "new-system" }],
+  ["session-codex", { repoId: "repo-say-to-me", worktree: "session-import" }],
+  ["session-morgan", { repoId: "repo-agent-tools", worktree: "__primary__" }],
+  ["session-voice-review", { repoId: "repo-voice-child", worktree: "__primary__" }],
+  ["session-voice-fix", { repoId: "repo-voice-child", worktree: "__primary__" }],
+]);
 
 function normalizePrototypeRepo(repo: PrototypeRepo): PrototypeRepo {
   if (repo.primaryBranch) return repo;
@@ -363,7 +363,7 @@ export function loadPrototypeSpaces(): PrototypeSpacesState {
           ...space,
           repos,
           sessions: space.sessions.map((storedSession) => {
-            const session = { ...storedSession, ...seededSessionGitContexts[storedSession.id] };
+            const session = { ...storedSession, ...seededSessionGitContexts.get(storedSession.id) };
             const repo = repos.find((item) => item.id === session.repoId);
             if (!repo || !session.worktree || session.worktree === "__primary__") return session;
             if (repo.worktrees.includes(session.worktree)) return session;
@@ -385,13 +385,13 @@ export function savePrototypeSpaces(state: PrototypeSpacesState): void {
 }
 
 export function sortPrototypeRosterSessions<T extends PrototypeSession>(sessions: T[]): T[] {
-  const order: Record<PrototypeRosterStatus, number> = {
+  const order = {
     error: 0,
     attention: 1,
     working: 2,
     idle: 3,
     unknown: 4,
-  };
+  } satisfies Record<PrototypeRosterStatus, number>;
   return [...sessions].sort((a, b) => {
     const aStatus = a.rosterStatus ?? "unknown";
     const bStatus = b.rosterStatus ?? "unknown";

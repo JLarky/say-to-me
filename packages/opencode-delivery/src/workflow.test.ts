@@ -17,10 +17,18 @@ import {
   WorkerIdentity,
 } from "./workflow.ts";
 
-function inMemoryMessageStore(seed: DeliveryMessage[]): {
+type InMemoryMessageStore = {
   layer: Layer.Layer<MessageStoreService>;
   get: (id: number) => DeliveryMessage | undefined;
-} {
+};
+
+type RecordingEffects = {
+  layer: Layer.Layer<DeliveryEffectsService>;
+  broadcasts: string[];
+  idleWatches: number[];
+};
+
+function inMemoryMessageStore(seed: DeliveryMessage[]): InMemoryMessageStore {
   const rows = new Map<number, DeliveryMessage>(seed.map((m) => [m.id, m]));
   const patch = (id: number, fields: Partial<DeliveryMessage>) => {
     const current = rows.get(id);
@@ -49,11 +57,7 @@ function inMemoryMessageStore(seed: DeliveryMessage[]): {
   return { layer: Layer.succeed(MessageStore, service), get: (id) => rows.get(id) };
 }
 
-function recordingEffects(): {
-  layer: Layer.Layer<DeliveryEffectsService>;
-  broadcasts: string[];
-  idleWatches: number[];
-} {
+function recordingEffects(): RecordingEffects {
   const broadcasts: string[] = [];
   const idleWatches: number[] = [];
   const service: DeliveryEffectsService = {

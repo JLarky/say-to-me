@@ -19,6 +19,45 @@ type OpenCodeContextUsage = {
   source: "latestMessageTokens";
 };
 
+type OpenCodeActivityPreview = {
+  saySessionId: string;
+  linkedOpenCodeSessionId: string | null;
+  status: OpenCodeActivityStatus;
+  statusRaw: unknown;
+  latestOutputSnippet: string | null;
+  latestActivityTimestamp: number | null;
+  freshness: { checkedAt: number; ageMs: number | null; stale: boolean | null };
+  metrics: {
+    fetchDurationMs: number;
+    payloadBytes: number;
+    statusPayloadBytes: number;
+    sessionPayloadBytes: number;
+    messagesPayloadBytes: number;
+    legacyMessagesPayloadBytes: number;
+    messageCount: number;
+    legacyMessageCount: number;
+    limit: number;
+  };
+  capabilities: {
+    status: "ok" | "missing" | "unknown";
+    sessionMetadata: "ok" | "missing" | "unknown";
+    v2Messages: "ok" | "missing" | "unknown";
+    legacyMessages: "ok" | "missing" | "unknown";
+  };
+  previewSource: "legacy" | "v2" | "sse" | null;
+  identifiers: {
+    messageId: string | null;
+    partId: string | null;
+    eventId: string | null;
+    runId: string | null;
+  };
+  contextUsage: OpenCodeContextUsage | null;
+  recentItems: RecentActivityItem[];
+  partialLiveUpdates: boolean;
+  awaitingQuestionText: string | null;
+  notes: string[];
+};
+
 type OpenCodeModelMetadataValue = {
   id?: string;
   providerID?: string;
@@ -61,16 +100,9 @@ async function fetchOpenCodeDebugJson(url: URL): Promise<{
     const text = await response.text();
     const bytes = Buffer.byteLength(text);
     const durationMs = Math.round(performance.now() - started);
-    let data: unknown = null;
-    let error: string | null = null;
-    if (text) {
-      const parsed = safeJsonParse(UnknownJson, text);
-      if (parsed === null) {
-        error = "Response was not JSON.";
-      } else {
-        data = parsed;
-      }
-    }
+    const parsed = text ? safeJsonParse(UnknownJson, text) : null;
+    const error = text && parsed === null ? "Response was not JSON." : null;
+    const data = parsed ?? null;
     return { ok: response.ok && !error, status: response.status, bytes, durationMs, data, error };
   } catch (error) {
     return {
@@ -398,14 +430,17 @@ function latestOutputSnippetFrom(items: unknown[]): string | null {
   return null;
 }
 
-export async function getOpenCodeActivityPreview(sessionId: string, limit: number) {
+export async function getOpenCodeActivityPreview(
+  sessionId: string,
+  limit: number,
+): Promise<OpenCodeActivityPreview> {
   const checkedAt = Date.now();
   const notes: string[] = [];
-  const result = {
+  const result: OpenCodeActivityPreview = {
     saySessionId: sessionId,
     linkedOpenCodeSessionId: null as string | null,
     status: "unknown" as OpenCodeActivityStatus,
-    statusRaw: null as unknown,
+    statusRaw: null,
     latestOutputSnippet: null as string | null,
     latestActivityTimestamp: null as number | null,
     freshness: {
