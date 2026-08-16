@@ -3,7 +3,7 @@ import * as HttpApiBuilder from "@effect/platform/HttpApiBuilder";
 import * as HttpApiEndpoint from "@effect/platform/HttpApiEndpoint";
 import * as HttpApiGroup from "@effect/platform/HttpApiGroup";
 import * as HttpServerResponse from "@effect/platform/HttpServerResponse";
-import { type as arktype } from "arktype";
+import { type as arktype, type Type } from "arktype";
 import { Context, Effect, Layer, Schema } from "effect";
 import {
   createMessageResult,
@@ -158,7 +158,7 @@ function textValidationError(text: string, maxLength = maxMessageLength()): stri
   return null;
 }
 
-function unknownKeyError(body: unknown, schema: (data: unknown) => unknown): string | null {
+function unknownKeyError(body: unknown, schema: Type): string | null {
   const result = schema(body ?? {});
   return result instanceof arktype.errors ? result.summary : null;
 }

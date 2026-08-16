@@ -1,11 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { type as arktype } from "arktype";
 import { createProviderSession, fetchProviderModels } from "./session-creation-api.ts";
 
 const originalFetch = globalThis.fetch;
 
-function parseRequestBody(init: RequestInit | undefined): unknown {
+const RequestBody = arktype({ path: "string", "provider?": "string", "modelID?": "string" });
+
+function parseRequestBody(init: RequestInit | undefined): typeof RequestBody.infer {
   if (typeof init?.body !== "string") throw new Error("Expected a JSON request body.");
-  return JSON.parse(init.body);
+  return RequestBody.assert(JSON.parse(init.body));
 }
 
 afterEach(() => {

@@ -16,6 +16,8 @@ type ToolCall = {
   name?: string;
 };
 
+type JsonRpcResult = object | string;
+
 const JsonRpcRequestSchema = arktype({
   "id?": "number | string | null",
   "jsonrpc?": "string",
@@ -139,7 +141,7 @@ async function handleLine(line: string): Promise<void> {
   }
 }
 
-async function handleRequest(request: JsonRpcRequest): Promise<unknown> {
+async function handleRequest(request: JsonRpcRequest): Promise<JsonRpcResult> {
   if (request.method === "initialize") {
     return {
       capabilities: { tools: {} },
@@ -153,7 +155,7 @@ async function handleRequest(request: JsonRpcRequest): Promise<unknown> {
   throw new Error(`Unsupported method: ${request.method ?? "unknown"}`);
 }
 
-async function callTool(call: ToolCall): Promise<unknown> {
+async function callTool(call: ToolCall): Promise<JsonRpcResult> {
   const args = call.arguments ?? {};
   if (call.name === "boo_list_sessions") return driver.listSessions();
   if (call.name === "boo_start_agent") {
@@ -215,7 +217,7 @@ function requiredString(args: Record<string, unknown>, key: string): string {
   return value;
 }
 
-function toolResult(value: unknown): object {
+function toolResult(value: JsonRpcResult): object {
   return { content: [{ text: JSON.stringify(value, null, 2), type: "text" }] };
 }
 

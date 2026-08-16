@@ -25,7 +25,7 @@ export type ExternalCliDeliveryInternalConfig<TLease extends ExternalCliDelivery
   sessionIdLeaseField: keyof TLease & string;
   workerVersion: number;
   scheduleWorkerReplacement: (sessionId: string) => Promise<void>;
-  claimDeliveryJobForWorker: (workerId: string, sessionId?: string) => Promise<unknown>;
+  claimDeliveryJobForWorker: (workerId: string, sessionId?: string) => Promise<object | null>;
   completeDeliveryJobFromWorker: (job: TLease, reply: string | null) => Promise<boolean>;
   retryDeliveryJobFromWorker: (job: TLease, error: string) => Promise<boolean>;
   failDeliveryJobFromWorker: (job: TLease, error: string) => Promise<boolean>;

@@ -1,5 +1,6 @@
 export {
   type JsonSchema,
+  type JsonValue,
   type SafeJsonParseResult,
   safeJsonParse,
   safeJsonParseWithError,
