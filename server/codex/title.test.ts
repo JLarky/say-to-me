@@ -9,7 +9,7 @@ process.env.SAY_TO_ME_EXTERNAL_CLI_STATE_ROOT = testHome;
 const { clearCodexTitleCache, getCodexTitle } = await import("./title.ts");
 const { clearCodexSessionJsonlPathCache } = await import("./resolve.ts");
 
-function writeSession(chatId: string, payload: Record<string, unknown>): void {
+function writeSession<T>(chatId: string, payload: T): void {
   const sessionDir = path.join(testHome, ".codex", "sessions", "2026", "07", "05");
   mkdirSync(sessionDir, { recursive: true });
   writeFileSync(
