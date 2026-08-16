@@ -93,6 +93,9 @@ export function getWorkspaceSessionContext(
       title: sessionTitle(session),
     }));
 
+  // SAFETY: Object.fromEntries widens to Record<string, ...>, but the entries are
+  // built by mapping the exhaustive DISCOVERABLE_PROVIDERS tuple 1:1, so every
+  // DiscoverableExternalCliProvider key is present exactly once.
   const providers = Object.fromEntries(
     DISCOVERABLE_PROVIDERS.map((provider) => {
       let importable = 0;
