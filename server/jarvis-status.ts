@@ -339,7 +339,10 @@ export function buildJarvisStatusEffect({
     );
     const summary = compactMessages(visible, { anchorMessageId, extended });
 
-    return {
+    const baseParams = { since, limit, extended, wait: waitMs };
+    const params = anchorMessageId == null ? baseParams : { ...baseParams, anchorMessageId };
+
+    const base = {
       sessionId,
       nextPullCursor: nextPullCursor({ extended, limit, waitMs, since: cursorSince }),
       opencodeState: wait.opencodeState,
@@ -352,21 +355,15 @@ export function buildJarvisStatusEffect({
               .map((item) => compactActivityItem(item)),
           }),
       messages: summary.messages,
-      ...(extended || otherMessages.length > 0 ? { otherMessages } : {}),
       waitingState,
       wait: {
         requestedMs: waitMs,
         waitedMs: wait.waitedMs,
         timedOut: wait.timedOut,
       },
-      params: {
-        since,
-        limit,
-        extended,
-        wait: waitMs,
-        ...(anchorMessageId == null ? {} : { anchorMessageId }),
-      },
+      params,
     };
+    return extended || otherMessages.length > 0 ? { ...base, otherMessages } : base;
   });
 }
 

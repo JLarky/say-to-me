@@ -74,6 +74,20 @@ function nowSql() {
   return sql`CURRENT_TIMESTAMP`;
 }
 
+type TimerUpdateSet = {
+  sessionId?: string;
+  title?: string;
+  message?: string;
+  dueAt?: number;
+  nextFireAt?: number;
+  intervalMs?: number | null;
+  status?: "active";
+  lockedAt: null;
+  lockedBy: null;
+  lastError: null;
+  updatedAt: ReturnType<typeof nowSql>;
+};
+
 function validateTimer(row: unknown, context: string): DbJarvisTimerRow {
   return validateDb(DbJarvisTimer, row, context);
 }
@@ -161,22 +175,22 @@ export const JarvisTimerRepositoryLive = Layer.succeed(JarvisTimerRepository, {
       const current = loadTimer(id);
       if (!current || !editableTimerStatus(current.status)) return null;
       if (input.sessionId) ensureSession(input.sessionId);
-      drizzleDb
-        .update(jarvisTimers)
-        .set({
-          ...(input.sessionId ? { sessionId: input.sessionId } : {}),
-          ...(input.title ? { title: input.title } : {}),
-          ...(input.message ? { message: input.message } : {}),
-          ...(input.dueAt !== undefined ? { dueAt: input.dueAt, nextFireAt: input.dueAt } : {}),
-          ...(input.intervalMs !== undefined ? { intervalMs: input.intervalMs } : {}),
-          ...(input.reactivateCancelled ? { status: "active" as const } : {}),
-          lockedAt: null,
-          lockedBy: null,
-          lastError: null,
-          updatedAt: nowSql(),
-        })
-        .where(eq(jarvisTimers.id, id))
-        .run();
+      const update: TimerUpdateSet = {
+        lockedAt: null,
+        lockedBy: null,
+        lastError: null,
+        updatedAt: nowSql(),
+      };
+      if (input.sessionId) update.sessionId = input.sessionId;
+      if (input.title) update.title = input.title;
+      if (input.message) update.message = input.message;
+      if (input.dueAt !== undefined) {
+        update.dueAt = input.dueAt;
+        update.nextFireAt = input.dueAt;
+      }
+      if (input.intervalMs !== undefined) update.intervalMs = input.intervalMs;
+      if (input.reactivateCancelled) update.status = "active";
+      drizzleDb.update(jarvisTimers).set(update).where(eq(jarvisTimers.id, id)).run();
       return loadTimer(id);
     }),
   get: (id) => tryTimerRepository(() => loadTimer(id)),
