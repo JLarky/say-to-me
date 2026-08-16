@@ -375,11 +375,13 @@ describe("POST /api/spaces/:spaceId/jarvis", () => {
     expect(body.error).toMatch(/another space/i);
   });
 
-  it("uses a DB lease so a second process owner cannot steal an active operation", () => {
+  it("uses a DB lease so a second process owner cannot steal an active operation", async () => {
+    const response = await createJarvis(spaceId, "lease locking");
+    expect(response?.status).toBe(201);
     const op = drizzleDb
       .select()
       .from(jarvisCreateOperations)
-      .where(eq(jarvisCreateOperations.slug, "shared-path"))
+      .where(eq(jarvisCreateOperations.slug, "lease-locking"))
       .get();
     expect(op).toBeTruthy();
     expect(tryAcquireJarvisCreateLease(op!.id, "process-a")).toBe(true);
