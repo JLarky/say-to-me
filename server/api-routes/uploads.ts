@@ -237,6 +237,8 @@ export async function messageAttachmentHttpApiWebHandler(request: Request): Prom
 
   const { attachment } = outcome;
   const fileStream = createReadStream(path.resolve(attachment.filePath));
+  // SAFETY: Readable.toWeb() types its return as ReadableStream<any> (lib.dom), but a
+  // Node fs.ReadStream only ever yields Buffer chunks, which satisfy Uint8Array.
   return new Response(Readable.toWeb(fileStream) as ReadableStream<Uint8Array>, {
     headers: {
       "Content-Type": attachment.mimeType,

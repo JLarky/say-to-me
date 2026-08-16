@@ -31,7 +31,7 @@ export function readGrokTitle(sessionId: string): string | null {
     const p = grokSummaryPath(grokSessionUuid(sessionId));
     if (p) {
       const data = safeJsonParse(GrokSummaryJson, readFileSync(p, "utf8"));
-      const t = typeof data?.title === "string" ? data.title.trim() : "";
+      const t = data?.title?.trim() ?? "";
       return t || null;
     }
   } catch {}
