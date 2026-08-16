@@ -30,6 +30,8 @@ describe("suggestAgentBranch", () => {
       value: undefined,
     });
     vi.spyOn(cryptoObj, "getRandomValues").mockImplementation((buffer) => {
+      // SAFETY: this mock only stands in for the branch-suggestion code path, which
+      // always calls crypto.getRandomValues with a Uint8Array view.
       const bytes = buffer as Uint8Array;
       bytes.set([0xab, 0xcd, 0x12, 0x34]);
       return buffer;
