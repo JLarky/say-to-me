@@ -49,7 +49,7 @@ export const noUnknownParametersRule = defineRule({
     },
     messages: {
       unknownParameter:
-        "Parameter `{{parameter}}` leaves input unparsed. Accept a named domain type; run the expected schema or parser at the I/O boundary before calling this function.",
+        "Parse `{{parameter}}` before inspecting it. Keep `unknown` for caught, rejected, or untrusted values and for callbacks that only forward, rethrow, or serialize them; use a focused exemption instead of an unconstrained generic.",
     },
   },
   createOnce(context) {
