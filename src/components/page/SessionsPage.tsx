@@ -25,6 +25,12 @@ const folderLookupDebounceMs = import.meta.env.VITEST ? 0 : 200;
 
 type CliProvider = "claude" | "codex" | "cursor" | "grok";
 type CreateProvider = "opencode" | CliProvider;
+type CliSessionRequestBody = {
+  provider: CliProvider;
+  path: string;
+  modelID: string;
+  reasoningEffort?: CodexReasoningEffort;
+};
 
 const providerLabels: Record<CreateProvider, string> = {
   opencode: "OpenCode",
@@ -533,17 +539,18 @@ export function SessionsPage() {
         return;
       }
       if (!selectedModelId) throw new Error("Pick a model first.");
+      const body: CliSessionRequestBody = {
+        provider: createProvider,
+        path: trimmedPath,
+        modelID: selectedModelId,
+      };
+      if (createProvider === "codex" && selectedReasoningEffort) {
+        body.reasoningEffort = selectedReasoningEffort;
+      }
       const response = await fetch("/api/cli-sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          provider: createProvider,
-          path: trimmedPath,
-          modelID: selectedModelId,
-          ...(createProvider === "codex" && selectedReasoningEffort
-            ? { reasoningEffort: selectedReasoningEffort }
-            : {}),
-        }),
+        body: JSON.stringify(body),
       });
       const payload = await safeResponseJson(response, CliSessionPayload);
       if (!response.ok) throw new Error(errorMessage(payload, "Unable to create CLI session."));

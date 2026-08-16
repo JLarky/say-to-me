@@ -1,6 +1,6 @@
 import os from "node:os";
 import path from "node:path";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, sql, type SQL } from "drizzle-orm";
 import { Clock, Effect } from "effect";
 import { drizzleDb, drizzleSqlite } from "./db/index.ts";
 import {
@@ -42,6 +42,14 @@ function worktreeBranchLabel(branch: string): string {
 function inTransaction<T>(operation: () => T): T {
   return drizzleSqlite.transaction(operation)();
 }
+
+type SpaceReparentUpdate = {
+  name?: string;
+  context?: string;
+  parentId: string | null;
+  sortOrder?: number;
+  updatedAt: SQL;
+};
 
 function syncRepositoryRecord(repo: GitRepository): string {
   const current = drizzleDb
@@ -302,17 +310,14 @@ function reparentSpaceTransactional(
   const previousParent = current.parentId ?? null;
   const parentChanged = previousParent !== parentId;
   inTransaction(() => {
-    drizzleDb
-      .update(spaces)
-      .set({
-        ...(fields?.name !== undefined ? { name: fields.name } : {}),
-        ...(fields?.context !== undefined ? { context: fields.context } : {}),
-        parentId,
-        ...(parentChanged ? { sortOrder: nextSortOrderAmongSiblings(parentId) } : {}),
-        updatedAt: sql`CURRENT_TIMESTAMP`,
-      })
-      .where(eq(spaces.id, spaceId))
-      .run();
+    const update: SpaceReparentUpdate = {
+      parentId,
+      updatedAt: sql`CURRENT_TIMESTAMP`,
+    };
+    if (fields?.name !== undefined) update.name = fields.name;
+    if (fields?.context !== undefined) update.context = fields.context;
+    if (parentChanged) update.sortOrder = nextSortOrderAmongSiblings(parentId);
+    drizzleDb.update(spaces).set(update).where(eq(spaces.id, spaceId)).run();
   });
 }
 
