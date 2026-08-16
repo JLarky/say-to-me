@@ -27,6 +27,7 @@ type ClaimedJob = {
 };
 
 type ClaimedJobWithMessage = ClaimedJob & { message: DbMessage };
+export type ClaudeStreamOutput = { isError?: boolean; text?: string };
 
 export function claudeDeliveryPrompt(
   job: Pick<DbClaudeDeliveryJob, "claudeSessionId">,
@@ -36,7 +37,7 @@ export function claudeDeliveryPrompt(
   return buildAgentVoicePromptFromMessage(job.claudeSessionId, message, options);
 }
 
-export function parseClaudeStreamLine(line: string): { isError?: boolean; text?: string } {
+export function parseClaudeStreamLine(line: string): ClaudeStreamOutput {
   const entry = safeJsonParse(UnknownJson, line);
   if (!entry || typeof entry !== "object") return {};
   const record = entry as Record<string, unknown>;

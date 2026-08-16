@@ -30,11 +30,11 @@ export type JarvisSection<T extends JarvisOrderingSession = JarvisOrderingSessio
   buckets: Array<{ id: JarvisBucketId; sessions: T[] }>;
 };
 
-const bucketOrder: Record<JarvisBucketId, number> = {
+const bucketOrder = {
   active: 0,
   idle: 1,
   unknown: 2,
-};
+} satisfies Record<JarvisBucketId, number>;
 
 const hourMs = 60 * 60 * 1000;
 const dayMs = 24 * hourMs;
@@ -57,7 +57,7 @@ const windowOrder: JarvisWindowId[] = [
 
 const bucketIds: JarvisBucketId[] = ["active", "idle", "unknown"];
 
-const windowTitles: Record<JarvisWindowId, string> = {
+const windowTitles = {
   lastHour: "Last Hour",
   lastDay: "Last Day",
   last3Days: "Last 3 Days",
@@ -66,7 +66,7 @@ const windowTitles: Record<JarvisWindowId, string> = {
   lastMonth: "Last Month",
   last6Months: "Last 6 Months",
   allTime: "All Time",
-};
+} satisfies Record<JarvisWindowId, string>;
 
 function isActiveStatus(value: string | null | undefined): boolean {
   return ["busy", "pending", "queued", "retrying", "speaking", "watching", "debouncing"].includes(

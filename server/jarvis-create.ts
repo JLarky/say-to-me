@@ -469,7 +469,7 @@ export function updateOperationWithLease(id: string, owner: string, patch: Opera
   const sets: string[] = ["leased_at = ?", "updated_at = CURRENT_TIMESTAMP"];
   const values: unknown[] = [now];
 
-  const columnMap: Record<keyof OperationPatch, string> = {
+  const columnMap = {
     phase: "phase",
     sessionId: "session_id",
     createdWorkspace: "created_workspace",
@@ -480,7 +480,7 @@ export function updateOperationWithLease(id: string, owner: string, patch: Opera
     bootstrapError: "bootstrap_error",
     error: "error",
     workspaceDirectory: "workspace_directory",
-  };
+  } satisfies Record<keyof OperationPatch, string>;
 
   for (const [key, column] of Object.entries(columnMap) as Array<[keyof OperationPatch, string]>) {
     if (key in patch) {
@@ -932,6 +932,11 @@ export async function createJarvisInSpace(
   return Effect.runPromise(createJarvisInSpaceEffect(input));
 }
 
+type JarvisCreateOperationResolution = {
+  operation: DbJarvisCreateOperation;
+  resumed: boolean;
+};
+
 function ensureJarvisCreateOperationRow(
   input: CreateJarvisInSpaceInput,
   prepared: {
@@ -940,7 +945,7 @@ function ensureJarvisCreateOperationRow(
     resolvedWorkspace: string;
     fingerprint: string;
   },
-): { operation: DbJarvisCreateOperation; resumed: boolean } {
+): JarvisCreateOperationResolution {
   const { alias, slug, resolvedWorkspace, fingerprint } = prepared;
   let operation = getOperationBySpaceAlias(input.spaceId, alias);
   const resumed = Boolean(operation?.sessionId);

@@ -126,7 +126,9 @@ export function galleryGeometryViolations(root: HTMLElement): GalleryGeometryVio
   return violations;
 }
 
-function section(title: string, description: string): { root: HTMLElement; grid: HTMLElement } {
+type GallerySection = { root: HTMLElement; grid: HTMLElement };
+
+function section(title: string, description: string): GallerySection {
   const root = document.createElement("section");
   root.className = "stm-gallery-section";
   root.append(heading("h2", title));

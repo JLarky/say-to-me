@@ -27,6 +27,7 @@ type ClaimedJob = {
 };
 
 type ClaimedJobWithMessage = ClaimedJob & { message: DbMessage };
+export type CursorJsonOutput = { isError?: boolean; text?: string };
 
 const OkResponse = arktype({ ok: "boolean" });
 

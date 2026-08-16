@@ -12,6 +12,11 @@ import {
   runCompletionWatchTickEffect,
 } from "./workflow.ts";
 
+type InMemoryCompletionStore = {
+  layer: Layer.Layer<CompletionWatchStoreService>;
+  rows: Map<number, WatchedMessage>;
+};
+
 function baseMessage(
   overrides: Partial<WatchedMessage> & Pick<WatchedMessage, "id" | "sessionId">,
 ): WatchedMessage {
