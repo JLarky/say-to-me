@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import { parseCodexActivity } from "./activity.ts";
 
-const line = (obj: unknown) => JSON.stringify(obj);
+const line = <T>(obj: T) => JSON.stringify(obj);
 
 const sample = [
   line({

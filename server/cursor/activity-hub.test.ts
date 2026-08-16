@@ -8,7 +8,7 @@ import { cursorSessionFilePath } from "./delivery.ts";
 
 const sessionUuid = "a35fda79-2e0e-4884-9085-0a250ef8f965";
 const sessionId = `cur_${sessionUuid}`;
-const line = (obj: unknown) => JSON.stringify(obj);
+const line = <T>(obj: T) => JSON.stringify(obj);
 
 let testHome: string;
 let testCwd: string;
