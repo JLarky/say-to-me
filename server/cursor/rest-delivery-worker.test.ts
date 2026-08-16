@@ -3,9 +3,14 @@ import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { and, eq, gt } from "drizzle-orm";
 import { Effect } from "effect";
+
+function isTcpAddress(address: string | AddressInfo | null): address is AddressInfo {
+  return address !== null && Object.prototype.hasOwnProperty.call(address, "port");
+}
 
 process.env.SAY_TO_ME_CURSOR_WORKER_AUTOSTART = "0";
 process.env.SAY_TO_ME_CURSOR_ECHO_ACCEPT_DELAY_MS = "0";
@@ -111,7 +116,7 @@ describe("Cursor REST delivery worker", () => {
     });
     await new Promise<void>((resolve) => fakeServer.listen(0, "127.0.0.1", resolve));
     const address = fakeServer.address();
-    if (!address || typeof address === "string") throw new Error("Expected TCP test server.");
+    if (!isTcpAddress(address)) throw new Error("Expected TCP test server.");
     process.env.SAY_TO_ME_INTERNAL_URL = `http://127.0.0.1:${address.port}`;
 
     try {
