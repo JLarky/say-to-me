@@ -479,4 +479,36 @@ describe("Settings API", () => {
       },
     });
   });
+
+  it("preserves and exposes a configured remote Paseo server ID", async () => {
+    const updated = await settingsRequest("PATCH", {
+      paseoInstances: [
+        {
+          id: "remote",
+          serverId: "srv_remote123",
+          host: "remote-paseo:6767",
+        },
+      ],
+    });
+    expect(updated?.status).toBe(200);
+    expect(await updated!.json()).toMatchObject({
+      paseoInstances: [
+        {
+          id: "remote",
+          serverId: "srv_remote123",
+          host: "remote-paseo:6767",
+        },
+      ],
+    });
+
+    const persisted = await settingsRequest();
+    expect(await persisted!.json()).toMatchObject({
+      paseoInstances: [
+        {
+          id: "remote",
+          serverId: "srv_remote123",
+        },
+      ],
+    });
+  });
 });

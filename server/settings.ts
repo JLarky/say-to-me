@@ -228,9 +228,11 @@ function parseStoredPaseoInstances(raw: string | null | undefined): PaseoInstanc
     const home = entry.home?.trim();
     const localUrl = entry.localUrl?.trim();
     const tailscaleUrl = entry.tailscaleUrl?.trim();
+    const serverId = entry.serverId?.trim();
     return [
       {
         id,
+        ...(serverId ? { serverId } : {}),
         ...(localUrl ? { localUrl } : {}),
         ...(tailscaleUrl ? { tailscaleUrl } : {}),
         ...(binPath ? { binPath } : {}),
@@ -402,9 +404,9 @@ export function normalizePaseoInstances(
     const tailscaleUrl = typeof entry.tailscaleUrl === "string" ? entry.tailscaleUrl.trim() : "";
     return {
       id,
+      ...(serverId ? { serverId } : {}),
       ...(localUrl ? { localUrl } : {}),
       ...(tailscaleUrl ? { tailscaleUrl } : {}),
-      ...(serverId ? { serverId } : {}),
       ...(binPath ? { binPath } : {}),
       ...(home ? { home } : {}),
       host,

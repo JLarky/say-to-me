@@ -503,6 +503,17 @@ export function NewSettingsPage() {
                         />
                       </label>
                       <label {...stylex.props(settings.label)}>
+                        SERVER ID
+                        <input
+                          {...stylex.props(settings.input)}
+                          value={instance.serverId ?? ""}
+                          placeholder="srv_…"
+                          onChange={(event) =>
+                            updatePaseoInstance(index, { serverId: event.target.value })
+                          }
+                        />
+                      </label>
+                      <label {...stylex.props(settings.label)}>
                         LOCAL URL
                         <input
                           {...stylex.props(settings.input)}
