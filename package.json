@@ -79,6 +79,7 @@
   "devDependencies": {
     "@effect/language-service": "^0.87.0",
     "@jlarky/gha-ts": "npm:@jsr/jlarky__gha-ts@^0.2.2",
+    "@oxlint/plugins": "1.78.0",
     "@stylexjs/babel-plugin": "^0.18.3",
     "@stylexjs/eslint-plugin": "^0.18.3",
     "@stylexjs/unplugin": "^0.18.3",
@@ -91,7 +92,7 @@
     "@types/web-push": "^3.6.4",
     "drizzle-kit": "^0.31.10",
     "jsdom": "^29.1.1",
-    "oxlint": "^1.66.0",
+    "oxlint": "1.78.0",
     "typescript": "^6.0.3",
     "vite-plugin-solid": "^2.11.14",
     "vite-plus": "latest",
