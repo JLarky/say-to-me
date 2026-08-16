@@ -33,6 +33,7 @@ export default defineConfig({
   adapter: node({ mode: "standalone" }),
   integrations: [react({ exclude: solidEmbedInclude })],
   server: {
+    host: "0.0.0.0",
     port: 5411,
   },
   vite: {
