@@ -20,6 +20,8 @@ function mount(session: VoiceNoteSession, uiBaseUrl?: string) {
   const host = document.createElement("div");
   document.body.append(host);
   dispose = render(() => createComponent(VoiceNoteSessionCard, { session, uiBaseUrl }), host);
+  // SAFETY: host starts as an empty div and VoiceNoteSessionCard's own return type is
+  // HTMLElement (a single root <div>), so after render() the first child is that element.
   return host.firstElementChild as HTMLElement;
 }
 
