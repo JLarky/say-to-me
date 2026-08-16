@@ -406,9 +406,6 @@ export function normalizeOpenCodeInstances(
     if (seen.has(id)) throw new SettingsValidationError(`Duplicate OpenCode instance id "${id}".`);
     const localUrl = typeof entry.localUrl === "string" ? entry.localUrl.trim() : "";
     const tailscaleUrl = typeof entry.tailscaleUrl === "string" ? entry.tailscaleUrl.trim() : "";
-    if (!localUrl && !tailscaleUrl) {
-      throw new SettingsValidationError(`OpenCode instance "${id}" needs a host URL.`);
-    }
     seen.add(id);
     return { id, ...(localUrl ? { localUrl } : {}), ...(tailscaleUrl ? { tailscaleUrl } : {}) };
   });

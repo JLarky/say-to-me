@@ -23,11 +23,18 @@ const PaseoInstance = Schema.Struct({
   host: Schema.String,
 });
 
+const OpenCodeInstance = Schema.Struct({
+  id: Schema.String,
+  localUrl: Schema.optional(Schema.String),
+  tailscaleUrl: Schema.optional(Schema.String),
+});
+
 const SettingsResult = Schema.Struct({
   preferredWorktreeParentPath: Schema.NullOr(Schema.String),
   preferredJarvisParentPath: Schema.NullOr(Schema.String),
   t3ServerInstances: Schema.Array(T3ServerInstance),
   paseoInstances: Schema.Array(PaseoInstance),
+  opencodeInstances: Schema.Array(OpenCodeInstance),
 });
 
 const UpdateSettingsPayload = Schema.Struct({
@@ -35,6 +42,7 @@ const UpdateSettingsPayload = Schema.Struct({
   preferredJarvisParentPath: Schema.optional(Schema.NullOr(Schema.String)),
   t3ServerInstances: Schema.optional(Schema.Array(T3ServerInstance)),
   paseoInstances: Schema.optional(Schema.Array(PaseoInstance)),
+  opencodeInstances: Schema.optional(Schema.Array(OpenCodeInstance)),
 });
 
 const SettingsValidationRouteError = Schema.Struct({
