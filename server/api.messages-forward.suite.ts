@@ -7,6 +7,7 @@ import {
   type TestServer,
   clearQueue,
   createApiMiddleware,
+  createTestSession,
   listen,
   mockOpenCode,
   waitFor,
@@ -14,6 +15,8 @@ import {
 import { clearForwardCompletionNotificationWatches } from "./notifications.ts";
 import { opencodeStatusCache } from "./opencode/cache.ts";
 import { stopAllCompletionWatches } from "./opencode/completion-watch.ts";
+import { setSessionT3InstanceId } from "./sessions.ts";
+import { setT3ServerInstanceAccessToken, updateAppSettings } from "./settings.ts";
 
 async function fetchSessionMessages(origin: string, sessionId: string): Promise<ApiMessage[]> {
   const queue = await fetch(`${origin}/api/sessions/${sessionId}/messages`).then((response) =>
@@ -84,6 +87,175 @@ describe("say API: message forwarding basics", () => {
     stopAllCompletionWatches();
     clearForwardCompletionNotificationWatches();
     opencodeStatusCache.clear();
+  });
+
+  it("forwards a message into another idle session with completion notification by default", async () => {
+    const previousOpenCodeUrl = process.env.SAY_TO_ME_OPENCODE_URL;
+    const sourceSessionId = "ses_6bd376ee58d0PoNRCToLKkJDYe";
+    const targetSessionId = "ses_1095e1587837BYyUIoZV83TzJk";
+    const openCode = await mockOpenCode((req, res) => {
+      const respond = (payload: unknown) => {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(payload));
+      };
+      if (req.url?.startsWith("/session/status")) {
+        return respond({
+          [sourceSessionId]: { type: "idle" },
+          [targetSessionId]: { type: "idle" },
+        });
+      }
+      if (req.method === "POST" && req.url?.startsWith(`/session/${sourceSessionId}/message`)) {
+        return respond({ info: { id: "msg_source_notice" }, parts: [] });
+      }
+      if (req.method === "POST" && req.url?.startsWith(`/session/${targetSessionId}/message`)) {
+        return respond({ info: { id: "msg_forwarded" }, parts: [] });
+      }
+      if (req.url?.startsWith(`/session/${sourceSessionId}`)) {
+        return respond({ id: sourceSessionId, directory: "/tmp/forward-source" });
+      }
+      if (req.url?.startsWith(`/session/${targetSessionId}`)) {
+        return respond({ id: targetSessionId, directory: "/tmp/forward-target" });
+      }
+      res.writeHead(404).end();
+    });
+    process.env.SAY_TO_ME_OPENCODE_URL = openCode.url;
+
+    try {
+      const response = await fetch(`${origin}/api/sessions/${sourceSessionId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ author: "user", targetSessionId, text: "please check this" }),
+      });
+      const payload = await response.json();
+
+      expect(response.status).toBe(201);
+      expect(payload.message).toMatchObject({
+        forwardRole: "source",
+        forwardTargetSessionId: targetSessionId,
+        forwardTargetMessageId: payload.targetMessage.id,
+        forwardStatus: "queued",
+        opencodeDeliveryStatus: null,
+        opencodeMessageId: null,
+        text: `<say-to-me-system>${targetSessionId} received message: please check this. You will be notified once the session is idle.</say-to-me-system>`,
+      });
+      expect(payload.targetMessage).toMatchObject({
+        sessionId: targetSessionId,
+        forwardRole: "target",
+        forwardSourceSessionId: sourceSessionId,
+        forwardSourceMessageId: payload.message.id,
+        opencodeDeliveryStatus: "queued",
+        opencodeMessageId: null,
+        forwardStatus: "queued",
+        completionWatchStatus: "watching",
+        completionSourceSessionId: sourceSessionId,
+        completionSourceMessageId: payload.message.id,
+      });
+      const deliveredSource = await waitForForwardStatus(
+        origin,
+        sourceSessionId,
+        payload.message.id,
+        "sent",
+      );
+      const deliveredTarget = await waitForMessageStatus(
+        origin,
+        targetSessionId,
+        payload.targetMessage.id,
+        "sent",
+      );
+      expect(deliveredSource).toMatchObject({
+        forwardStatus: "sent",
+        opencodeDeliveryStatus: null,
+        opencodeMessageId: null,
+      });
+      expect(deliveredTarget).toMatchObject({
+        forwardStatus: "sent",
+        opencodeMessageId: "msg_forwarded",
+      });
+      expect(
+        openCode.requests.filter(
+          (request) =>
+            request.method === "POST" &&
+            request.url?.startsWith(`/session/${targetSessionId}/message`),
+        ),
+      ).toHaveLength(1);
+      expect(
+        openCode.requests.filter(
+          (request) =>
+            request.method === "POST" &&
+            request.url?.startsWith(`/session/${sourceSessionId}/message`) &&
+            JSON.stringify(request.body).includes("received message: please check this"),
+        ),
+      ).toHaveLength(0);
+    } finally {
+      process.env.SAY_TO_ME_OPENCODE_URL = previousOpenCodeUrl;
+      openCode.server.close();
+      server.close();
+    }
+  });
+
+  it("persists and retries a T3 forward target", async () => {
+    const sourceSessionId = "vo_forward-source";
+    const targetSessionId = "t3_22222222-2222-4222-8222-222222222222";
+    let dispatchCount = 0;
+    const t3 = await mockOpenCode((req, res) => {
+      if (req.url !== "/api/orchestration/dispatch") {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+      dispatchCount += 1;
+      res.writeHead(dispatchCount === 1 ? 502 : 200, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify(dispatchCount === 1 ? { error: "temporary failure" } : { sequence: 2 }),
+      );
+    });
+    updateAppSettings({
+      t3ServerInstances: [
+        {
+          id: "test-t3-forward",
+          baseDir: "/tmp/test-t3-forward",
+          originUrl: t3.url,
+          isDev: false,
+        },
+      ],
+    });
+    setT3ServerInstanceAccessToken("test-t3-forward", "test-token", Date.now() + 60 * 60 * 1000);
+    await createTestSession(sourceSessionId);
+    await createTestSession(targetSessionId);
+    setSessionT3InstanceId(targetSessionId, "test-t3-forward");
+
+    try {
+      const body = {
+        author: "user",
+        targetSessionId,
+        text: "retry this forward",
+      };
+      const first = await fetch(`${origin}/api/sessions/${sourceSessionId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const firstJson = await first.json();
+      await waitFor(() => dispatchCount >= 1);
+      const sourceQueue = await fetch(`${origin}/api/sessions/${sourceSessionId}/messages`).then(
+        (res) => res.json(),
+      );
+      const targetQueue = await fetch(`${origin}/api/sessions/${targetSessionId}/messages`).then(
+        (res) => res.json(),
+      );
+
+      expect(first.status).toBe(201);
+      expect(firstJson.message.forwardStatus).toBe("queued");
+      expect(
+        sourceQueue.messages.filter((message: ApiMessage) => message.forwardRole === "source"),
+      ).toHaveLength(1);
+      expect(
+        targetQueue.messages.filter((message: ApiMessage) => message.forwardRole === "target"),
+      ).toHaveLength(1);
+      await waitFor(() => dispatchCount >= 2);
+    } finally {
+      t3.server.close();
+    }
   });
 
   it("redacts inline mp3 temp paths when forwarding messages", async () => {

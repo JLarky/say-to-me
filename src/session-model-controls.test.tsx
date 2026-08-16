@@ -36,18 +36,6 @@ function response(body: unknown, ok = true): Response {
   });
 }
 
-async function waitForDom<T>(read: () => T | null, timeoutMs = 2000): Promise<T> {
-  const started = performance.now();
-  while (performance.now() - started <= timeoutMs) {
-    const value = read();
-    if (value !== null) return value;
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 5));
-    });
-  }
-  throw new Error("Timed out waiting for DOM update");
-}
-
 function CodexControls() {
   const [resetEffort, setResetEffort] = useState<string | null>(null);
   return (
@@ -294,19 +282,16 @@ describe("OpenCode reasoning effort controls", () => {
     ) as HTMLSelectElement;
     expect([...select.options].map((option) => option.value)).toEqual(["", "low", "medium"]);
 
-    const modelTrigger = container!.querySelector(
-      "[aria-label='OpenCode model']",
-    ) as HTMLButtonElement;
-    if (modelTrigger.getAttribute("aria-expanded") !== "true") {
-      act(() => modelTrigger.click());
-    }
-    const modelButton = await waitForDom(() =>
-      container!.querySelector<HTMLButtonElement>("[data-opencode-model-value='openai/gpt-5.6']"),
-    );
-    act(() => modelButton.click());
-    await waitForDom(() =>
-      [...select.options].some((option) => option.value === "high") ? select : null,
-    );
+    await act(async () => {
+      (container!.querySelector("[aria-label='OpenCode model']") as HTMLButtonElement).click();
+      await Promise.resolve();
+      (
+        container!.querySelector(
+          "[data-opencode-model-value='openai/gpt-5.6']",
+        ) as HTMLButtonElement
+      ).click();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/sessions/ses_1ff836cba5b7W2IE8852hd1wwV/opencode-model",

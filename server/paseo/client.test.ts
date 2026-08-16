@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process";
 import {
   chmodSync,
   existsSync,
@@ -9,6 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import {
   buildPaseoCommand,
@@ -20,6 +22,8 @@ import {
   paseoSessionMatchesWorkspace,
   runPaseoCommand,
 } from "./client.ts";
+
+const execFileAsync = promisify(execFile);
 
 const dirs: string[] = [];
 
@@ -71,6 +75,43 @@ describe("Paseo CLI client", () => {
       args: ["npx", "tsx", path.join(checkout, "packages/cli/src/index.ts"), "--json", "ls"],
       checkoutCwd: checkout,
     });
+  });
+
+  it("pins chat wait argv to the real CLI contract (no --after)", async () => {
+    const waitArgs = paseoChatWaitArgs("room-id", "127.0.0.1:6767");
+    expect(waitArgs).toEqual([
+      "chat",
+      "wait",
+      "--json",
+      "--host",
+      "127.0.0.1:6767",
+      "--timeout",
+      "30s",
+      "room-id",
+    ]);
+    expect(waitArgs).not.toContain("--after");
+
+    // When a real Paseo CLI is available, also pin against its help surface so a
+    // reintroduced --after cannot pass local-only unit fixtures. CI often has no
+    // `paseo` on PATH — argv shape above still guards the STM contract.
+    const paseoBin = process.env.SAY_TO_ME_PASEO_BIN?.trim() || "paseo";
+    let help: string;
+    try {
+      const result = await execFileAsync(paseoBin, ["chat", "wait", "--help"], {
+        timeout: 15_000,
+        env: { ...process.env, NO_COLOR: "1" },
+      });
+      help = `${result.stdout}\n${result.stderr}`;
+    } catch (error) {
+      const err = error as NodeJS.ErrnoException & { stdout?: string; stderr?: string };
+      if (err.code === "ENOENT") return;
+      // commander --help can exit non-zero on some wrappers; still inspect output.
+      help = `${err.stdout ?? ""}\n${err.stderr ?? ""}`;
+      if (!help.trim()) throw error;
+    }
+    expect(help).toMatch(/Wait for new chat messages/i);
+    expect(help).not.toMatch(/--after\b/);
+    expect(help).toMatch(/--timeout/);
   });
 
   it("falls back from a broken checkout binPath to SAY_TO_ME_PASEO_BIN", async () => {
