@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Cause, Effect, Exit } from "effect";
-import { afterAll, describe, expect, it, vi } from "vite-plus/test";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const testDbDir = mkdtempSync(path.join(tmpdir(), "say-to-me-settings-test-"));
 process.env.SAY_TO_ME_DB = path.join(testDbDir, "queue.sqlite");
@@ -31,6 +31,10 @@ async function settingsRequest(method = "GET", body?: Record<string, unknown>) {
 }
 
 describe("Settings API", () => {
+  beforeEach(() => {
+    drizzleSqlite.prepare("DELETE FROM app_settings").run();
+  });
+
   afterAll(() => {
     drizzleSqlite.close();
     rmSync(testDbDir, { force: true, recursive: true });

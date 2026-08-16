@@ -4,14 +4,14 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
 const testDbDir = mkdtempSync(path.join(tmpdir(), "say-to-me-spaces-test-"));
 process.env.SAY_TO_ME_DB = path.join(testDbDir, "queue.sqlite");
 
 const execFileAsync = promisify(execFile);
 const { dispatchEffectApiRequest } = await import("./effect-api.ts");
-const { drizzleDb, drizzleSqlite } = await import("../db/index.ts");
+const { drizzleDb, drizzleSqlite, wipeTestDatabase } = await import("../db/index.ts");
 const {
   repositories,
   sessions,
@@ -80,6 +80,11 @@ describe("Spaces API regressions", () => {
       "feature/hidden",
       featureWorktreePath,
     ]);
+  });
+
+  beforeEach(() => {
+    wipeTestDatabase();
+    drizzleDb.insert(spaces).values({ id: "space-default", name: "Default" }).run();
   });
 
   afterAll(async () => {
@@ -594,13 +599,18 @@ describe("Spaces API regressions", () => {
     const spaceId = "test-space-unclaimed-session-worktree";
     const sessionId = "test-session-unclaimed-worktree";
     drizzleDb.insert(spaces).values({ id: spaceId, name: "Session visibility" }).run();
+    const attachResponse = await action(spaceId, {
+      action: "attachRepository",
+      name: "alternate",
+      path: alternateRepositoryPath,
+    });
+    expect(attachResponse?.status).toBe(200);
     const repository = drizzleDb
       .select()
       .from(repositories)
       .all()
       .find((candidate) => candidate.identity === "https://example.com/alternate.git");
     expect(repository).toBeDefined();
-    drizzleDb.insert(spaceRepositories).values({ spaceId, repositoryId: repository!.id }).run();
     drizzleDb.insert(sessions).values({ id: sessionId, cwd: featureWorktreePath }).run();
 
     const response = await action(spaceId, { action: "claimSession", sessionId });
