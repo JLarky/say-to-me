@@ -48,6 +48,7 @@ async function ensureJarvisSpace(): Promise<string> {
     }),
   );
   const body = await response!.json();
+  // SAFETY: this test's own POST /api/spaces response always includes spaceId.
   return body.spaceId as string;
 }
 

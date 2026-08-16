@@ -93,7 +93,7 @@ describe("say API: waiting state", () => {
         `${origin}/api/sessions/ses_f94c8a586294iWvZxZR7C3BGu9/waiting-state`,
       ).then((response) => response.json());
       expect(payload).toMatchObject({ state: "unknown" });
-      expect(typeof payload.reason).toBe("string");
+      expect(payload.reason).toEqual(expect.any(String));
     } finally {
       server.close();
     }
