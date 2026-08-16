@@ -241,7 +241,7 @@ export type ExternalCliDurableDeliveryConfig<
   jobSelectColumns: DeliveryJobSelectColumns;
   validateJob: (row: unknown, context: string) => TJob;
   resolveRuntime: (cwd: string, sessionId: string) => TRuntime;
-  ensureBooWorker: (sessionId: string) => Promise<unknown>;
+  ensureBooWorker: (sessionId: string) => Promise<boolean>;
   queueTag: string;
   promptClientTag: string;
   workerIdentityTag: string;

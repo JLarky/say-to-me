@@ -67,6 +67,7 @@ export const AskQuestionInput = arktype({
 });
 export type AskQuestionInput = typeof AskQuestionInput.infer;
 
+// oxlint-disable-next-line anti-slop/no-unknown-returns -- This preserves opaque transcript input for the generic tool hint formatter; named tool schemas validate before inspection.
 function coerceToolInput(input: unknown): unknown {
   if (typeof input === "string") return safeJsonParse(UnknownJson, input);
   return input;
