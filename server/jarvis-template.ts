@@ -55,7 +55,7 @@ export function validJarvisAlias(input: string): string | null {
 export function resolveJarvisWorkspacePath(
   aliasOrSlug: string,
   preferredParentPath?: string | null,
-): { parentDirectory: string; slug: string; workspaceDirectory: string } {
+) {
   const parentDirectory = resolveJarvisParentPath(preferredParentPath);
   const slug = jarvisWorkspaceName(aliasOrSlug);
   if (!slug || slug.includes("..") || slug.includes("/") || slug.includes("\\")) {
