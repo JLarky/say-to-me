@@ -22,11 +22,6 @@ export function createCapabilityHttpHandler(options: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- fake service layers vary by tag
   services: any;
 }): CapabilityHttpHandler {
-  // SAFETY: options.api/handlers/services are intentionally typed `any` (each
-  // capability's HttpApi id and service requirements differ), so the merged
-  // layer can't structurally match toWebHandler's generic signature; callers
-  // still supply a concrete, correctly-shaped Api/handlers/services pairing
-  // at the runtime layer-composition boundary above.
   const webHandler = HttpApiBuilder.toWebHandler(
     Layer.mergeAll(
       HttpApiBuilder.api(options.api).pipe(

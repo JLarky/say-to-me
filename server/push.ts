@@ -85,8 +85,6 @@ export async function sendBrowserPush(sessionId: string, text: string): Promise<
       try {
         await webpush.sendNotification(sub, payload);
       } catch (err) {
-        // SAFETY: web-push throws errors shaped as { statusCode?, message? };
-        // both fields are read with optional access below, so a wrong shape degrades safely.
         const pushErr = err as PushError;
         const status = pushErr.statusCode;
         if (status === 404 || status === 410) {

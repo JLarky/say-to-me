@@ -71,7 +71,7 @@ export async function getEmbedWidgetScript(): Promise<string> {
       buildInFlight = null;
       return text;
     })
-    .catch(<E>(error: E) => {
+    .catch((error: unknown) => {
       buildInFlight = null;
       throw error;
     });

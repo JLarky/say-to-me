@@ -7,7 +7,7 @@ import { getCodexActivitySnapshot, shutdownCodexActivityHub } from "./activity-h
 
 const sessionUuid = "e6ca1259-5b7f-4de3-afd5-a877811435cb";
 const sessionId = `cx_${sessionUuid}`;
-const line = <T>(obj: T) => JSON.stringify(obj);
+const line = (obj: unknown) => JSON.stringify(obj);
 
 let testHome: string;
 let previousRoot: string | undefined;

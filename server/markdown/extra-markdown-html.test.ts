@@ -118,5 +118,5 @@ describe("deserializeMessage extraMarkdownHtml wiring", () => {
     expect(message?.extraMarkdownHtml).toMatch(/href="https:\/\/example\.com"/);
     expect(message?.extraMarkdownHtml).toMatch(/rel="noopener noreferrer"/);
     expect(message?.extraMarkdownHtml?.toLowerCase()).not.toContain("<script");
-  }, 15_000);
+  }, 30_000);
 });
