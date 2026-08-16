@@ -15,7 +15,7 @@ export function getCachedOpenCodeStatus(sessionId: string): OpenCodeStatus | nul
 
 export function getCachedOpenCodeStatusReason(sessionId: string): string | null {
   const reason = getCachedOpenCodeStatusEntry(sessionId)?.reason;
-  return typeof reason === "string" && reason.trim() ? reason.trim() : null;
+  return reason?.trim() || null;
 }
 
 function getCachedOpenCodeStatusEntry(sessionId: string): OpenCodeStatusCacheEntry | null {
