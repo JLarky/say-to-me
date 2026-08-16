@@ -60,7 +60,7 @@ export const noChainedTypeAssertionsRule = defineRule({
     },
     messages: {
       chained:
-        "This assertion chain discards type evidence. Keep the original precise type, or parse untrusted input at its boundary before narrowing it.",
+        "This assertion chain discards type evidence. Preserve the original precise type or parse untrusted input; do not route through `unknown` or invent a narrower type. For a real framework/test invariant, use one assertion with a specific `SAFETY:` justification or focused exemption.",
     },
   },
   createOnce(context) {
