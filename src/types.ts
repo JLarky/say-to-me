@@ -260,6 +260,9 @@ export const Session = type({
   "cwd?": "string | null",
   "t3InstanceId?": "string | null",
   "paseoInstanceId?": "string | null",
+  "paseoUiUrl?": "string | null",
+  "paseoLocalUrl?": "string | null",
+  "paseoTailscaleUrl?": "string | null",
   "organizePath?": OrganizePathCrumb.array(),
 });
 
@@ -343,6 +346,8 @@ export type ExternalCliActivitySnapshot = typeof ExternalCliActivitySnapshot.inf
 export const Capabilities = type({
   "opencodeLocalBase?": "string | null",
   "opencodeTailscaleBase?": "string | null",
+  "paseoLocalBase?": "string | null",
+  "paseoTailscaleBase?": "string | null",
   "opencodeDirB64?": "string | null",
   "openCodeActivityPreview?": "boolean",
 });

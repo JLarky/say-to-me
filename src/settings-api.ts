@@ -17,9 +17,17 @@ const T3ServerInstance = arktype({
 });
 const PaseoInstance = arktype({
   id: "string",
+  "serverId?": "string",
+  "localUrl?": "string",
+  "tailscaleUrl?": "string",
   "binPath?": "string",
   "home?": "string",
   host: "string",
+});
+const OpenCodeInstance = arktype({
+  id: "string",
+  "localUrl?": "string",
+  "tailscaleUrl?": "string",
 });
 
 const SettingsResponse = arktype({
@@ -27,11 +35,13 @@ const SettingsResponse = arktype({
   preferredJarvisParentPath: "string | null",
   t3ServerInstances: T3ServerInstance.array(),
   paseoInstances: PaseoInstance.array(),
+  "opencodeInstances?": OpenCodeInstance.array(),
 });
 const SettingsErrorResponse = arktype({ error: "string" });
 
 export type T3ServerInstance = typeof T3ServerInstance.infer;
 export type PaseoInstance = typeof PaseoInstance.infer;
+export type OpenCodeInstance = typeof OpenCodeInstance.infer;
 export type AppSettings = typeof SettingsResponse.infer;
 
 export type AppSettingsPatch = {
@@ -39,6 +49,7 @@ export type AppSettingsPatch = {
   preferredJarvisParentPath?: string | null;
   t3ServerInstances?: T3ServerInstance[];
   paseoInstances?: PaseoInstance[];
+  opencodeInstances?: OpenCodeInstance[];
 };
 
 export function displayLocationPath(value: string | null | undefined, fallback: string): string {

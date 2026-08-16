@@ -7,6 +7,7 @@ import { queuePayload } from "../broadcast.ts";
 import { enableOpenCodeActivityPreview, opencodeDirectory } from "../config.ts";
 import { browserOtelConfig } from "../otel-config.ts";
 import { serverCapabilities } from "../capabilities.ts";
+import { getAppSettings } from "../settings.ts";
 import { normalizeSessionId } from "../session-id.ts";
 import { getSession } from "../sessions.ts";
 import { publicRouteErrorResponse } from "./route-errors.ts";
@@ -59,7 +60,11 @@ export const getQueueEffect: Effect.Effect<unknown> = Effect.promise(() =>
 );
 
 export const getCapabilitiesEffect: Effect.Effect<unknown> = Effect.sync(() =>
-  serverCapabilities({ enableOpenCodeActivityPreview, opencodeDirectory }),
+  serverCapabilities({
+    enableOpenCodeActivityPreview,
+    opencodeDirectory,
+    opencodeInstances: getAppSettings().opencodeInstances,
+  }),
 );
 
 export const getOtelConfigEffect: Effect.Effect<unknown> = Effect.sync(() => browserOtelConfig());
