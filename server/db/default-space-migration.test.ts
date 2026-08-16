@@ -30,6 +30,8 @@ function migrationsThrough(tagPrefix: string): string {
   mkdirSync(dest, { recursive: true });
   cpSync(migrationsFolder, dest, { recursive: true });
   const journalPath = path.join(dest, "meta", "_journal.json");
+  // SAFETY: reads drizzle-kit's generated meta/_journal.json, whose
+  // entries/tag schema is controlled by drizzle-kit itself.
   const journal = JSON.parse(readFileSync(journalPath, "utf8")) as {
     entries: Array<{ tag: string }>;
   };
