@@ -8,6 +8,8 @@ function semanticHtml(root: ParentNode): string {
   const visit = (node: Node): string => {
     if (node.nodeType === Node.TEXT_NODE) return `#${node.nodeValue ?? ""}`;
     if (node.nodeType !== Node.ELEMENT_NODE) return "";
+    // SAFETY: the DOM Node interface guarantees nodeType === ELEMENT_NODE only for Element
+    // instances, and the guard above already ruled out every other nodeType.
     const element = node as Element;
     const attributes = [...element.attributes]
       .sort((left, right) => left.name.localeCompare(right.name))

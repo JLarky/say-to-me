@@ -103,6 +103,8 @@ describe("Paseo CLI client", () => {
       });
       help = `${result.stdout}\n${result.stderr}`;
     } catch (error) {
+      // SAFETY: execFileAsync wraps node:child_process's execFile, which rejects
+      // with an ErrnoException carrying the process's stdout/stderr.
       const err = error as NodeJS.ErrnoException & { stdout?: string; stderr?: string };
       if (err.code === "ENOENT") return;
       // commander --help can exit non-zero on some wrappers; still inspect output.
