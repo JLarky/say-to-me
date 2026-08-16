@@ -37,6 +37,8 @@ const idleSnapshot: ActivePlaybackSnapshot = {
   token: null,
 };
 
+// SAFETY: __sayToMeBrowserPlaybackStore is only ever read and written by this
+// module, immediately below, so the augmented shape is self-controlled.
 const globalWithPlaybackStore = globalThis as typeof globalThis & {
   __sayToMeBrowserPlaybackStore?: BrowserPlaybackStore;
 };
