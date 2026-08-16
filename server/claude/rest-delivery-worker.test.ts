@@ -1,11 +1,6 @@
 import { createServer } from "node:http";
-import type { AddressInfo } from "node:net";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { Effect } from "effect";
-
-function isTcpAddress(address: AddressInfo | string | null): address is AddressInfo {
-  return address !== null && Object.hasOwn(Object(address), "port");
-}
 
 process.env.SAY_TO_ME_CLAUDE_WORKER_AUTOSTART = "0";
 process.env.SAY_TO_ME_CLAUDE_ECHO_ACCEPT_DELAY_MS = "0";
@@ -80,7 +75,7 @@ describe("Claude REST delivery worker", () => {
     });
     await new Promise<void>((resolve) => fakeServer.listen(0, "127.0.0.1", resolve));
     const address = fakeServer.address();
-    if (!isTcpAddress(address)) throw new Error("Expected TCP test server.");
+    if (!address || typeof address === "string") throw new Error("Expected TCP test server.");
     process.env.SAY_TO_ME_INTERNAL_URL = `http://127.0.0.1:${address.port}`;
 
     try {

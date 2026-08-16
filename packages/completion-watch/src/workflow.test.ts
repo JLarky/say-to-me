@@ -42,7 +42,10 @@ function baseMessage(
   };
 }
 
-function inMemoryCompletionStore(seed: WatchedMessage[]) {
+function inMemoryCompletionStore(seed: WatchedMessage[]): {
+  layer: Layer.Layer<CompletionWatchStoreService>;
+  rows: Map<number, WatchedMessage>;
+} {
   const rows = new Map<number, WatchedMessage>(seed.map((row) => [row.id, { ...row }]));
   let seq = Math.max(0, ...seed.map((row) => row.id)) + 1;
   const patch = (id: number, fields: Partial<WatchedMessage>) => {

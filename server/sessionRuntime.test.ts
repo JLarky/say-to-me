@@ -3,26 +3,15 @@ import { type SessionRuntimeLogEvent, createSessionRuntimeRegistry } from "./ses
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Mirrors the concrete detail shapes passed to log(...) at each call site in sessionRuntime.ts.
-type SessionRuntimeLogDetail =
-  | { runtimeId: number }
-  | { runtimeId: number; idleShutdownMs: number }
-  | { runtimeId: number; status: string | null }
-  | { runtimeId: number; attachedClients: number };
-
 function makeRegistry(idleShutdownMs = 40) {
   const logs: Array<{
     event: SessionRuntimeLogEvent;
     sessionId: string;
-    detail: SessionRuntimeLogDetail;
+    detail: Record<string, unknown>;
   }> = [];
   const registry = createSessionRuntimeRegistry({
     idleShutdownMs,
-    log: (event, sessionId, detail) =>
-      // SAFETY: sessionRuntime.ts's log() callback type declares detail as Record<string,
-      // unknown>, but every call site only ever passes one of the SessionRuntimeLogDetail
-      // shapes above; this test doesn't read detail's fields, only the event/sessionId.
-      logs.push({ event, sessionId, detail: detail as SessionRuntimeLogDetail }),
+    log: (event, sessionId, detail) => logs.push({ event, sessionId, detail }),
   });
   return { logs, registry };
 }

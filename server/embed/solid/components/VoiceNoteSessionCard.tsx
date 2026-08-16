@@ -9,10 +9,6 @@ import {
 
 const COPY_CONFIRMATION_MS = 2_000;
 
-function resolveMaybeAccessor<T>(value: T | (() => T)): T {
-  return value instanceof Function ? value() : value;
-}
-
 export type VoiceNoteSession = {
   readonly id: string;
   readonly alias?: string | null;
@@ -28,7 +24,7 @@ export function VoiceNoteSessionCard(props: {
   readonly session: VoiceNoteSession | (() => VoiceNoteSession);
   readonly uiBaseUrl?: VoiceWidgetUiBaseUrl;
 }): HTMLElement {
-  const getSession = () => resolveMaybeAccessor(props.session);
+  const getSession = () => (typeof props.session === "function" ? props.session() : props.session);
   const [isCopied, setIsCopied] = createSignal(false);
   let resetTimer: ReturnType<typeof setTimeout> | undefined;
   let disposed = false;

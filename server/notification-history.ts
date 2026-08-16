@@ -91,10 +91,11 @@ function broadcastNotifications(): void {
 
 function ensureNotificationSchema() {
   if (notificationSchemaReady) return;
-  const columns = drizzleSqlite
-    .prepare<[], { name: string }>("PRAGMA table_info(notifications)")
-    .all();
-  const hasSessionTitle = columns.some((column) => column.name === "session_title");
+  const columns = drizzleSqlite.prepare("PRAGMA table_info(notifications)").all();
+  const hasSessionTitle = columns.some(
+    (column) =>
+      column && typeof column === "object" && "name" in column && column.name === "session_title",
+  );
   if (!hasSessionTitle) {
     addNotificationColumn(
       "ALTER TABLE notifications ADD COLUMN session_title text NOT NULL DEFAULT ''",
