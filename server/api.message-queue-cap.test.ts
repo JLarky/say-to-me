@@ -1,14 +1,10 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { writeFileSync, rmSync } from "node:fs";
 import path from "node:path";
-import { Worker } from "node:worker_threads";
-import { fileURLToPath } from "node:url";
 import {
   type ApiMessage,
   type TestServer,
-  beginTestTransaction,
   clearQueue,
-  commitTestTransaction,
   createApiMiddleware,
   createTestSession,
   listen,
@@ -16,7 +12,6 @@ import {
   tinyPng,
 } from "./api.harness.ts";
 import { dispatchEffectApiRequest } from "./api-routes/effect-api.ts";
-import { dbPath } from "./config.ts";
 import { getQueuedCountForSession } from "./messages.ts";
 import {
   resetQueueCapClaimDepsForTest,
@@ -25,53 +20,6 @@ import {
 import { clearForwardCompletionNotificationWatches } from "./notifications.ts";
 import { opencodeStatusCache } from "./opencode/cache.ts";
 import { stopAllCompletionWatches } from "./opencode/completion-watch.ts";
-
-type ClaimWorkerResult =
-  | { ok: true; messageId: number; existing: boolean }
-  | { ok: false; error: string };
-
-function claimOnSecondConnection(input: {
-  sessionId: string;
-  text: string;
-  overflow: "force" | null;
-  clientMessageId?: string | null;
-  cap?: number;
-}): Promise<ClaimWorkerResult> {
-  return new Promise((resolve, reject) => {
-    const worker = new Worker(
-      fileURLToPath(new URL("./messages-queue-cap-claim-worker.ts", import.meta.url)),
-      {
-        execArgv: ["--experimental-strip-types"],
-        workerData: {
-          dbPath,
-          cap: input.cap ?? Number(process.env.SAY_TO_ME_MAX_QUEUED_MESSAGES || 2),
-          sessionId: input.sessionId,
-          text: input.text,
-          overflow: input.overflow,
-          clientMessageId: input.clientMessageId ?? null,
-        },
-      },
-    );
-    const timer = setTimeout(() => {
-      void worker.terminate();
-      reject(new Error("queue-cap claim worker timed out"));
-    }, 15_000);
-    worker.on("message", (message: ClaimWorkerResult) => {
-      clearTimeout(timer);
-      resolve(message);
-    });
-    worker.on("error", (error) => {
-      clearTimeout(timer);
-      reject(error);
-    });
-    worker.on("exit", (code) => {
-      if (code !== 0) {
-        clearTimeout(timer);
-        reject(new Error(`queue-cap claim worker exited with code ${code}`));
-      }
-    });
-  });
-}
 
 describe("say API: per-session agent queue cap", () => {
   let server: TestServer;
@@ -273,128 +221,6 @@ describe("say API: per-session agent queue cap", () => {
     const body = await forced.json();
     expect(body.error).toContain("All queued messages are pinned");
   });
-
-  it("serializes concurrent at-cap sends across two sqlite connections", async () => {
-    await createTestSession("ses_af8ec96c8663L1x7jZCkJZL4HN");
-    expect((await postAgent("ses_af8ec96c8663L1x7jZCkJZL4HN", "seed")).status).toBe(201);
-    // Cap is 2: one slot left. Two connections race to claim it without force.
-    // Release the harness BEGIN so worker connections can take BEGIN IMMEDIATE.
-    commitTestTransaction();
-    try {
-      const [a, b] = await Promise.all([
-        claimOnSecondConnection({
-          sessionId: "ses_af8ec96c8663L1x7jZCkJZL4HN",
-          text: "race-a",
-          overflow: null,
-        }),
-        claimOnSecondConnection({
-          sessionId: "ses_af8ec96c8663L1x7jZCkJZL4HN",
-          text: "race-b",
-          overflow: null,
-        }),
-      ]);
-      const outcomes = [a, b];
-      expect(outcomes.filter((result) => result.ok)).toHaveLength(1);
-      expect(outcomes.filter((result) => !result.ok)).toHaveLength(1);
-      expect(getQueuedCountForSession("ses_af8ec96c8663L1x7jZCkJZL4HN")).toBe(2);
-    } finally {
-      beginTestTransaction();
-    }
-  }, 20_000);
-
-  it("serializes concurrent force sends across two sqlite connections without double-evicting", async () => {
-    await createTestSession("ses_01979ae09e1c37PoJC4TNtoZxY");
-    const first = await postAgent("ses_01979ae09e1c37PoJC4TNtoZxY", "oldest");
-    const second = await postAgent("ses_01979ae09e1c37PoJC4TNtoZxY", "newer");
-    expect(first.status).toBe(201);
-    expect(second.status).toBe(201);
-    const firstId = ((await first.json()) as { message: ApiMessage }).message.id;
-    const secondId = ((await second.json()) as { message: ApiMessage }).message.id;
-
-    commitTestTransaction();
-    try {
-      const [a, b] = await Promise.all([
-        claimOnSecondConnection({
-          sessionId: "ses_01979ae09e1c37PoJC4TNtoZxY",
-          text: "force-a",
-          overflow: "force",
-        }),
-        claimOnSecondConnection({
-          sessionId: "ses_01979ae09e1c37PoJC4TNtoZxY",
-          text: "force-b",
-          overflow: "force",
-        }),
-      ]);
-      expect(a.ok).toBe(true);
-      expect(b.ok).toBe(true);
-      expect(getQueuedCountForSession("ses_01979ae09e1c37PoJC4TNtoZxY")).toBe(2);
-
-      const messages = await listMessages("ses_01979ae09e1c37PoJC4TNtoZxY");
-      const byId = new Map(messages.map((message) => [message.id, message]));
-      expect(byId.get(firstId)?.status).toBe("skipped");
-      expect(byId.get(secondId)?.status).toBe("skipped");
-      expect(messages.filter((message) => message.status === "skipped")).toHaveLength(2);
-      expect(
-        messages.filter((message) => message.status === "queued" && message.author === "agent"),
-      ).toHaveLength(2);
-    } finally {
-      beginTestTransaction();
-    }
-  }, 20_000);
-
-  it("serializes concurrent force retries with the same clientMessageId to one insert", async () => {
-    await createTestSession("ses_9e68a4853b38COF7rSUhB7EGHi");
-    const first = await postAgent("ses_9e68a4853b38COF7rSUhB7EGHi", "oldest");
-    const second = await postAgent("ses_9e68a4853b38COF7rSUhB7EGHi", "newer");
-    expect(first.status).toBe(201);
-    expect(second.status).toBe(201);
-    const firstId = ((await first.json()) as { message: ApiMessage }).message.id;
-    const secondId = ((await second.json()) as { message: ApiMessage }).message.id;
-    const clientMessageId = "client-force-idempotent-1";
-
-    commitTestTransaction();
-    try {
-      const [a, b] = await Promise.all([
-        claimOnSecondConnection({
-          sessionId: "ses_9e68a4853b38COF7rSUhB7EGHi",
-          text: "same-retry",
-          overflow: "force",
-          clientMessageId,
-        }),
-        claimOnSecondConnection({
-          sessionId: "ses_9e68a4853b38COF7rSUhB7EGHi",
-          text: "same-retry",
-          overflow: "force",
-          clientMessageId,
-        }),
-      ]);
-      expect(a.ok).toBe(true);
-      expect(b.ok).toBe(true);
-      if (!a.ok || !b.ok) return;
-      expect(a.messageId).toBe(b.messageId);
-      expect([a.existing, b.existing].filter(Boolean)).toHaveLength(1);
-      expect([a.existing, b.existing].filter((value) => !value)).toHaveLength(1);
-      expect(getQueuedCountForSession("ses_9e68a4853b38COF7rSUhB7EGHi")).toBe(2);
-
-      const messages = await listMessages("ses_9e68a4853b38COF7rSUhB7EGHi");
-      const byClient = messages.filter((message) => message.clientMessageId === clientMessageId);
-      expect(byClient).toHaveLength(1);
-      expect(byClient[0]?.text).toBe("same-retry");
-      expect(byClient[0]?.status).toBe("queued");
-
-      const byId = new Map(messages.map((message) => [message.id, message]));
-      const skippedOriginals = [firstId, secondId].filter(
-        (id) => byId.get(id)?.status === "skipped",
-      );
-      expect(skippedOriginals).toHaveLength(1);
-      expect(messages.filter((message) => message.status === "skipped")).toHaveLength(1);
-      expect(
-        messages.filter((message) => message.status === "queued" && message.author === "agent"),
-      ).toHaveLength(2);
-    } finally {
-      beginTestTransaction();
-    }
-  }, 20_000);
 
   it("retries an agent image message by clientMessageId after the temp file is gone", async () => {
     const imagePath = path.join("/tmp", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.png");

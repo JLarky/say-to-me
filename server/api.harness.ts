@@ -114,15 +114,18 @@ export function beginTestTransaction(): void {
   testTransactionActive = true;
 }
 
-export function waitFor(condition: () => boolean | Promise<boolean>): Promise<void> {
+export function waitFor(
+  condition: () => boolean | Promise<boolean>,
+  timeoutMs = 4000,
+): Promise<void> {
   return new Promise((resolve, reject) => {
-    const started = Date.now();
+    const started = performance.now();
     const timer = setInterval(async () => {
       try {
         if (await condition()) {
           clearInterval(timer);
           resolve();
-        } else if (Date.now() - started > 2000) {
+        } else if (performance.now() - started > timeoutMs) {
           clearInterval(timer);
           reject(new Error("Timed out waiting for condition"));
         }

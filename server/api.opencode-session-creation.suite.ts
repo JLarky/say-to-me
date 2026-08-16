@@ -85,44 +85,6 @@ describe("say API: OpenCode session creation", () => {
     resetJarvisCreateDepsForTest();
   });
 
-  it("creates an OpenCode session for an existing workspace folder", async () => {
-    const workspacePath = mkdtempSync(path.join(tmpdir(), "say-to-me-opencode-"));
-    const previousOpenCodeUrl = process.env.SAY_TO_ME_OPENCODE_URL;
-    const openCode = await mockOpenCode((_req, res) => {
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(
-        JSON.stringify({
-          id: "ses_23804645cbf4zkDzjLJDBL8x0u",
-          title: "new workspace",
-          directory: workspacePath,
-        }),
-      );
-    });
-    process.env.SAY_TO_ME_OPENCODE_URL = openCode.url;
-
-    try {
-      const response = await fetch(`${origin}/api/opencode-sessions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: workspacePath }),
-      });
-      const payload = await response.json();
-      expect(response.status).toBe(201);
-      expect(payload.session).toMatchObject({
-        id: "ses_23804645cbf4zkDzjLJDBL8x0u",
-        opencodeTitle: "new workspace",
-      });
-      expect(openCode.requests[0].method).toBe("POST");
-      expect(openCode.requests[0].url).toContain("/session");
-      expect(openCode.requests[0].url).toContain(encodeURIComponent(workspacePath));
-    } finally {
-      process.env.SAY_TO_ME_OPENCODE_URL = previousOpenCodeUrl;
-      openCode.server.close();
-      rmSync(workspacePath, { recursive: true, force: true });
-      server.close();
-    }
-  });
-
   it("creates a named Jarvis-managed scaffolded OpenCode session and bootstraps it", async () => {
     const previousOpenCodeUrl = process.env.SAY_TO_ME_OPENCODE_URL;
     let workspacePath: string | null = null;

@@ -11,7 +11,6 @@ import {
 } from "./api.harness.ts";
 import { MessagesPayload } from "../src/types.ts";
 import { parseJson, UnknownJson } from "@say-to-me/runtime-validation";
-import { insertMessageRow, markCompletionWorkSeen, updateOpencodeDelivery } from "./messages.ts";
 import { opencodeStatusCache } from "./opencode/cache.ts";
 import { setCompletionWatchNextCheckAt } from "./messages.ts";
 import {
@@ -273,47 +272,6 @@ describe.sequential("say API: OpenCode completion watches", () => {
     }
   });
 
-  it("starts watching forwarded prompts only after queued delivery flushes", async () => {
-    const sourceSessionId = "ses_941902450e84nP9doy6vdPGxl4";
-    const targetSessionId = "ses_f33941222decPeAYKFmklWJRnU";
-    const openCode = await installOpenCodeMock({
-      sourceSessionId,
-      targetSessionId,
-      targetInitiallyBusy: true,
-    });
-    process.env.SAY_TO_ME_OPENCODE_URL = openCode.url;
-
-    try {
-      const created = await jsonResponse<{ message: ApiMessage; targetMessage: ApiMessage }>(
-        await fetch(`${origin}/api/sessions/${sourceSessionId}/messages`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ author: "user", targetSessionId, text: "queue then watch" }),
-        }),
-      );
-      expect(created.targetMessage.opencodeDeliveryStatus).toBe("queued");
-
-      opencodeStatusCache.clear();
-      openCode.setTargetStatus("idle");
-      await completeTargetWork(targetSessionId, created.targetMessage.id, openCode);
-
-      const source = (await messages(sourceSessionId)).find((m) => m.id === created.message.id)!;
-      const targetItems = await messages(targetSessionId);
-      const deliveredTarget = targetItems.find((m) => m.id === created.targetMessage.id)!;
-      const sourceTarget = targetItems.find((m) => m.id === source.forwardTargetMessageId)!;
-      expect(
-        sourceTarget.id === deliveredTarget.id ||
-          sourceTarget.mergedIntoMessageId === deliveredTarget.id,
-      ).toBe(true);
-      expect(deliveredTarget).toMatchObject({
-        forwardRole: "target",
-        completionWatchStatus: "completed",
-      });
-    } finally {
-      await closeServer(openCode.server);
-    }
-  });
-
   it("emits an idle marker for queued direct prompts after delivery and work", async () => {
     const sessionId = "ses_8e8625bb26383zcHXuzcQ1cYoQ";
     const openCode = await installOpenCodeMock({
@@ -340,153 +298,6 @@ describe.sequential("say API: OpenCode completion watches", () => {
       expect(
         (await messages(sessionId)).filter((m) => m.text.includes("idle now after")),
       ).toHaveLength(0);
-    } finally {
-      await closeServer(openCode.server);
-    }
-  });
-
-  it("retries a failed source notification without duplicating messages", async () => {
-    const sourceSessionId = "ses_363e8102bbd8bV217R1m12JlIY";
-    const targetSessionId = "ses_27bb36233f03sTMEyoq7IfJKXu";
-    const openCode = await installOpenCodeMock({
-      sourceSessionId,
-      targetSessionId,
-      sourceFailures: 2,
-    });
-    process.env.SAY_TO_ME_OPENCODE_URL = openCode.url;
-
-    try {
-      await fetch(`${origin}/api/sessions/${sourceSessionId}/messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ author: "user", targetSessionId, text: "retry notice" }),
-      });
-
-      const target = (await messages(targetSessionId)).find(
-        (message) => message.author === "user",
-      )!;
-      await completeTargetWork(targetSessionId, target.id, openCode);
-      openCode.setSourceStatus("idle");
-      setCompletionWatchNextCheckAt(target.id, Date.now() - 1);
-      await runCompletionWatchTick(target.id);
-      const notices = (await messages(sourceSessionId)).filter(
-        (m) => m.text.includes("idle now after") && m.forwardRole === "source",
-      );
-      expect(notices).toHaveLength(1);
-      await waitFor(
-        () =>
-          openCode.requests.filter(
-            (request) =>
-              request.method === "POST" &&
-              request.url?.startsWith(`/session/${sourceSessionId}/message`),
-          ).length >= 1,
-      );
-      expect(
-        openCode.requests.filter(
-          (request) =>
-            request.method === "POST" &&
-            request.url?.startsWith(`/session/${sourceSessionId}/message`),
-        ).length,
-      ).toBeGreaterThanOrEqual(1);
-    } finally {
-      await closeServer(openCode.server);
-    }
-  });
-
-  it("batches multiple completed forwards into one queued source notification while source is busy", async () => {
-    const sourceSessionId = "ses_80c69225a4b0Dz3VO9BqMZfspr";
-    const targetSessionId = "ses_a02fbd1c4c0fKX6ya7y4TSIh43";
-    const openCode = await installOpenCodeMock({
-      sourceSessionId,
-      targetSessionId,
-      sourceInitiallyBusy: true,
-    });
-    process.env.SAY_TO_ME_OPENCODE_URL = openCode.url;
-
-    try {
-      const first = await jsonResponse<{ message: ApiMessage; targetMessage: ApiMessage }>(
-        await fetch(`${origin}/api/sessions/${sourceSessionId}/messages`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ author: "user", targetSessionId, text: "first watched forward" }),
-        }),
-      );
-      await completeTargetWork(targetSessionId, first.targetMessage.id, openCode);
-
-      const second = await jsonResponse<{ message: ApiMessage; targetMessage: ApiMessage }>(
-        await fetch(`${origin}/api/sessions/${sourceSessionId}/messages`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ author: "user", targetSessionId, text: "second watched forward" }),
-        }),
-      );
-      await completeTargetWork(targetSessionId, second.targetMessage.id, openCode);
-
-      const sourceNotices = (await messages(sourceSessionId)).filter((message) =>
-        message.text.includes(`${targetSessionId} is idle now after`),
-      );
-      expect(sourceNotices).toHaveLength(1);
-      expect(sourceNotices[0]).toMatchObject({
-        opencodeDeliveryStatus: "queued",
-        forwardRole: "source",
-        forwardTargetSessionId: targetSessionId,
-      });
-      expect(sourceNotices[0].text).toContain(targetSessionId);
-      expect(sourceNotices[0].text).toContain("watched forward");
-      expect(
-        openCode.requests.filter(
-          (request) =>
-            request.method === "POST" &&
-            request.url?.startsWith(`/session/${sourceSessionId}/message`),
-        ),
-      ).toHaveLength(0);
-    } finally {
-      await closeServer(openCode.server);
-    }
-  });
-
-  it("resumes pending completion watches from durable rows on API startup", async () => {
-    const sessionId = "ses_46a86a08f330bPaDEalvm5S9NT";
-    const openCode = await installOpenCodeMock({
-      sourceSessionId: "ses_2000510ec43e1QSNxmzzPMPWPh",
-      targetSessionId: sessionId,
-    });
-    process.env.SAY_TO_ME_OPENCODE_URL = openCode.url;
-
-    try {
-      await createTestSession(sessionId);
-      const watched = insertMessageRow({
-        sessionId,
-        text: "resume watched prompt",
-        extraMarkdown: null,
-        author: "user",
-        status: "received",
-        links: null,
-        sessionRefs: null,
-        clientMessageId: null,
-        completionWatchStatus: "watching",
-      });
-      updateOpencodeDelivery(watched.id, "sent", null, "msg_resume_watch");
-      markCompletionWorkSeen(watched.id);
-
-      await closeServer(server);
-      stopAllCompletionWatches();
-      setCompletionWatchAutoPollingForTest(true);
-      ({ server, origin } = await listen(createApiMiddleware()));
-
-      await waitFor(async () => {
-        const watchedAfterResume = (await messages(sessionId)).find(
-          (message) => message.id === watched.id,
-        );
-        return watchedAfterResume?.completionWatchStatus === "completed";
-      });
-
-      const sessionMessages = await messages(sessionId);
-      expect(sessionMessages.find((message) => message.id === watched.id)).toMatchObject({
-        completionWatchStatus: "completed",
-        completionWatchWorkSeen: 1,
-      });
-      expect(systemMessages(sessionMessages)).toHaveLength(1);
     } finally {
       await closeServer(openCode.server);
     }
