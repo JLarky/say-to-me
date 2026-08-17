@@ -112,7 +112,8 @@ export function buildClaudeStopHandlers<
   R,
 >(api: HttpApi.HttpApi<Id, Groups, E, R>) {
   return HttpApiBuilder.group(
-    api as unknown as HttpApi.HttpApi<Id, typeof ClaudeStopGroup, E, R>,
+    // @ts-expect-error SAFETY: Every caller passes the assembled API containing ClaudeStopGroup; Effect cannot express that group-membership constraint for arbitrary Groups.
+    api as HttpApi.HttpApi<Id, typeof ClaudeStopGroup, E, R>,
     "claude-stop",
     (handlers) =>
       handlers.handle("stopClaudeSession", ({ path }) =>

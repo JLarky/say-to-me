@@ -80,7 +80,8 @@ export function buildCurrentModelHandlers<
   R,
 >(api: HttpApi.HttpApi<Id, Groups, E, R>) {
   return HttpApiBuilder.group(
-    api as unknown as HttpApi.HttpApi<Id, typeof CurrentModelGroup, E, R>,
+    // @ts-expect-error SAFETY: Every caller passes the assembled API containing CurrentModelGroup; Effect cannot express that group-membership constraint for arbitrary Groups.
+    api as HttpApi.HttpApi<Id, typeof CurrentModelGroup, E, R>,
     "current-session-model",
     (handlers) =>
       handlers.handle("getCurrentModel", ({ path }) =>
