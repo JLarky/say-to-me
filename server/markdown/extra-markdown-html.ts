@@ -3,6 +3,7 @@
  * Used for message `extraMarkdownHtml` and activity snippet HTML.
  */
 import { createHash } from "node:crypto";
+import { type as arktype } from "arktype";
 import { markdownToHtml } from "satteri";
 import sanitizeHtml from "sanitize-html";
 import {
@@ -105,7 +106,7 @@ export function renderExtraMarkdownHtml(markdown: string): string {
 export function extraMarkdownHtmlField(
   extraMarkdown: string | null | undefined,
 ): { extraMarkdownHtml: string } | Record<string, never> {
-  if (typeof extraMarkdown !== "string" || !extraMarkdown.trim()) return {};
+  if (!extraMarkdown?.trim()) return {};
   return { extraMarkdownHtml: renderExtraMarkdownHtml(extraMarkdown) };
 }
 
@@ -121,7 +122,8 @@ export function withActivitySnippetHtml<T extends { snippet: string }>(
 
 /** External CLI activity: tool lines render as inline code (UI parity with former client). */
 export function externalCliItemMarkdown(item: { kind?: unknown; text?: unknown }): string {
-  const text = typeof item.text === "string" ? item.text : "";
+  const parsedText = arktype("string")(item.text);
+  const text = parsedText instanceof arktype.errors ? "" : parsedText;
   if (item.kind !== "tool") return text;
   // Multi-line tool payloads (CreatePlan, AskQuestion) are already markdown.
   if (text.includes("\n")) return text;

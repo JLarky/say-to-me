@@ -46,11 +46,13 @@ function readAstroDevLoopbackUrl(
   }
   const raw = safeJsonParse(AstroDevJson, text);
   if (!raw) return null;
-  if (typeof raw.port === "number" && Number.isFinite(raw.port) && raw.port > 0) {
-    return `http://127.0.0.1:${raw.port}`;
+  const port = raw.port;
+  if (port !== undefined && Number.isFinite(port) && port > 0) {
+    return `http://127.0.0.1:${port}`;
   }
-  if (typeof raw.url === "string" && /^https?:\/\//i.test(raw.url)) {
-    return raw.url.replace(/\/$/, "");
+  const url = raw.url;
+  if (url && /^https?:\/\//i.test(url)) {
+    return url.replace(/\/$/, "");
   }
   return null;
 }
