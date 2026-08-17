@@ -72,13 +72,8 @@ export function parseCodexModelsCacheJson(raw: string): ProviderModel[] {
     .filter((m) => m.visibility === "list")
     .map((m) => ({
       providerID: CODEX_PROVIDER,
-      id: typeof m.slug === "string" ? m.slug : "",
-      name:
-        typeof m.display_name === "string"
-          ? m.display_name
-          : typeof m.slug === "string"
-            ? m.slug
-            : "",
+      id: m.slug ?? "",
+      name: m.display_name ?? m.slug ?? "",
     }))
     .filter((m) => m.id.length > 0);
 }

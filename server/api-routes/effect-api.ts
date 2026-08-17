@@ -5,6 +5,9 @@ import {
   uploadImageHttpApiWebHandler,
 } from "./uploads.ts";
 import { disposeSayToMeHttpApiHandler, sayToMeHttpApiWebHandler } from "./merged-api.ts";
+import { type as arktype } from "arktype";
+
+const JsonErrorBody = arktype({ error: "string" });
 
 async function dispatchUploadRequest(request: Request): Promise<Response | null> {
   const { pathname } = new URL(request.url);
@@ -34,15 +37,8 @@ export async function dispatchEffectApiRequest(
     const contentType = response.headers.get("content-type") ?? "";
     if (contentType.includes("application/json")) {
       try {
-        const body: unknown = await response.clone().json();
-        if (
-          body &&
-          typeof body === "object" &&
-          "error" in body &&
-          typeof (body as { error?: unknown }).error === "string"
-        ) {
-          return response;
-        }
+        const body = JsonErrorBody(await response.clone().json());
+        if (!(body instanceof arktype.errors)) return response;
       } catch {
         // Unmatched routes may return non-JSON 404 bodies.
       }
