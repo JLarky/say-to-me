@@ -24,6 +24,7 @@ export function VoiceNoteSessionCard(props: {
   readonly session: VoiceNoteSession | (() => VoiceNoteSession);
   readonly uiBaseUrl?: VoiceWidgetUiBaseUrl;
 }): HTMLElement {
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- props.session is the declared `VoiceNoteSession | (() => VoiceNoteSession)` union; typeof narrows the already-typed union.
   const getSession = () => (typeof props.session === "function" ? props.session() : props.session);
   const [isCopied, setIsCopied] = createSignal(false);
   let resetTimer: ReturnType<typeof setTimeout> | undefined;

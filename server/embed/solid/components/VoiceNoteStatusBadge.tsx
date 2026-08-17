@@ -9,9 +9,11 @@ type PlayingValue = boolean | (() => boolean);
 
 export function VoiceNoteStatusBadge(props: { status: StatusValue; isPlaying?: PlayingValue }) {
   const getStatus = () =>
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof -- props.isPlaying is the declared `PlayingValue = boolean | (() => boolean)` union; typeof narrows the already-typed union.
     (typeof props.isPlaying === "function" ? props.isPlaying() : props.isPlaying)
       ? "speaking"
-      : typeof props.status === "function"
+      : // oxlint-disable-next-line anti-slop/no-runtime-typeof -- props.status is the declared `StatusValue = string | (() => string)` union; typeof narrows the already-typed union.
+        typeof props.status === "function"
         ? props.status()
         : props.status;
   const badge = document.createElement("span");

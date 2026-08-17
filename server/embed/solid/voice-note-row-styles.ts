@@ -145,6 +145,7 @@ say-to-me-widget .stm-voice-note-markdown--compact {
 }
 `;
 export function ensureVoiceNoteRowStylesheet(
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Environment guard: detects whether a DOM `document` global exists (SSR/Node safety).
   doc: Document | null | undefined = typeof document !== "undefined" ? document : undefined,
 ): HTMLStyleElement | null {
   if (!doc?.head) return null;

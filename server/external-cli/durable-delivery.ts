@@ -619,6 +619,7 @@ export function createExternalCliDurableDelivery<
       .where(inArray(config.jobsTable.status, OWED_JOB_STATUSES))
       .all();
     const sessionIds = new Set(
+      // oxlint-disable-next-line anti-slop/no-runtime-typeof -- sessionIdColumn is a union of four backend-specific notNull text columns; Drizzle's generic select over that union can't statically collapse to `string`, so this narrows the already-declared union.
       rows.flatMap((row) => (typeof row.sessionId === "string" ? [row.sessionId] : [])),
     );
     for (const sessionId of sessionIds) {

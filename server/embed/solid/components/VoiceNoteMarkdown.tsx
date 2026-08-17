@@ -70,6 +70,7 @@ function sanitizeServerMarkdownHtml(html: string): string {
 
 /** Exported for DOM fixtures; input is server HTML, never raw Markdown. */
 export function renderVoiceNoteMarkdownHtml(html: VoiceNoteMarkdownHtmlInput): string {
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- html is the declared `string | null | undefined` VoiceNoteMarkdownHtmlInput union; typeof narrows the already-typed union.
   return typeof html === "string" && html.trim() ? sanitizeServerMarkdownHtml(html) : "";
 }
 
@@ -87,8 +88,10 @@ export function VoiceNoteMarkdown(props: {
 }): HTMLElement {
   const container = document.createElement("div");
   container.className = "stm-voice-note-markdown";
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- props.html is the declared `VoiceNoteMarkdownHtmlInput | (() => ...)` union; typeof narrows the already-typed union.
   const getHtml = () => (typeof props.html === "function" ? props.html() : props.html);
   const getCompact = () =>
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof -- props.compact is the declared `boolean | (() => boolean)` union; typeof narrows the already-typed union.
     typeof props.compact === "function" ? props.compact() : (props.compact ?? false);
   createRenderEffect(() => {
     container.classList.toggle("stm-voice-note-markdown--compact", getCompact());

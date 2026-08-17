@@ -111,6 +111,7 @@ describe("Cursor REST delivery worker", () => {
     });
     await new Promise<void>((resolve) => fakeServer.listen(0, "127.0.0.1", resolve));
     const address = fakeServer.address();
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof -- address is Node's declared `string | AddressInfo | null` Server.address() union; typeof narrows the already-typed union.
     if (!address || typeof address === "string") throw new Error("Expected TCP test server.");
     process.env.SAY_TO_ME_INTERNAL_URL = `http://127.0.0.1:${address.port}`;
 

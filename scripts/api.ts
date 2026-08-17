@@ -22,7 +22,8 @@ function formatCliFetchError(cause: unknown): string {
   const causeMessage =
     cause instanceof Error && cause.cause instanceof Error
       ? cause.cause.message
-      : cause instanceof Error && typeof cause.cause === "string"
+      : // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Error.cause is typed `unknown`; this is a best-effort CLI error hint, not a trust boundary, so a string check is an honest representation check.
+        cause instanceof Error && typeof cause.cause === "string"
         ? cause.cause
         : "";
   const tlsHint =
