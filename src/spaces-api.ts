@@ -1,4 +1,5 @@
 import { type as arktype } from "arktype";
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- Spaces API response helpers preserve server-defined JSON fields while selecting known data. */
 import { safeResponseJson } from "@say-to-me/runtime-validation";
 import { PrototypeSpacesSchema, type PrototypeSpacesState } from "./new-space-prototype.ts";
 

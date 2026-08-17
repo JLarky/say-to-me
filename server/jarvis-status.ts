@@ -1,4 +1,5 @@
 import type { OpenCodeStatus, WaitingStatePayload } from "../src/types.ts";
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- Compact status output preserves provider activity item fields while projecting known fields. */
 import { Clock, Context, Duration, Effect, Layer } from "effect";
 import { getOpenCodeActivityPreview } from "./opencode/activity.ts";
 import { getOpenCodeStatus } from "./opencode/client.ts";

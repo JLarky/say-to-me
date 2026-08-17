@@ -1,4 +1,5 @@
 import * as HttpApi from "@effect/platform/HttpApi";
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- Request bodies are untrusted JSON and are validated field-by-field by the route's existing command builders. */
 import * as HttpApiBuilder from "@effect/platform/HttpApiBuilder";
 import * as HttpApiEndpoint from "@effect/platform/HttpApiEndpoint";
 import * as HttpApiGroup from "@effect/platform/HttpApiGroup";

@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync } from "node:fs";
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- Settings API tests intentionally send flexible JSON fixture payloads. */
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Cause, Effect, Exit } from "effect";

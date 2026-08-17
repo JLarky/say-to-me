@@ -1,4 +1,5 @@
 import { type as arktype } from "arktype";
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- OpenCode stream records are provider-defined JSON; this adapter narrows only rendered fields. */
 import { Duration, Effect } from "effect";
 import { opencodeDirectory, opencodeStatusTimeoutMs } from "../config.ts";
 import { getOpenCodeSessionInfo } from "./client.ts";

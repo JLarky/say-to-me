@@ -1,4 +1,5 @@
 // Shared activity-parsing utilities used by all external-CLI provider activity modules.
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- Transcript tool payloads are provider-defined JSON; formatters inspect only known hints. */
 // Pure over file contents; the file read lives in the route.
 
 import { type as arktype } from "arktype";

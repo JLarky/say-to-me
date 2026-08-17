@@ -1,4 +1,5 @@
 /** Host Contract v2 for the complete `<say-to-me-widget>` element. */
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- The embed contract preserves provider-defined message payload fields for progressive UI projection. */
 
 import {
   EMBED_WIDGET_PARK_SESSION_EVENT,
