@@ -240,6 +240,7 @@ export function createSessionMessageEffect(
         sourceSessionRefs: JSON.stringify([
           {
             id: targetSessionId,
+            // oxlint-disable-next-line anti-slop/no-conditional-empty-object-spread -- The stored session reference must omit alias when the resolved target has no non-empty alias.
             ...(leadingRelay?.session.alias ? { alias: leadingRelay.session.alias } : {}),
           },
         ]),
