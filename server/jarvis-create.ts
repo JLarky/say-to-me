@@ -187,15 +187,15 @@ export function providerConfigFingerprint(input: {
     .digest("hex");
 }
 
-function statusFromUnknownError(error: unknown): number {
-  if (error instanceof JarvisCreateError) return error.status;
+function statusFromUnknownError(cause: unknown): number {
+  if (cause instanceof JarvisCreateError) return cause.status;
   if (
-    error &&
-    typeof error === "object" &&
-    "status" in error &&
-    typeof (error as { status: unknown }).status === "number"
+    cause &&
+    typeof cause === "object" &&
+    "status" in cause &&
+    typeof (cause as { status: unknown }).status === "number"
   ) {
-    return (error as { status: number }).status;
+    return (cause as { status: number }).status;
   }
   return 500;
 }
@@ -266,6 +266,7 @@ function requireSpace(spaceId: string) {
   return space;
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 function validateOperation(row: unknown, context: string): DbJarvisCreateOperation {
   return validateDb(DbJarvisCreateOperation, row, context);
 }
@@ -798,24 +799,24 @@ async function compensateBeforeSession(input: {
   }
 }
 
-function toJarvisCreateFailure(error: unknown): JarvisCreateError {
-  if (error instanceof JarvisCreateError) return error;
-  const fiberCause = readFiberFailureCause(error);
+function toJarvisCreateFailure(cause: unknown): JarvisCreateError {
+  if (cause instanceof JarvisCreateError) return cause;
+  const fiberCause = readFiberFailureCause(cause);
   if (fiberCause) {
     for (const failure of Cause.failures(fiberCause)) {
       if (failure instanceof JarvisCreateError) return failure;
     }
   }
-  const message = error instanceof Error ? error.message : String(error);
-  return new JarvisCreateError(message, statusFromUnknownError(error));
+  const message = cause instanceof Error ? cause.message : String(cause);
+  return new JarvisCreateError(message, statusFromUnknownError(cause));
 }
 
 const FiberFailureCauseSym = Symbol.for("effect/Runtime/FiberFailure/Cause");
 
-function readFiberFailureCause(error: unknown): Cause.Cause<unknown> | undefined {
-  if (!error || typeof error !== "object") return undefined;
-  const cause = (error as Record<symbol, unknown>)[FiberFailureCauseSym];
-  return Cause.isCause(cause) ? (cause as Cause.Cause<unknown>) : undefined;
+function readFiberFailureCause(cause: unknown): Cause.Cause<unknown> | undefined {
+  if (!cause || typeof cause !== "object") return undefined;
+  const fiberCause = (cause as Record<symbol, unknown>)[FiberFailureCauseSym];
+  return Cause.isCause(fiberCause) ? (fiberCause as Cause.Cause<unknown>) : undefined;
 }
 
 function acquireOperationLock(key: string): Promise<{ release: () => void }> {

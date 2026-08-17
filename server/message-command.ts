@@ -64,6 +64,7 @@ export type MessageCreateCommand = DirectMessageCommand | ForwardMessageCommand;
 // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- sessionMessageBodyKeys first rejects unknown keys, then this parser validates every supported field.
 type MessageCommandBody = Record<string, unknown>;
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 function normalizeSessionReference(item: unknown): SessionReferenceInput | null {
   if (typeof item === "string") return { id: item, alias: null };
   if (!item || typeof item !== "object") return null;
@@ -75,6 +76,7 @@ function normalizeSessionReference(item: unknown): SessionReferenceInput | null 
   return { id: record.id, alias };
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 function normalizeSessionReferences(rawSessions: unknown): SessionReferenceInput[] | null {
   if (rawSessions == null) return null;
   if (!Array.isArray(rawSessions)) return null;

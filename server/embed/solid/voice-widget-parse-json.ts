@@ -13,6 +13,7 @@ export type VoiceWidgetMessagesPayload = {
  * Individual message fields are intentionally not validated here: the React
  * banner projected those values at render time and ignored other payload keys.
  */
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 export function parseVoiceWidgetPayload(raw: unknown): VoiceWidgetMessagesPayload | null {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
   const messages = (raw as { readonly messages?: unknown }).messages;

@@ -89,10 +89,10 @@ export function buildPaseoDiscoverHandlers<
               // predates `paseo chat` must still list its agent sessions.
               const [sessions, chats] = await Promise.all([
                 listPaseoSessions(instance),
-                listPaseoChatRooms(instance).catch((error: unknown) => {
+                listPaseoChatRooms(instance).catch((cause: unknown) => {
                   console.error(
                     `[paseo-discover] chat ls failed for instance "${instance.id}":`,
-                    error,
+                    cause,
                   );
                   return [];
                 }),

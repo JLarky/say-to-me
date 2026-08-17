@@ -38,6 +38,7 @@ type OrganizationError = Schema.Schema.Type<typeof OrganizationError>;
 // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- This is the untrusted JSON object being parsed field-by-field by parseOrganization.
 type OrganizationJsonObject = Record<string, unknown>;
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 function asRecord(value: unknown): OrganizationJsonObject | null {
   return value && typeof value === "object" ? (value as OrganizationJsonObject) : null;
 }
@@ -58,6 +59,7 @@ function hasCycle(folders: OrgFolder[]): boolean {
   return false;
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 export function parseOrganization(payload: unknown): Organization | null {
   const root = asRecord(payload);
   if (!root || !Array.isArray(root.folders) || !Array.isArray(root.placements)) return null;
@@ -88,6 +90,7 @@ function getOrganizationEffect(): Effect.Effect<Organization, never, SessionOrga
 }
 
 function saveOrganizationEffect(
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   payload: unknown,
 ): Effect.Effect<{ ok: true }, OrganizationError, SessionOrganizationService> {
   return Effect.gen(function* () {

@@ -28,6 +28,7 @@ function timerError(error: string, status = 400): TimerError {
   return { error, status };
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 function textField(value: unknown, field: string, maxLength: number): string | TimerError {
   if (typeof value !== "string") return timerError(`${field} is required.`);
   const trimmed = value.trim();
@@ -38,6 +39,7 @@ function textField(value: unknown, field: string, maxLength: number): string | T
 }
 
 function optionalTextField(
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   value: unknown,
   field: string,
   maxLength: number,
@@ -46,6 +48,7 @@ function optionalTextField(
   return textField(value, field, maxLength);
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 function timestampField(value: unknown, field: string): number | TimerError {
   const numberValue = typeof value === "string" ? Number(value) : value;
   if (typeof numberValue !== "number" || !Number.isFinite(numberValue) || numberValue <= 0) {
@@ -54,11 +57,13 @@ function timestampField(value: unknown, field: string): number | TimerError {
   return Math.floor(numberValue);
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 function optionalTimestampField(value: unknown, field: string): number | TimerError | undefined {
   if (value === undefined) return undefined;
   return timestampField(value, field);
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 function intervalField(value: unknown): number | null | TimerError {
   if (value === null || value === undefined || value === "") return null;
   const numberValue = typeof value === "string" ? Number(value) : value;
@@ -68,17 +73,19 @@ function intervalField(value: unknown): number | null | TimerError {
   return Math.floor(numberValue);
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 function optionalIntervalField(value: unknown): number | null | TimerError | undefined {
   if (value === undefined) return undefined;
   return intervalField(value);
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 function isTimerError(value: unknown): value is TimerError {
   return Boolean(value && typeof value === "object" && "error" in value && "status" in value);
 }
 
-function publicTimerError(error: unknown, fallback: string): TimerError {
-  return isTimerError(error) ? error : timerError(fallback, 500);
+function publicTimerError(cause: unknown, fallback: string): TimerError {
+  return isTimerError(cause) ? cause : timerError(fallback, 500);
 }
 
 export function publicTimerErrorFromCause(
