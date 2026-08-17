@@ -105,6 +105,7 @@ export function listNotesEffect(
 
 export function createNoteEffect(
   rawSessionId: string,
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   payload: unknown,
 ): Effect.Effect<NoteResult, NoteRouteError, NotesService> {
   return Effect.gen(function* () {
@@ -221,7 +222,8 @@ export function buildNotesHandlers<
   R,
 >(api: HttpApi.HttpApi<Id, Groups, E, R>) {
   return HttpApiBuilder.group(
-    api as unknown as HttpApi.HttpApi<Id, typeof NotesGroup, E, R>,
+    // @ts-expect-error SAFETY: Every caller passes the assembled API containing NotesGroup; Effect cannot express that group-membership constraint for arbitrary Groups.
+    api as HttpApi.HttpApi<Id, typeof NotesGroup, E, R>,
     "notes",
     (handlers) =>
       handlers

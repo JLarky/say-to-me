@@ -15,6 +15,12 @@ const JarvisCreateResponse = arktype({
 const ErrorResponse = arktype({ error: "string" });
 
 export type JarvisCreateResult = typeof JarvisCreateResponse.infer;
+type JarvisCreateRequestBody = {
+  name: string;
+  provider: CreateProvider;
+  modelID?: string;
+  reasoningEffort?: CodexReasoningEffort;
+};
 
 export async function createJarvisInSpace(input: {
   spaceId: string;
@@ -23,17 +29,18 @@ export async function createJarvisInSpace(input: {
   modelID?: string;
   reasoningEffort?: CodexReasoningEffort | "";
 }): Promise<JarvisCreateResult & { state: PrototypeSpacesState }> {
+  const body: JarvisCreateRequestBody = {
+    name: input.name,
+    provider: input.provider,
+  };
+  if (input.modelID) body.modelID = input.modelID;
+  if (input.provider === "codex" && input.reasoningEffort) {
+    body.reasoningEffort = input.reasoningEffort;
+  }
   const response = await fetch(`/api/spaces/${encodeURIComponent(input.spaceId)}/jarvis`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      name: input.name,
-      provider: input.provider,
-      ...(input.modelID ? { modelID: input.modelID } : {}),
-      ...(input.provider === "codex" && input.reasoningEffort
-        ? { reasoningEffort: input.reasoningEffort }
-        : {}),
-    }),
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
     let message = `Unable to create Jarvis (${response.status}).`;

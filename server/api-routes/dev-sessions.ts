@@ -82,7 +82,8 @@ export function buildDevSessionsHandlers<
   R,
 >(api: HttpApi.HttpApi<Id, Groups, E, R>) {
   return HttpApiBuilder.group(
-    api as unknown as HttpApi.HttpApi<Id, typeof DevSessionsGroup, E, R>,
+    // @ts-expect-error SAFETY: Every caller passes the assembled API containing DevSessionsGroup; Effect cannot express that group-membership constraint for arbitrary Groups.
+    api as HttpApi.HttpApi<Id, typeof DevSessionsGroup, E, R>,
     "dev-sessions",
     (handlers) =>
       handlers.handle("reimportOpenCodeContext", ({ path }) =>

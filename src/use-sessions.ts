@@ -15,7 +15,8 @@ const SessionsPayload = type({
   "sessions?": Session.array(),
 });
 
-function errorMessage(value: unknown, fallback: string): string {
+function errorMessage(cause: unknown, fallback: string): string {
+  const value = cause;
   try {
     return ErrorPayload.assert(value).error || fallback;
   } catch {

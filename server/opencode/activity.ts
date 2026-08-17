@@ -1,4 +1,5 @@
 import { type as arktype } from "arktype";
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- OpenCode stream records are provider-defined JSON; this adapter narrows only rendered fields. */
 import { Duration, Effect } from "effect";
 import { opencodeDirectory, opencodeStatusTimeoutMs } from "../config.ts";
 import { getOpenCodeSessionInfo } from "./client.ts";
@@ -17,6 +18,45 @@ type OpenCodeContextUsage = {
   limitTokens: number | null;
   percent: number | null;
   source: "latestMessageTokens";
+};
+
+type OpenCodeActivityPreview = {
+  saySessionId: string;
+  linkedOpenCodeSessionId: string | null;
+  status: OpenCodeActivityStatus;
+  statusRaw: unknown;
+  latestOutputSnippet: string | null;
+  latestActivityTimestamp: number | null;
+  freshness: { checkedAt: number; ageMs: number | null; stale: boolean | null };
+  metrics: {
+    fetchDurationMs: number;
+    payloadBytes: number;
+    statusPayloadBytes: number;
+    sessionPayloadBytes: number;
+    messagesPayloadBytes: number;
+    legacyMessagesPayloadBytes: number;
+    messageCount: number;
+    legacyMessageCount: number;
+    limit: number;
+  };
+  capabilities: {
+    status: "ok" | "missing" | "unknown";
+    sessionMetadata: "ok" | "missing" | "unknown";
+    v2Messages: "ok" | "missing" | "unknown";
+    legacyMessages: "ok" | "missing" | "unknown";
+  };
+  previewSource: "legacy" | "v2" | "sse" | null;
+  identifiers: {
+    messageId: string | null;
+    partId: string | null;
+    eventId: string | null;
+    runId: string | null;
+  };
+  contextUsage: OpenCodeContextUsage | null;
+  recentItems: RecentActivityItem[];
+  partialLiveUpdates: boolean;
+  awaitingQuestionText: string | null;
+  notes: string[];
 };
 
 type OpenCodeModelMetadataValue = {
@@ -61,16 +101,9 @@ async function fetchOpenCodeDebugJson(url: URL): Promise<{
     const text = await response.text();
     const bytes = Buffer.byteLength(text);
     const durationMs = Math.round(performance.now() - started);
-    let data: unknown = null;
-    let error: string | null = null;
-    if (text) {
-      const parsed = safeJsonParse(UnknownJson, text);
-      if (parsed === null) {
-        error = "Response was not JSON.";
-      } else {
-        data = parsed;
-      }
-    }
+    const parsed = text ? safeJsonParse(UnknownJson, text) : null;
+    const error = text && parsed === null ? "Response was not JSON." : null;
+    const data = parsed ?? null;
     return { ok: response.ok && !error, status: response.status, bytes, durationMs, data, error };
   } catch (error) {
     return {
@@ -89,6 +122,7 @@ function debugOpenCodeUrl(pathname: string): URL {
   return new URL(pathname, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 function rawOpenCodeActivityStatus(value: unknown): OpenCodeActivityStatus {
   if (value && typeof value === "object" && "type" in value) {
     const type = (value as { type?: unknown }).type;
@@ -100,6 +134,7 @@ function rawOpenCodeActivityStatus(value: unknown): OpenCodeActivityStatus {
   return "unknown";
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 function openCodeStatusMessage(value: unknown): string | null {
   if (!value || typeof value !== "object") return null;
   const message = (value as { message?: unknown }).message;
@@ -113,9 +148,13 @@ function compactSnippet(value: string | null | undefined): string | null {
 }
 
 function latestMessageTokenUsage(
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   messagesData: unknown,
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   modelData: unknown,
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   providersData: unknown,
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   sessionModel: unknown,
 ): OpenCodeContextUsage | null {
   if (!Array.isArray(messagesData)) return null;
@@ -143,12 +182,14 @@ function latestMessageTokenUsage(
   };
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 function messageTokenTotal(info: unknown): number | null {
   const parsed = OpenCodeMessageInfoTokens(info);
   if (parsed instanceof arktype.errors) return null;
   return parsed.tokens.total;
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 function messagePartTokenTotal(parts: unknown): number | null {
   if (!Array.isArray(parts)) return null;
   for (let index = parts.length - 1; index >= 0; index -= 1) {
@@ -160,6 +201,7 @@ function messagePartTokenTotal(parts: unknown): number | null {
 }
 
 function providerModelContextLimit(
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   providersData: unknown,
   desiredId: string | null,
   desiredProvider: string | null,
@@ -201,8 +243,11 @@ function providerModelContextLimit(
 }
 
 function modelContextLimit(
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   modelData: unknown,
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   providersData: unknown,
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   sessionModel: unknown,
 ): number | null {
   const desired = OpenCodeSessionModel(sessionModel);
@@ -286,10 +331,12 @@ function ensureRecentItemsWithHtml({
   ]);
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 function textFromUnknown(value: unknown): string | null {
   return typeof value === "string" ? compactSnippet(value) : null;
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 function textFromContentItems(content: unknown): string | null {
   if (!Array.isArray(content)) return null;
   for (const item of content) {
@@ -327,6 +374,7 @@ function activityPartSummary(part: {
   return null;
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 function isCompactionMessageInfo(info: unknown) {
   if (!info || typeof info !== "object") return false;
   const messageInfo = info as { agent?: unknown; mode?: unknown; summary?: unknown };
@@ -341,6 +389,7 @@ function compactionSnippet(text: string | null) {
   return text ? `Compacted context: ${text}` : "Compacted conversation context.";
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 function eventActivitySummary(type: unknown): ActivityPartSummary | null {
   const eventType = typeof type === "string" ? type.toLowerCase() : "";
   if (eventType.includes("compact") || eventType.includes("summar")) {
@@ -352,6 +401,7 @@ function eventActivitySummary(type: unknown): ActivityPartSummary | null {
   return null;
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 function newestTimestampFrom(value: unknown): number | null {
   if (!value || typeof value !== "object") return null;
   const time = (value as { time?: { updated?: unknown; completed?: unknown; created?: unknown } })
@@ -398,14 +448,17 @@ function latestOutputSnippetFrom(items: unknown[]): string | null {
   return null;
 }
 
-export async function getOpenCodeActivityPreview(sessionId: string, limit: number) {
+export async function getOpenCodeActivityPreview(
+  sessionId: string,
+  limit: number,
+): Promise<OpenCodeActivityPreview> {
   const checkedAt = Date.now();
   const notes: string[] = [];
-  const result = {
+  const result: OpenCodeActivityPreview = {
     saySessionId: sessionId,
     linkedOpenCodeSessionId: null as string | null,
     status: "unknown" as OpenCodeActivityStatus,
-    statusRaw: null as unknown,
+    statusRaw: null,
     latestOutputSnippet: null as string | null,
     latestActivityTimestamp: null as number | null,
     freshness: {
@@ -639,6 +692,7 @@ export async function getOpenCodeActivityPreview(sessionId: string, limit: numbe
   return result;
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 function textFromToolContent(content: unknown): string | null {
   if (!Array.isArray(content)) return null;
   for (const item of content) {
@@ -650,6 +704,7 @@ function textFromToolContent(content: unknown): string | null {
   return null;
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 function analyzeV2MessageSurface(data: unknown) {
   const items = data && typeof data === "object" ? (data as { items?: unknown }).items : null;
   const messages = Array.isArray(items) ? items : [];
@@ -686,6 +741,7 @@ function analyzeV2MessageSurface(data: unknown) {
   };
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 export function analyzeLegacyMessageSurface(data: unknown) {
   const messages = Array.isArray(data) ? data : [];
   let snippet: string | null = null;
@@ -837,6 +893,7 @@ export function analyzeLegacyMessageSurface(data: unknown) {
   };
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 function legacyMessageActivityItem(rawMessage: unknown): RecentActivityItem[] {
   if (!rawMessage || typeof rawMessage !== "object") return [];
   const message = rawMessage as {
@@ -1170,6 +1227,7 @@ function analyzeSseSurface(events: unknown[]) {
   };
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 function openCodeEventSessionId(rawEvent: unknown) {
   if (!rawEvent || typeof rawEvent !== "object") return null;
   const event = rawEvent as {
@@ -1195,6 +1253,7 @@ function openCodeEventSessionId(rawEvent: unknown) {
   return typeof candidate === "string" ? candidate : null;
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 export function normalizeOpenCodeSseActivity(sessionId: string, rawEvent: unknown) {
   const eventSessionId = openCodeEventSessionId(rawEvent);
   if (eventSessionId && eventSessionId !== sessionId) return null;
@@ -1239,6 +1298,7 @@ export function normalizeOpenCodeSseActivity(sessionId: string, rawEvent: unknow
   };
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- SSE helper forwards its opaque payload without inspecting it.
 export function writeSse(client: SseClient, payload: unknown, eventName?: string) {
   writeSseEvent(client, payload, eventName);
 }

@@ -93,6 +93,14 @@ Use `agent-browser` for browser automation tasks. Repository: https://github.com
 
 Create draft PRs by default. Only create a ready-for-review PR when the user explicitly asks for it.
 
+## Anti-slop migration
+
+Read [docs/anti-slop-migration.md](docs/anti-slop-migration.md) before fixing an
+anti-slop warning. A warning is a review prompt, not a mandate to rewrite correct
+code. Do not change runtime semantics, remove validation, weaken a public type
+contract, launder `unknown` through a generic or assertion, or delete tests merely
+to silence a rule. Leave the warning in place when the rule does not fit the code.
+
 ## Fonts
 
 **Never use network fonts.** Do not add `@import` for Google Fonts, Adobe Fonts, or any other external font service. Do not add `<link rel="stylesheet">` tags pointing to font CDNs. The font stack in `src/styles.css` must use only system fonts (`ui-sans-serif`, `system-ui`, `-apple-system`, etc.). This rule exists because network fonts introduce an external dependency, slow down load on poor connections, and have crept in accidentally before.

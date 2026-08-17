@@ -80,7 +80,8 @@ export function buildCursorActivityHandlers<
   R,
 >(api: HttpApi.HttpApi<Id, Groups, E, R>) {
   return HttpApiBuilder.group(
-    api as unknown as HttpApi.HttpApi<Id, typeof CursorActivityGroup, E, R>,
+    // @ts-expect-error SAFETY: Every caller passes the assembled API containing CursorActivityGroup; Effect cannot express that group-membership constraint for arbitrary Groups.
+    api as HttpApi.HttpApi<Id, typeof CursorActivityGroup, E, R>,
     "cursor-activity",
     (handlers) =>
       handlers.handle("cursorActivity", ({ path, urlParams }) =>

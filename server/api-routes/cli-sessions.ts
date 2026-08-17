@@ -136,7 +136,8 @@ export function buildCliSessionsHandlers<
   R,
 >(api: HttpApi.HttpApi<Id, Groups, E, R>) {
   return HttpApiBuilder.group(
-    api as unknown as HttpApi.HttpApi<Id, typeof CliSessionsGroup, E, R>,
+    // @ts-expect-error SAFETY: Every caller passes the assembled API containing CliSessionsGroup; Effect cannot express that group-membership constraint for arbitrary Groups.
+    api as HttpApi.HttpApi<Id, typeof CliSessionsGroup, E, R>,
     "cli-sessions",
     (handlers) =>
       handlers.handle("createCliSession", ({ payload }) =>

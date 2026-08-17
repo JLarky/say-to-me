@@ -46,6 +46,16 @@ const preferredBrowserSpeechVoiceNames = [
   "Microsoft Emma Online (Natural) - English (United States)",
   "Google US English",
 ];
+type SessionMessageRequestBody = {
+  author: Message["author"];
+  text: string;
+  useCli?: boolean;
+  clientMessageId: string;
+  forceOpencode?: true;
+  notifyOnCompletion?: boolean;
+  targetSessionId?: string;
+  images?: Message["images"];
+};
 
 export function preferredBrowserSpeechVoice<T extends { name: string; lang?: string }>(
   voices: readonly T[],
@@ -108,16 +118,17 @@ export function delay(ms: number): Promise<void> {
 }
 
 export function sessionMessageRequestBody(pendingMessage: Message) {
-  return {
+  const body: SessionMessageRequestBody = {
     author: pendingMessage.author,
     text: pendingMessage.text,
     useCli: pendingMessage.useCli,
     clientMessageId: String(pendingMessage.id),
-    ...(pendingMessage.forceOpencode ? { forceOpencode: true } : {}),
-    ...(typeof pendingMessage.notifyOnCompletion === "boolean"
-      ? { notifyOnCompletion: pendingMessage.notifyOnCompletion }
-      : {}),
-    ...(pendingMessage.targetSessionId ? { targetSessionId: pendingMessage.targetSessionId } : {}),
-    ...(pendingMessage.images ? { images: pendingMessage.images } : {}),
   };
+  if (pendingMessage.forceOpencode) body.forceOpencode = true;
+  if (typeof pendingMessage.notifyOnCompletion === "boolean") {
+    body.notifyOnCompletion = pendingMessage.notifyOnCompletion;
+  }
+  if (pendingMessage.targetSessionId) body.targetSessionId = pendingMessage.targetSessionId;
+  if (pendingMessage.images) body.images = pendingMessage.images;
+  return body;
 }

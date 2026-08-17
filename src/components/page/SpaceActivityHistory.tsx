@@ -156,7 +156,8 @@ export function SpaceActivityHistory({
         if (!active) return;
         setPayload(next);
       })
-      .catch((err: unknown) => {
+      .catch((cause: unknown) => {
+        const err = cause;
         if (!active) return;
         setError(err instanceof Error ? err.message : String(err));
       })

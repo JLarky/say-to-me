@@ -112,7 +112,8 @@ export function buildOpenCodeCompactHandlers<
   R,
 >(api: HttpApi.HttpApi<Id, Groups, E, R>) {
   return HttpApiBuilder.group(
-    api as unknown as HttpApi.HttpApi<Id, typeof OpenCodeCompactGroup, E, R>,
+    // @ts-expect-error SAFETY: Every caller passes the assembled API containing OpenCodeCompactGroup; Effect cannot express that group-membership constraint for arbitrary Groups.
+    api as HttpApi.HttpApi<Id, typeof OpenCodeCompactGroup, E, R>,
     "opencode-compact",
     (handlers) =>
       handlers.handle("compactOpenCodeSession", ({ path }) =>

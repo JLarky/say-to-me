@@ -270,6 +270,9 @@ describe("say API: messages", () => {
 
       const attachment = created.message.attachments[0];
       const prompt = await waitForOpenCodePrompt(openCode, sessionId);
+      // SAFETY: prompt.body is captured from this test's own mock OpenCode server as the
+      // request the server under test sent to POST /session/:id/message; that endpoint is
+      // always called with a `parts` array by our own message-forwarding code.
       const promptText = (prompt.body as { parts: { text: string }[] }).parts[0].text;
       const attachmentResponse = await fetch(`${origin}${attachment.url}`);
 

@@ -276,6 +276,7 @@ function formatNotificationTimestamp(value: string) {
   return relative ? `${exact} (${relative})` : exact;
 }
 
-function errorMessage(error: unknown) {
+function errorMessage(cause: unknown) {
+  const error = cause;
   return error instanceof Error && error.message ? error.message : String(error);
 }

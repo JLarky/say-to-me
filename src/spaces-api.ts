@@ -1,4 +1,5 @@
 import { type as arktype } from "arktype";
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- Spaces API response helpers preserve server-defined JSON fields while selecting known data. */
 import { safeResponseJson } from "@say-to-me/runtime-validation";
 import { PrototypeSpacesSchema, type PrototypeSpacesState } from "./new-space-prototype.ts";
 
@@ -187,13 +188,21 @@ export function placeSession(
   mode: "claim" | "move",
   expectedOwnerSpaceId?: string,
 ) {
-  return action(targetSpaceId, {
+  const input: PlaceSessionAction = {
     action: "placeSession",
     sessionId,
     mode,
-    ...(expectedOwnerSpaceId ? { expectedOwnerSpaceId } : {}),
-  });
+  };
+  if (expectedOwnerSpaceId) input.expectedOwnerSpaceId = expectedOwnerSpaceId;
+  return action(targetSpaceId, input);
 }
+
+type PlaceSessionAction = {
+  action: "placeSession";
+  sessionId: string;
+  mode: "claim" | "move";
+  expectedOwnerSpaceId?: string;
+};
 
 const DiscoveredCheckoutSchema = arktype({
   checkoutPath: "string",

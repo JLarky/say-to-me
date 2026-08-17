@@ -52,7 +52,7 @@ export type SessionRow = {
 export type DropMode = "before" | "after" | "into";
 export type DropTarget = { id: string; mode: DropMode };
 
-export const backendLabel: Record<Backend, string> = {
+export const backendLabel = {
   opencode: "OpenCode",
   claude: "Claude",
   cursor: "Cursor",
@@ -63,7 +63,7 @@ export const backendLabel: Record<Backend, string> = {
   "paseo-chat": "Paseo Chat",
   voice: "Voice",
   local: "Local",
-};
+} satisfies Record<Backend, string>;
 
 export function backendOf(id: string): Backend {
   if (id.startsWith("ses_")) return "opencode";

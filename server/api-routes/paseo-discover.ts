@@ -66,7 +66,8 @@ export function buildPaseoDiscoverHandlers<
   R,
 >(api: HttpApi.HttpApi<Id, Groups, E, R>) {
   return HttpApiBuilder.group(
-    api as unknown as HttpApi.HttpApi<Id, typeof PaseoDiscoverGroup, E, R>,
+    // @ts-expect-error SAFETY: Every caller passes the assembled API containing PaseoDiscoverGroup; Effect cannot express that group-membership constraint for arbitrary Groups.
+    api as HttpApi.HttpApi<Id, typeof PaseoDiscoverGroup, E, R>,
     "paseo-discover",
     (handlers) =>
       handlers
@@ -88,10 +89,10 @@ export function buildPaseoDiscoverHandlers<
               // predates `paseo chat` must still list its agent sessions.
               const [sessions, chats] = await Promise.all([
                 listPaseoSessions(instance),
-                listPaseoChatRooms(instance).catch((error: unknown) => {
+                listPaseoChatRooms(instance).catch((cause: unknown) => {
                   console.error(
                     `[paseo-discover] chat ls failed for instance "${instance.id}":`,
-                    error,
+                    cause,
                   );
                   return [];
                 }),

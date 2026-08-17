@@ -11,6 +11,11 @@ import {
   runCompletionWatchTickEffect,
 } from "./workflow.ts";
 
+type InMemoryCompletionStore = {
+  layer: Layer.Layer<CompletionWatchStoreService>;
+  rows: Map<number, WatchedMessage>;
+};
+
 function baseMessage(
   overrides: Partial<WatchedMessage> & Pick<WatchedMessage, "id" | "sessionId">,
 ): WatchedMessage {
@@ -42,10 +47,7 @@ function baseMessage(
   };
 }
 
-function inMemoryCompletionStore(seed: WatchedMessage[]): {
-  layer: Layer.Layer<CompletionWatchStoreService>;
-  rows: Map<number, WatchedMessage>;
-} {
+function inMemoryCompletionStore(seed: WatchedMessage[]): InMemoryCompletionStore {
   const rows = new Map<number, WatchedMessage>(seed.map((row) => [row.id, { ...row }]));
   let seq = Math.max(0, ...seed.map((row) => row.id)) + 1;
   const patch = (id: number, fields: Partial<WatchedMessage>) => {

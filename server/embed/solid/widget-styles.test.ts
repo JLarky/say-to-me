@@ -53,18 +53,21 @@ describe("widget stylesheet", () => {
   it("injects one idempotent style node and refreshes content", () => {
     expect(ensureWidgetStylesheet(null)).toBeNull();
 
+    // @ts-expect-error SAFETY: This detached fake is intentionally limited to the Document members exercised by ensureWidgetStylesheet.
     const doc = new (class {
-      head = { append: (_node: unknown) => undefined } as unknown as HTMLHeadElement;
+      // SAFETY: This detached Node test document only needs append() for stylesheet insertion.
+      head = { append: (_node: unknown) => undefined } as HTMLHeadElement;
       private style: HTMLStyleElement | null = null;
       getElementById(id: string) {
         return id === WIDGET_STYLE_ELEMENT_ID ? this.style : null;
       }
       createElement(tag: string) {
         expect(tag).toBe("style");
+        // SAFETY: This test owns the minimal style element consumed by ensureWidgetStylesheet.
         this.style = { id: "", textContent: "" } as HTMLStyleElement;
         return this.style;
       }
-    })() as unknown as Document;
+    })() as Document;
 
     const first = ensureWidgetStylesheet(doc);
     expect(first?.id).toBe(WIDGET_STYLE_ELEMENT_ID);

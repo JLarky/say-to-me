@@ -9,6 +9,8 @@ import type { JarvisTimer } from "../src/types.ts";
 import { publicTimerErrorFromCause } from "./api-routes/jarvis-timers.ts";
 
 async function json<T>(response: Response): Promise<T> {
+  // SAFETY: T is supplied by each call site to match the response contract
+  // of the specific endpoint under test.
   return (await response.json()) as T;
 }
 

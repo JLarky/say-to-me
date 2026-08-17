@@ -6,6 +6,8 @@ import { parentPort, workerData } from "node:worker_threads";
 import Database from "better-sqlite3";
 import { claimQueuedAgentSlot } from "./messages-queue-cap-claim.ts";
 
+// SAFETY: workerData is set only by server/api.message-queue-cap.test.ts's
+// `new Worker(..., { workerData })` call, which supplies exactly this shape.
 const data = workerData as {
   dbPath: string;
   cap: number;

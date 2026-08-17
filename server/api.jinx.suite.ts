@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import type { JsonValue } from "@say-to-me/runtime-validation";
 import {
   type TestServer,
   clearQueue,
@@ -34,10 +35,10 @@ describe("say API: jinx waiting-state refinement", () => {
 
   function mockOpenCodeWithJinx(
     targetSessionId: string,
-    structured: unknown,
+    structured: JsonValue,
   ): ReturnType<typeof mockOpenCode> {
     return mockOpenCode((req, res) => {
-      const respond = (payload: unknown) => {
+      const respond = (payload: JsonValue) => {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(payload));
       };

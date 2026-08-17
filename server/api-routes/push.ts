@@ -71,6 +71,7 @@ export function getVapidPublicKeyEffect(): Effect.Effect<
 }
 
 export function subscribeToPushEffect(
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   payload: unknown,
 ): Effect.Effect<PushSubscribed, PushNotConfiguredError | PushValidationError, PushService> {
   return Effect.gen(function* () {
@@ -109,6 +110,7 @@ export function subscribeToPushEffect(
 // In-memory subscriptions are dropped on restart; the client polls this to know
 // it must re-subscribe.
 export function checkPushSubscriptionEffect(
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   payload: unknown,
 ): Effect.Effect<PushSubscriptionStatus, PushValidationError, PushService> {
   return Effect.gen(function* () {
@@ -173,7 +175,8 @@ export function buildPushHandlers<
   R,
 >(api: HttpApi.HttpApi<Id, Groups, E, R>) {
   return HttpApiBuilder.group(
-    api as unknown as HttpApi.HttpApi<Id, typeof PushGroup, E, R>,
+    // @ts-expect-error SAFETY: Every caller passes the assembled API containing PushGroup; Effect cannot express that group-membership constraint for arbitrary Groups.
+    api as HttpApi.HttpApi<Id, typeof PushGroup, E, R>,
     "push",
     (handlers) =>
       handlers

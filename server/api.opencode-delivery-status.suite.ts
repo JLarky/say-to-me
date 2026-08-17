@@ -56,6 +56,8 @@ describe("say API: OpenCode delivery and status", () => {
       );
 
       expect(promptRequest).toBeDefined();
+      // SAFETY: promptRequest is captured from this test's own mock OpenCode server;
+      // the request body shape is controlled by the fetch call this test made above.
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const body = promptRequest!.body as { parts: { type: string; text: string }[] };
       expect(body.parts[0]).toMatchObject({ type: "text" });

@@ -155,9 +155,10 @@ export type ExternalCliDurableDeliveryConfig<
   jobsTable: DeliveryJobsTable;
   sessionIdColumn: SessionIdColumn;
   jobSelectColumns: DeliveryJobSelectColumns;
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Each worker validates its raw database row with its schema-derived validator.
   validateJob: (row: unknown, context: string) => TJob;
   resolveRuntime: (cwd: string, sessionId: string) => TRuntime;
-  ensureBooWorker: (sessionId: string) => Promise<unknown>;
+  ensureBooWorker: (sessionId: string) => Promise<boolean>;
   queueTag: string;
   promptClientTag: string;
   workerIdentityTag: string;
@@ -290,6 +291,7 @@ export function createExternalCliDurableDelivery<
       .where(inArray(config.jobsTable.status, ["pending", "retrying", "running"]))
       .all();
     const sessionIds = new Set(
+      // oxlint-disable-next-line anti-slop/no-runtime-typeof -- sessionIdColumn is a union of four backend-specific notNull text columns; Drizzle's generic select over that union can't statically collapse to `string`, so this narrows the already-declared union.
       rows.flatMap((row) => (typeof row.sessionId === "string" ? [row.sessionId] : [])),
     );
     for (const sessionId of sessionIds) {

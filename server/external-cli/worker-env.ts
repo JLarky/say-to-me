@@ -5,12 +5,12 @@ export type ExternalCliWorkerEnvPrefix = "CLAUDE" | "CURSOR" | "CODEX" | "GROK";
  * that makes already-running Boo workers unsafe or incompatible. Stale idle
  * workers exit after a version mismatch so Say To Me can start a fresh worker.
  */
-export const WORKER_VERSIONS: Record<ExternalCliWorkerEnvPrefix, number> = {
+export const WORKER_VERSIONS = {
   CLAUDE: 3,
   CODEX: 1,
   GROK: 2,
   CURSOR: 2,
-};
+} satisfies Record<ExternalCliWorkerEnvPrefix, number>;
 
 export function workerVersion(prefix: ExternalCliWorkerEnvPrefix): number {
   return WORKER_VERSIONS[prefix];

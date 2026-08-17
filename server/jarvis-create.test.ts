@@ -70,21 +70,23 @@ function clearJarvisCreateDeps(extra: Parameters<typeof setJarvisCreateDepsForTe
   installOpenCodeModelDeps(extra);
 }
 
+type CreateJarvisRequest = { name: string; provider: string; modelID?: string };
+
 async function createJarvis(
   spaceId: string,
   name: string,
   provider = "opencode",
   modelID = "openai/gpt-4.1-mini",
 ) {
+  const payload: CreateJarvisRequest = { name, provider };
+  if (provider === "opencode" || modelID) {
+    payload.modelID = modelID;
+  }
   return dispatchEffectApiRequest(
     new Request(`http://say.local/api/spaces/${spaceId}/jarvis`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        name,
-        provider,
-        ...(provider === "opencode" || modelID ? { modelID } : {}),
-      }),
+      body: JSON.stringify(payload),
     }),
   );
 }

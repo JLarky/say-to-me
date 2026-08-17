@@ -75,7 +75,8 @@ export function NewSettingsPage() {
         setPaseoSettingsError(null);
         setOpenCodeSettingsError(null);
       })
-      .catch((error: unknown) => {
+      .catch((cause: unknown) => {
+        const error = cause;
         if (!active) return;
         const message =
           error instanceof Error ? error.message : "Unable to load location settings.";

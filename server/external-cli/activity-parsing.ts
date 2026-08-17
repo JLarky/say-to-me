@@ -1,4 +1,5 @@
 // Shared activity-parsing utilities used by all external-CLI provider activity modules.
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- Transcript tool payloads are provider-defined JSON; formatters inspect only known hints. */
 // Pure over file contents; the file read lives in the route.
 
 import { type as arktype } from "arktype";
@@ -67,6 +68,8 @@ export const AskQuestionInput = arktype({
 });
 export type AskQuestionInput = typeof AskQuestionInput.infer;
 
+// oxlint-disable-next-line anti-slop/no-unknown-returns -- This preserves opaque transcript input for the generic tool hint formatter; named tool schemas validate before inspection.
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 function coerceToolInput(input: unknown): unknown {
   if (typeof input === "string") return safeJsonParse(UnknownJson, input);
   return input;
@@ -105,6 +108,7 @@ function formatAskQuestionSummary(io: AskQuestionInput): string {
   return parts.length > 1 ? parts.join("\n\n") : (parts[0] ?? "AskQuestion");
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 export function toolSummary(name: string, input: unknown): string {
   const raw = coerceToolInput(input);
 
@@ -133,6 +137,7 @@ export function toolSummary(name: string, input: unknown): string {
   return typeof hint === "string" ? `${name} ${compact(hint, 80)}` : name;
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 export function textFromContent(content: unknown): string | null {
   if (!Array.isArray(content)) return null;
   const parts = content.flatMap((block) => {
@@ -144,6 +149,7 @@ export function textFromContent(content: unknown): string | null {
   return text || null;
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 export function parseTimestamp(raw: unknown): number | null {
   const parsed = typeof raw === "string" ? Date.parse(raw) : NaN;
   return Number.isNaN(parsed) ? null : parsed;

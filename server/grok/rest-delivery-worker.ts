@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- Worker response JSON is validated by the existing typed response parser before use. */
+import { type as arktype } from "arktype";
 import { Effect } from "effect";
 import { buildAgentVoicePrompt } from "../agent-voice-prompt.ts";
 import type { DbGrokDeliveryJob, DbMessage } from "../db/schemas.ts";
@@ -13,27 +15,27 @@ type ClaimedJob = {
 };
 
 type ClaimedJobWithMessage = ClaimedJob & { message: DbMessage };
+export type GrokJsonOutput = { isError?: boolean; text?: string };
+
+const GrokResultEvent = arktype({
+  "result?": "string",
+  "text?": "string",
+});
 
 function deliveryPrompt(job: DbGrokDeliveryJob, message: DbMessage): string {
   return buildAgentVoicePrompt(job.grokSessionId, message.text);
 }
 
-export function parseGrokJsonOutput(stdout: string): { isError?: boolean; text?: string } {
+export function parseGrokJsonOutput(stdout: string): GrokJsonOutput {
   const trimmed = stdout.trim();
   if (!trimmed) return {};
   // Try JSON first (if --output-format json)
-  try {
-    const entry = safeJsonParse(UnknownJson, trimmed);
-    if (entry && typeof entry === "object") {
-      const record = entry as Record<string, unknown>;
-      if (typeof record.result === "string") {
-        return { text: record.result };
-      }
-      if (typeof record.text === "string") {
-        return { text: record.text };
-      }
-    }
-  } catch {}
+  const entry = safeJsonParse(UnknownJson, trimmed);
+  const resultEvent = GrokResultEvent(entry);
+  if (!(resultEvent instanceof arktype.errors)) {
+    if (resultEvent.result !== undefined) return { text: resultEvent.result };
+    if (resultEvent.text !== undefined) return { text: resultEvent.text };
+  }
   // Fallback: plain text output
   return { text: trimmed };
 }

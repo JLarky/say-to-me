@@ -5,7 +5,7 @@ export const deliveryStatuses = ["queued", "pending", "sent", "failed", "cli_tim
 export type DeliveryStatusValue = (typeof deliveryStatuses)[number];
 export const deliveryStatusSet = new Set<string>(deliveryStatuses);
 
-export const sessionStateLabel: Record<string, string> = {
+export const sessionStateLabel = {
   needs_answer: "Needs you",
   needs_direction: "Needs direction",
   can_continue: "Idle",
@@ -13,7 +13,9 @@ export const sessionStateLabel: Record<string, string> = {
   blocked: "Blocked",
   review: "Review",
   unknown: "Unknown",
-};
+} satisfies Record<string, string>;
+
+const sessionStateLabelByState = new Map(Object.entries(sessionStateLabel));
 
 export function deliveryProviderLabel(message: Message): string {
   const target = message.forwardTargetSessionId ?? message.sessionId;
@@ -44,7 +46,7 @@ export function deliveryStatusLabel(
 }
 
 export function cardStatusLabel(state?: string | null): string {
-  return state ? (sessionStateLabel[state] ?? state) : "Unknown";
+  return state ? (sessionStateLabelByState.get(state) ?? state) : "Unknown";
 }
 
 export function formatElapsedDuration(from?: string | null, to?: string | null): string {

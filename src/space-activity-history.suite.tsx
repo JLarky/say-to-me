@@ -97,7 +97,7 @@ describe("SpaceActivityHistory", () => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
       expect(url).toContain("hours=168");
       return Response.json(payload);
-    }) as unknown as typeof fetch;
+    });
 
     await act(async () => {
       render(
@@ -132,7 +132,7 @@ describe("SpaceActivityHistory", () => {
   });
 
   it("focuses the search field, traps Tab, restores focus on close", async () => {
-    globalThis.fetch = vi.fn(async () => Response.json(payload)) as unknown as typeof fetch;
+    globalThis.fetch = vi.fn(async () => Response.json(payload));
     const trigger = document.createElement("button");
     trigger.textContent = "View full history →";
     document.body.appendChild(trigger);

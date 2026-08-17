@@ -1,4 +1,5 @@
 #!/usr/bin/env -S mise x deno -- deno run --allow-read --allow-env --allow-net
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- This diagnostic CLI transparently prints arbitrary JSON fields returned by the session poll endpoint. */
 
 import { readFile } from "node:fs/promises";
 
@@ -26,7 +27,7 @@ const caCerts = [await readFile(`${home}/.portless/ca.pem`, "utf8")];
 // Deno-only: trust a custom CA for fetch. Reach it off globalThis so the Node
 // type-checker (which has no Deno global) doesn't choke.
 const { Deno } = globalThis as typeof globalThis & {
-  Deno: { createHttpClient(options: { caCerts: string[] }): unknown };
+  Deno: { createHttpClient(options: { caCerts: string[] }): object };
 };
 const client = Deno.createHttpClient({ caCerts });
 const baseUrl = process.env.SAY_TO_ME_URL ?? "https://say.local:1355";

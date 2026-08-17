@@ -1,8 +1,10 @@
 /** Map an OpenCode SDK session.create result into a create failure payload. */
+export type OpenCodeSessionCreateFailure = { ok: false; status: number; error: string };
+
 export function mapOpenCodeSessionCreateFailure(result: {
   response?: { status: number } | null;
   error?: unknown;
-}): { ok: false; status: number; error: string } {
+}): OpenCodeSessionCreateFailure {
   // v2 SDK network failures can omit `response` entirely.
   if (!result.response) {
     return {

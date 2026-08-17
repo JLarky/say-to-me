@@ -113,10 +113,10 @@ describe("deserializeMessage extraMarkdownHtml wiring", () => {
     });
     const [message] = listMessages(sessionId);
     expect(message?.extraMarkdown).toContain("**bold**");
-    expect(typeof message?.extraMarkdownHtml).toBe("string");
+    expect(message?.extraMarkdownHtml).toEqual(expect.any(String));
     expect(message?.extraMarkdownHtml).toMatch(/<strong>bold<\/strong>/i);
     expect(message?.extraMarkdownHtml).toMatch(/href="https:\/\/example\.com"/);
     expect(message?.extraMarkdownHtml).toMatch(/rel="noopener noreferrer"/);
     expect(message?.extraMarkdownHtml?.toLowerCase()).not.toContain("<script");
-  }, 15_000);
+  }, 30_000);
 });

@@ -255,11 +255,11 @@ async function deliverReplyToOpencodeViaApi(
   updateOpencodeDelivery(reply.id, "sent", null, result.data?.info?.id || null);
 }
 
-function formatOpenCodePromptError(error: unknown): string {
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === "string" && error) return error;
+function formatOpenCodePromptError(cause: unknown): string {
+  if (cause instanceof Error && cause.message) return cause.message;
+  if (typeof cause === "string" && cause) return cause;
   try {
-    const serialized = JSON.stringify(error);
+    const serialized = JSON.stringify(cause);
     if (serialized && serialized !== "{}") return serialized;
   } catch {
     // Fall through to the generic message.

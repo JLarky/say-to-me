@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from "vite-plus/test";
+import type { JsonValue } from "@say-to-me/runtime-validation";
 
 process.env.SAY_TO_ME_CODEX_WORKER_AUTOSTART = "0";
 process.env.SAY_TO_ME_INTERNAL_API_TOKEN = "test-internal-api-token";
@@ -9,9 +10,9 @@ const { dispatchCodexDeliveryInternalRequest } = await import("./codex-delivery-
 
 const base = "http://127.0.0.1/api/internal/codex-delivery";
 
-function post(path: string, body: unknown, token?: string) {
-  const headers: Record<string, string> = { "content-type": "application/json" };
-  if (token) headers["x-say-to-me-internal-token"] = token;
+function post(path: string, body: JsonValue, token?: string) {
+  const headers = new Headers({ "content-type": "application/json" });
+  if (token) headers.set("x-say-to-me-internal-token", token);
   return dispatchCodexDeliveryInternalRequest(
     new Request(`${base}${path}`, { method: "POST", headers, body: JSON.stringify(body) }),
   );

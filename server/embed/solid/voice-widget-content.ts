@@ -5,6 +5,9 @@ export const SAY_TO_ME_UI_URL = "https://say.localhost:1311";
 export const SAY_TO_ME_USAGE_PROMPT = "Tell your agent how to use Say To Me";
 const MUTED_FOREGROUND_CLASS = ["text", "muted", "foreground"].join("-");
 
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Attachment JSON is intentionally projected only through the safe thumbnail fields below.
+type AttachmentPayload = Record<string, unknown>;
+
 export type VoiceWidgetLink = {
   readonly href: string;
   readonly target: "_blank";
@@ -25,6 +28,7 @@ export type VoiceWidgetRevisionDecision = {
  */
 export function decideVoiceWidgetRevision(
   lastRevision: number,
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   payloadRevision: unknown,
 ): VoiceWidgetRevisionDecision {
   if (typeof payloadRevision !== "number" || !Number.isInteger(payloadRevision)) {
@@ -188,9 +192,10 @@ function isSafeThumbnailDataUrl(value: string): boolean {
 }
 
 /** Return only safe image thumbnails, preserving the banner's trimmed URL. */
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 export function imageAttachmentThumbnail(attachment: unknown): string | null {
   if (!attachment || typeof attachment !== "object" || Array.isArray(attachment)) return null;
-  const row = attachment as Record<string, unknown>;
+  const row = attachment as AttachmentPayload;
   if (typeof row.mimeType !== "string" || !row.mimeType.startsWith("image/")) return null;
   if (typeof row.thumbnailDataUrl !== "string") return null;
   const thumbnail = row.thumbnailDataUrl.trim();

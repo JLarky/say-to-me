@@ -175,7 +175,8 @@ const timerPage = stylex.create({
   },
 });
 
-function errorMessage(value: unknown, fallback: string): string {
+function errorMessage(cause: unknown, fallback: string): string {
+  const value = cause;
   if (value instanceof Error) return value.message || fallback;
   try {
     return ErrorPayload.assert(value).error || fallback;
@@ -201,10 +202,11 @@ export function NewTimerPage() {
   const [searchParams] = useSearchParams();
   const requestedSessionId = searchParams.get("sessionId");
   const { sessions } = useSessions({ includeCachedStatus: true, live: true });
-  const [draft, setDraft] = useState<TimerDraft>(() => ({
-    ...emptyTimerDraft([]),
-    ...(requestedSessionId ? { sessionId: requestedSessionId } : {}),
-  }));
+  const [draft, setDraft] = useState<TimerDraft>(() => {
+    const initialDraft = emptyTimerDraft([]);
+    if (requestedSessionId) initialDraft.sessionId = requestedSessionId;
+    return initialDraft;
+  });
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
   const targetSession = sessions.find((session) => session.id === draft.sessionId);

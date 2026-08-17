@@ -1,4 +1,5 @@
 import { internalApiToken } from "../claude/internal-api-token.ts";
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- Internal worker request bodies are validated field-by-field before actions run. */
 
 type JsonRecord = Record<string, unknown>;
 
@@ -25,7 +26,7 @@ export type ExternalCliDeliveryInternalConfig<TLease extends ExternalCliDelivery
   sessionIdLeaseField: keyof TLease & string;
   workerVersion: number;
   scheduleWorkerReplacement: (sessionId: string) => Promise<void>;
-  claimDeliveryJobForWorker: (workerId: string, sessionId?: string) => Promise<unknown>;
+  claimDeliveryJobForWorker: (workerId: string, sessionId?: string) => Promise<object | null>;
   completeDeliveryJobFromWorker: (job: TLease, reply: string | null) => Promise<boolean>;
   retryDeliveryJobFromWorker: (job: TLease, error: string) => Promise<boolean>;
   failDeliveryJobFromWorker: (job: TLease, error: string) => Promise<boolean>;
@@ -33,6 +34,7 @@ export type ExternalCliDeliveryInternalConfig<TLease extends ExternalCliDelivery
   renewDeliveryJobFromWorker: (job: TLease) => Promise<TLease | null>;
 };
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Internal response helper serializes its caller-owned payload without inspection.
 function json(body: unknown, init: ResponseInit = {}): Response {
   const headers = new Headers(init.headers);
   headers.set("content-type", "application/json");

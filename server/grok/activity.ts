@@ -55,14 +55,14 @@ export function parseGrokActivity(jsonl: string, limit: number): GrokActivity {
     if (parsed instanceof arktype.errors) continue;
     const entry = parsed;
 
-    const parsedTs = typeof entry.timestamp === "string" ? Date.parse(entry.timestamp) : NaN;
+    const parsedTs = entry.timestamp ? Date.parse(entry.timestamp) : NaN;
     const timestamp = Number.isNaN(parsedTs) ? null : parsedTs;
     if (timestamp !== null) lastTimestamp = timestamp;
 
     // Top-level reasoning (common in current grok transcripts): extract summary texts as thinking
     if (entry.type === "reasoning" && entry.summary) {
       for (const s of entry.summary) {
-        if (s.type === "summary_text" && typeof s.text === "string" && s.text.trim()) {
+        if (s.type === "summary_text" && s.text?.trim()) {
           items.push({ kind: "thinking", text: s.text.trim(), timestamp });
         }
       }
@@ -75,7 +75,7 @@ export function parseGrokActivity(jsonl: string, limit: number): GrokActivity {
     // Top-level tool_calls (current grok-build style): content often "", actions here
     if (entry.tool_calls) {
       for (const tc of entry.tool_calls) {
-        if (typeof tc.name === "string") {
+        if (tc.name) {
           items.push({
             kind: "tool",
             tool: tc.name,
@@ -87,8 +87,9 @@ export function parseGrokActivity(jsonl: string, limit: number): GrokActivity {
     }
 
     let content = entry.content ?? entry.message?.content;
-    if (typeof content === "string") {
-      const text = content.trim();
+    const textContent = arktype("string")(content);
+    if (!(textContent instanceof arktype.errors)) {
+      const text = textContent.trim();
       if (text) {
         items.push({ kind: "message", text, timestamp });
       }
@@ -99,20 +100,16 @@ export function parseGrokActivity(jsonl: string, limit: number): GrokActivity {
     for (const rawBlock of content) {
       const b = GrokContentBlock(rawBlock);
       if (b instanceof arktype.errors) continue;
-      if ((b.type === "text" || !b.type) && typeof b.text === "string" && b.text.trim()) {
+      if ((b.type === "text" || !b.type) && b.text?.trim()) {
         items.push({ kind: "message", text: b.text.trim(), timestamp });
-      } else if (b.type === "tool_use" && typeof b.name === "string") {
+      } else if (b.type === "tool_use" && b.name) {
         items.push({
           kind: "tool",
           tool: b.name,
           text: toolSummary(b.name, b.input),
           timestamp,
         });
-      } else if (
-        (b.type === "thinking" || b.type === "reasoning") &&
-        typeof b.thinking === "string" &&
-        b.thinking.trim()
-      ) {
+      } else if ((b.type === "thinking" || b.type === "reasoning") && b.thinking?.trim()) {
         items.push({ kind: "thinking", text: b.thinking.trim(), timestamp });
       }
     }
@@ -131,7 +128,8 @@ export function parseGrokActivity(jsonl: string, limit: number): GrokActivity {
       const isAssistant = entry.type === "assistant" || entry.role === "assistant";
       if (!isAssistant) continue;
       const c = entry.content ?? entry.message?.content;
-      const text = typeof c === "string" ? c.trim() : textFromContent(c);
+      const parsedText = arktype("string")(c);
+      const text = parsedText instanceof arktype.errors ? textFromContent(c) : parsedText.trim();
       if (text) items.push({ kind: "message", text, timestamp: null });
     }
   }

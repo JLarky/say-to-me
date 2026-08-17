@@ -416,11 +416,17 @@ export function openCodeContextLabel(
 
 export type ExternalCliProvider = "claude" | "codex" | "cursor" | "grok";
 
-const externalCliProviderLabels: Record<ExternalCliProvider, string> = {
+const externalCliProviderLabels = {
   claude: "Claude",
   codex: "Codex",
   cursor: "Cursor",
   grok: "Grok",
+} satisfies Record<ExternalCliProvider, string>;
+
+type ProjectIdentity = {
+  color: string;
+  icon: string;
+  label: string;
 };
 
 function externalCliProviderFromBackend(
@@ -485,11 +491,7 @@ function hashProjectKey(key: string): number {
   return hash >>> 0;
 }
 
-export function projectIdentity(session: Pick<Session, "id" | "opencodeTitle">): {
-  color: string;
-  icon: string;
-  label: string;
-} {
+export function projectIdentity(session: Pick<Session, "id" | "opencodeTitle">): ProjectIdentity {
   const hash = hashProjectKey(session.id);
   const hue = hash % 360;
   const saturation = 28 + ((hash >>> 8) % 15);

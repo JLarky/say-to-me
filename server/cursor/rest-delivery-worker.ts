@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- Worker response JSON is validated by the existing typed response parser before use. */
 import { Effect } from "effect";
 import { buildAgentVoicePrompt } from "../agent-voice-prompt.ts";
 import type { DbCursorDeliveryJob, DbMessage } from "../db/schemas.ts";
@@ -13,12 +14,13 @@ type ClaimedJob = {
 };
 
 type ClaimedJobWithMessage = ClaimedJob & { message: DbMessage };
+export type CursorJsonOutput = { isError?: boolean; text?: string };
 
 function deliveryPrompt(job: DbCursorDeliveryJob, message: DbMessage): string {
   return buildAgentVoicePrompt(job.cursorSessionId, message.text);
 }
 
-export function parseCursorJsonOutput(stdout: string): { isError?: boolean; text?: string } {
+export function parseCursorJsonOutput(stdout: string): CursorJsonOutput {
   const entry = safeJsonParse(UnknownJson, stdout.trim());
   if (!entry || typeof entry !== "object") return {};
   const record = entry as Record<string, unknown>;

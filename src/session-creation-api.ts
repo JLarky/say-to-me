@@ -6,14 +6,20 @@ import { CliSessionPayload, CreateOpenCodeSessionPayload, ErrorPayload } from ".
 
 export type CliProvider = "claude" | "codex" | "cursor" | "grok";
 export type CreateProvider = "opencode" | CliProvider;
+type CliSessionRequestBody = {
+  provider: CliProvider;
+  path: string;
+  modelID: string;
+  reasoningEffort?: CodexReasoningEffort;
+};
 
-export const providerLabels: Record<CreateProvider, string> = {
+export const providerLabels = {
   opencode: "OpenCode",
   claude: "Claude",
   codex: "Codex",
   cursor: "Cursor",
   grok: "Grok",
-};
+} satisfies Record<CreateProvider, string>;
 
 const ProviderModel = arktype({ providerID: "string", id: "string", name: "string" });
 const ProviderModelsPayload = arktype({ models: ProviderModel.array() });
@@ -56,15 +62,12 @@ export async function createProviderSession(
   }
 
   if (!modelID) throw new Error("Pick a model first.");
+  const body: CliSessionRequestBody = { provider, path, modelID };
+  if (provider === "codex" && reasoningEffort) body.reasoningEffort = reasoningEffort;
   const response = await fetch("/api/cli-sessions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      provider,
-      path,
-      modelID,
-      ...(provider === "codex" && reasoningEffort ? { reasoningEffort } : {}),
-    }),
+    body: JSON.stringify(body),
   });
   if (!response.ok) throw await responseError(response, "Unable to create session.");
   return (await safeResponseJson(response, CliSessionPayload)).session.id;

@@ -1,4 +1,5 @@
 import type { OpenCodeStatus, WaitingStatePayload } from "../src/types.ts";
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- Compact status output preserves provider activity item fields while projecting known fields. */
 import { Clock, Context, Duration, Effect, Layer } from "effect";
 import { getOpenCodeActivityPreview } from "./opencode/activity.ts";
 import { getOpenCodeStatus } from "./opencode/client.ts";
@@ -101,6 +102,7 @@ function dropCompactEmptyValues(fields: Record<string, unknown>) {
   );
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 export function parseStatusWait(raw: unknown): { ok: true; waitMs: number } | { ok: false } {
   if (raw == null) return { ok: true, waitMs: defaultWaitMs };
   const value = Array.isArray(raw) ? raw.at(-1) : raw;
@@ -120,6 +122,7 @@ export function parseStatusWait(raw: unknown): { ok: true; waitMs: number } | { 
   return { ok: true, waitMs };
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 export function parseLimit(raw: unknown): { ok: true; limit: number } | { ok: false } {
   if (raw == null) return { ok: true, limit: defaultLimit };
   const value = Array.isArray(raw) ? raw.at(-1) : raw;
@@ -129,6 +132,7 @@ export function parseLimit(raw: unknown): { ok: true; limit: number } | { ok: fa
   return { ok: true, limit };
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 export function parseExtended(raw: unknown): { ok: true; extended: boolean } | { ok: false } {
   if (raw == null) return { ok: true, extended: false };
   const value = Array.isArray(raw) ? raw.at(-1) : raw;
@@ -141,6 +145,7 @@ export function parseExtended(raw: unknown): { ok: true; extended: boolean } | {
   return { ok: false };
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 export function parseSince(raw: unknown): { ok: true; since: number | null } | { ok: false } {
   if (raw == null) return { ok: true, since: null };
   const value = Array.isArray(raw) ? raw.at(-1) : raw;
@@ -339,7 +344,10 @@ export function buildJarvisStatusEffect({
     );
     const summary = compactMessages(visible, { anchorMessageId, extended });
 
-    return {
+    const baseParams = { since, limit, extended, wait: waitMs };
+    const params = anchorMessageId == null ? baseParams : { ...baseParams, anchorMessageId };
+
+    const base = {
       sessionId,
       nextPullCursor: nextPullCursor({ extended, limit, waitMs, since: cursorSince }),
       opencodeState: wait.opencodeState,
@@ -352,21 +360,15 @@ export function buildJarvisStatusEffect({
               .map((item) => compactActivityItem(item)),
           }),
       messages: summary.messages,
-      ...(extended || otherMessages.length > 0 ? { otherMessages } : {}),
       waitingState,
       wait: {
         requestedMs: waitMs,
         waitedMs: wait.waitedMs,
         timedOut: wait.timedOut,
       },
-      params: {
-        since,
-        limit,
-        extended,
-        wait: waitMs,
-        ...(anchorMessageId == null ? {} : { anchorMessageId }),
-      },
+      params,
     };
+    return extended || otherMessages.length > 0 ? { ...base, otherMessages } : base;
   });
 }
 

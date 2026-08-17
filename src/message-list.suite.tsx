@@ -17,19 +17,22 @@ const noop = () => {};
 
 function message(overrides: Partial<Message>): Message {
   const extraMarkdown = overrides.extraMarkdown ?? null;
-  return {
+  const result: Message = {
     id: 1,
     text: "Long agent message",
     status: "speaking",
     author: "agent",
     sessionId: "default",
     ...overrides,
-    ...(typeof extraMarkdown === "string" &&
+  };
+  if (
+    typeof extraMarkdown === "string" &&
     extraMarkdown.trim() &&
     overrides.extraMarkdownHtml == null
-      ? { extraMarkdownHtml: renderExtraMarkdownHtml(extraMarkdown) }
-      : {}),
-  };
+  ) {
+    result.extraMarkdownHtml = renderExtraMarkdownHtml(extraMarkdown);
+  }
+  return result;
 }
 
 function renderMessages(
