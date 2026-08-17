@@ -117,6 +117,7 @@ describe("CreateAgentWorktreeDialog keyboard accessibility", () => {
 
   it("keeps Tab focus inside the dialog while creating", async () => {
     const { createAgentWorktreeSession } = await import("./agent-worktree-session.ts");
+    // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Controlled Promise resolver forwards the mocked success value unchanged.
     let resolveCreate!: (value: unknown) => void;
     vi.mocked(createAgentWorktreeSession).mockImplementation(
       () =>
@@ -199,6 +200,7 @@ describe("CreateAgentWorktreeDialog keyboard accessibility", () => {
 
   it("stays open on Escape while create is busy", async () => {
     const { createAgentWorktreeSession } = await import("./agent-worktree-session.ts");
+    // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Controlled Promise resolver forwards the mocked success value unchanged.
     let resolveCreate!: (value: unknown) => void;
     vi.mocked(createAgentWorktreeSession).mockImplementation(
       () =>

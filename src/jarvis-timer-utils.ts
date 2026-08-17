@@ -85,7 +85,8 @@ export function intervalFromDraft(draft: TimerDraft): number | null {
   return Number.isFinite(minutes) && minutes > 0 ? Math.round(minutes * 60_000) : null;
 }
 
-export function errorMessage(value: unknown, fallback: string): string {
+export function errorMessage(cause: unknown, fallback: string): string {
+  const value = cause;
   if (value instanceof Error) return value.message || fallback;
   try {
     return ErrorPayload.assert(value).error || fallback;

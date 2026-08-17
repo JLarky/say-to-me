@@ -20,7 +20,8 @@ function initialScope(hasSpace: boolean): NotificationScope {
   return window.sessionStorage.getItem(scopeStorageKey) === "all" ? "all" : "space";
 }
 
-function errorMessage(error: unknown) {
+function errorMessage(cause: unknown) {
+  const error = cause;
   return error instanceof Error && error.message ? error.message : String(error);
 }
 

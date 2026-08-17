@@ -1,6 +1,7 @@
 /** Fallback values used when an OpenCode model does not publish its options. */
 export const defaultOpenCodeReasoningEfforts = ["low", "medium", "high", "xhigh"] as const;
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- SDK reasoning-effort metadata is normalized at this boundary.
 export function normalizeOpenCodeReasoningEfforts(value: unknown): string[] {
   if (Array.isArray(value)) {
     return [
