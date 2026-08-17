@@ -105,6 +105,7 @@ export function listNotesEffect(
 
 export function createNoteEffect(
   rawSessionId: string,
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   payload: unknown,
 ): Effect.Effect<NoteResult, NoteRouteError, NotesService> {
   return Effect.gen(function* () {

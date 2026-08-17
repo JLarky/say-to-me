@@ -196,6 +196,7 @@ export function listSessionsEffect({
 
 export function updateSessionEffect(
   rawSessionId: string,
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   payload: unknown,
 ): Effect.Effect<SessionUpdated, SessionValidationError, SessionMutationService> {
   return Effect.gen(function* () {
@@ -280,6 +281,7 @@ export function updateSessionEffect(
 
 export function updateOpenCodeTitleEffect(
   rawSessionId: string,
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   payload: unknown,
 ): Effect.Effect<
   SessionUpdated,

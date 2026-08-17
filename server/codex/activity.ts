@@ -15,6 +15,7 @@ type CodexTranscriptObject = Record<string, unknown>;
 
 export type { CodexActivity, CodexActivityItem, CodexActivityKind };
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 function textFromAssistantContent(content: unknown): string | null {
   if (!Array.isArray(content)) return null;
   const parts = content.flatMap((block) => {

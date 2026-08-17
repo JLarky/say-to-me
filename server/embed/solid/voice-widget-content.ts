@@ -28,6 +28,7 @@ export type VoiceWidgetRevisionDecision = {
  */
 export function decideVoiceWidgetRevision(
   lastRevision: number,
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   payloadRevision: unknown,
 ): VoiceWidgetRevisionDecision {
   if (typeof payloadRevision !== "number" || !Number.isInteger(payloadRevision)) {
@@ -191,6 +192,7 @@ function isSafeThumbnailDataUrl(value: string): boolean {
 }
 
 /** Return only safe image thumbnails, preserving the banner's trimmed URL. */
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 export function imageAttachmentThumbnail(attachment: unknown): string | null {
   if (!attachment || typeof attachment !== "object" || Array.isArray(attachment)) return null;
   const row = attachment as AttachmentPayload;
