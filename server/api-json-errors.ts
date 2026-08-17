@@ -1,6 +1,9 @@
 import type { ErrorRequestHandler, RequestHandler, Response as ExpressResponse } from "express";
 import { safeJsonParse, UnknownJson } from "@say-to-me/runtime-validation";
 
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Existing JSON response bodies are preserved verbatim apart from injecting their HTTP status.
+type ExistingJsonErrorBody = Record<string, unknown>;
+
 function errorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === "string" && error.trim()) return error;
@@ -22,7 +25,7 @@ function jsonErrorPayload(status: number, error: string) {
   return { status, error };
 }
 
-function jsonObjectFromBody(chunk: unknown): Record<string, unknown> | null {
+function jsonObjectFromBody(chunk: unknown): ExistingJsonErrorBody | null {
   const text = Buffer.isBuffer(chunk)
     ? chunk.toString("utf8")
     : typeof chunk === "string"
@@ -31,7 +34,7 @@ function jsonObjectFromBody(chunk: unknown): Record<string, unknown> | null {
   if (!text?.trim()) return null;
   const value = safeJsonParse(UnknownJson, text);
   return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
+    ? (value as ExistingJsonErrorBody)
     : null;
 }
 

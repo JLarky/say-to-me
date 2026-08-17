@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
-import { type SessionRuntimeLogEvent, createSessionRuntimeRegistry } from "./sessionRuntime.ts";
+import {
+  type SessionRuntimeLogDetail,
+  type SessionRuntimeLogEvent,
+  createSessionRuntimeRegistry,
+} from "./sessionRuntime.ts";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -7,7 +11,7 @@ function makeRegistry(idleShutdownMs = 40) {
   const logs: Array<{
     event: SessionRuntimeLogEvent;
     sessionId: string;
-    detail: Record<string, unknown>;
+    detail: SessionRuntimeLogDetail;
   }> = [];
   const registry = createSessionRuntimeRegistry({
     idleShutdownMs,

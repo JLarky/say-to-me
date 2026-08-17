@@ -2,12 +2,15 @@ import type { AssistantMessage } from "@opencode-ai/sdk/v2/client";
 
 type OpenCodeMessageError = NonNullable<AssistantMessage["error"]>;
 
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- SDK error envelopes are untrusted until the focused guards below establish their fields.
+type OpenCodeErrorEnvelope = Record<string, unknown>;
+
 function compactSnippet(value: string | null | undefined): string | null {
   const snippet = value?.trim();
   return snippet ? snippet : null;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+function isRecord(value: unknown): value is OpenCodeErrorEnvelope {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 

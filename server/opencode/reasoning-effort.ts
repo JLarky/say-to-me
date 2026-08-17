@@ -6,9 +6,12 @@ import {
 
 export { defaultOpenCodeReasoningEfforts as opencodeReasoningEfforts, isOpenCodeReasoningEffort };
 
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- OpenCode SDK model metadata is extensible; this helper reads only reasoningEffort and variant keys.
+type OpenCodeModelMetadata = Record<string, unknown>;
+
 export function readOpenCodeModelReasoningEfforts(
-  options: Record<string, unknown>,
-  variants?: Record<string, unknown>,
+  options: OpenCodeModelMetadata,
+  variants?: OpenCodeModelMetadata,
 ): string[] {
   const configured = normalizeOpenCodeReasoningEfforts(options.reasoningEffort);
   if (configured.length > 0) return configured;

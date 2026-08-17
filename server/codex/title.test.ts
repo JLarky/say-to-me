@@ -9,7 +9,10 @@ process.env.SAY_TO_ME_EXTERNAL_CLI_STATE_ROOT = testHome;
 const { clearCodexTitleCache, getCodexTitle } = await import("./title.ts");
 const { clearCodexSessionJsonlPathCache } = await import("./resolve.ts");
 
-function writeSession(chatId: string, payload: Record<string, unknown>): void {
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Controlled JSON fixture data is deliberately open-ended to exercise Codex transcript decoding.
+type CodexSessionFixture = Record<string, unknown>;
+
+function writeSession(chatId: string, payload: CodexSessionFixture): void {
   const sessionDir = path.join(testHome, ".codex", "sessions", "2026", "07", "05");
   mkdirSync(sessionDir, { recursive: true });
   writeFileSync(

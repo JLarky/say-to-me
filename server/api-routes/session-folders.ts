@@ -35,8 +35,11 @@ const OrganizationError = Schema.Struct({
 
 type OrganizationError = Schema.Schema.Type<typeof OrganizationError>;
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- This is the untrusted JSON object being parsed field-by-field by parseOrganization.
+type OrganizationJsonObject = Record<string, unknown>;
+
+function asRecord(value: unknown): OrganizationJsonObject | null {
+  return value && typeof value === "object" ? (value as OrganizationJsonObject) : null;
 }
 
 // A folder chain that loops back on itself would make its subtree invisible on

@@ -62,6 +62,9 @@ export type ForwardMessageCommand = {
 
 export type MessageCreateCommand = DirectMessageCommand | ForwardMessageCommand;
 
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- sessionMessageBodyKeys first rejects unknown keys, then this parser validates every supported field.
+type MessageCommandBody = Record<string, unknown>;
+
 function normalizeSessionReference(item: unknown): SessionReferenceInput | null {
   if (typeof item === "string") return { id: item, alias: null };
   if (!item || typeof item !== "object") return null;
@@ -128,7 +131,7 @@ export function buildSessionMessageCommand({
       return yield* Effect.fail(validationError(parsedKeys.summary));
     }
 
-    const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+    const record = body && typeof body === "object" ? (body as MessageCommandBody) : {};
     const rawText = typeof record.text === "string" ? record.text.trim() : "";
     const rawExtraMarkdown = record.extraMarkdown;
     const extraMarkdown = typeof rawExtraMarkdown === "string" ? rawExtraMarkdown.trim() : null;
