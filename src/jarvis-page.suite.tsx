@@ -30,7 +30,8 @@ describe("JarvisPage guidance", () => {
       close() {}
     }
 
-    globalThis.EventSource = MockEventSource as unknown as typeof EventSource;
+    // @ts-expect-error SAFETY: MockEventSource is this test's controlled EventSource replacement.
+    globalThis.EventSource = MockEventSource as typeof EventSource;
     globalThis.fetch = (input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
       if (url.startsWith("/api/sessions")) {

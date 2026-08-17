@@ -309,7 +309,8 @@ function installGalleryFixtureTransport(markdownHtml: string): void {
     }
   }
   (window as Window & typeof globalThis).EventSource =
-    GalleryEventSource as unknown as typeof EventSource;
+    // @ts-expect-error SAFETY: GalleryEventSource is the dev gallery's controlled browser EventSource replacement.
+    GalleryEventSource as typeof EventSource;
 }
 export function mountVoiceWidgetGallery(
   root: HTMLElement | null,

@@ -28,7 +28,8 @@ async function internalFetch(url: string, init: RequestInit): Promise<Response> 
         ...init,
         dispatcher: agent,
       } as Parameters<typeof undiciFetch>[1]);
-      return response as unknown as Response;
+      // @ts-expect-error SAFETY: Undici implements the Fetch Response contract returned by this local HTTPS adapter.
+      return response as Response;
     }
   }
   // Test plumbing only: production workers default to portless HTTPS.

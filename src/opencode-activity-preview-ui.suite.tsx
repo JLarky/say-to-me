@@ -44,7 +44,8 @@ describe("OpenCodeActivityPreview", () => {
       close() {}
     }
 
-    globalThis.EventSource = MockEventSource as unknown as typeof EventSource;
+    // @ts-expect-error SAFETY: MockEventSource is this test's controlled EventSource replacement.
+    globalThis.EventSource = MockEventSource as typeof EventSource;
     globalThis.fetch = (input: RequestInfo | URL) => {
       const url = input instanceof Request ? input.url : input.toString();
       if (url === "/api/debug/opencode-activity/ses_af261eb974e5Tz4bVO2cbTzOz1?limit=8") {
@@ -104,7 +105,8 @@ describe("OpenCodeActivityPreview", () => {
       close() {}
     }
 
-    globalThis.EventSource = MockEventSource as unknown as typeof EventSource;
+    // SAFETY: MockEventSource is this test's controlled EventSource replacement.
+    globalThis.EventSource = MockEventSource as typeof EventSource;
 
     try {
       await act(async () => {
@@ -144,7 +146,8 @@ describe("OpenCodeActivityPreview", () => {
       close() {}
     }
 
-    globalThis.EventSource = MockEventSource as unknown as typeof EventSource;
+    // @ts-expect-error SAFETY: MockEventSource is this test's controlled EventSource replacement.
+    globalThis.EventSource = MockEventSource as typeof EventSource;
 
     try {
       await act(async () => {
@@ -185,7 +188,8 @@ describe("OpenCodeActivityPreview", () => {
       close() {}
     }
 
-    globalThis.EventSource = MockEventSource as unknown as typeof EventSource;
+    // @ts-expect-error SAFETY: MockEventSource is this test's controlled EventSource replacement.
+    globalThis.EventSource = MockEventSource as typeof EventSource;
     globalThis.fetch = (input: RequestInfo | URL) => {
       const url = input instanceof Request ? input.url : input.toString();
       if (url === "/api/debug/opencode-activity/ses_9dd0e37709acUEbZH4UglxV3ko?limit=8") {
@@ -256,7 +260,8 @@ describe("OpenCodeActivityPreview", () => {
     const snippet =
       "**done**\n\n- item\n\n| Library | Role |\n|---|---|\n| marked | parser |\n\n<shell_metadata>User aborted the command</shell_metadata>\n\n<script>alert('xss')</script>\n\n[docs](https://example.com)\n\n[bad](javascript:alert('xss'))\n\n![image](https://example.com/image.png)";
 
-    globalThis.EventSource = MockEventSource as unknown as typeof EventSource;
+    // @ts-expect-error SAFETY: MockEventSource is this test's controlled EventSource replacement.
+    globalThis.EventSource = MockEventSource as typeof EventSource;
     globalThis.fetch = (input: RequestInfo | URL) => {
       const url = input instanceof Request ? input.url : input.toString();
       if (url === "/api/debug/opencode-activity/ses_af261eb974e5Tz4bVO2cbTzOz1?limit=8") {
@@ -324,7 +329,8 @@ describe("OpenCodeActivityPreview", () => {
       close() {}
     }
 
-    globalThis.EventSource = MockEventSource as unknown as typeof EventSource;
+    // @ts-expect-error SAFETY: MockEventSource is this test's controlled EventSource replacement.
+    globalThis.EventSource = MockEventSource as typeof EventSource;
     globalThis.fetch = (input: RequestInfo | URL) => {
       const url = input instanceof Request ? input.url : input.toString();
       if (url === "/api/debug/opencode-activity/ses_af261eb974e5Tz4bVO2cbTzOz1?limit=8") {
@@ -387,7 +393,8 @@ describe("OpenCodeActivityPreview", () => {
       close() {}
     }
 
-    globalThis.EventSource = MockEventSource as unknown as typeof EventSource;
+    // @ts-expect-error SAFETY: MockEventSource is this test's controlled EventSource replacement.
+    globalThis.EventSource = MockEventSource as typeof EventSource;
 
     try {
       await act(async () => {

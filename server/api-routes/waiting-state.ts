@@ -66,7 +66,8 @@ export function buildWaitingStateHandlers<
   R,
 >(api: HttpApi.HttpApi<Id, Groups, E, R>) {
   return HttpApiBuilder.group(
-    api as unknown as HttpApi.HttpApi<Id, typeof WaitingStateGroup, E, R>,
+    // @ts-expect-error SAFETY: Every caller passes the assembled API containing WaitingStateGroup; Effect cannot express that group-membership constraint for arbitrary Groups.
+    api as HttpApi.HttpApi<Id, typeof WaitingStateGroup, E, R>,
     "waiting-state",
     (handlers) =>
       handlers.handle("getWaitingState", ({ path }) =>
