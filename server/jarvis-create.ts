@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- Provider configuration is an extensible persisted JSON payload and each consumed field is validated. */
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";

@@ -1,4 +1,5 @@
 #!/usr/bin/env -S mise x deno -- deno run --allow-read --allow-env --allow-net
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- This diagnostic CLI transparently prints arbitrary JSON fields returned by the session poll endpoint. */
 
 import { readFile } from "node:fs/promises";
 

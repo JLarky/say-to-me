@@ -1,4 +1,5 @@
 import { internalApiToken } from "../claude/internal-api-token.ts";
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- Internal worker request bodies are validated field-by-field before actions run. */
 
 type JsonRecord = Record<string, unknown>;
 

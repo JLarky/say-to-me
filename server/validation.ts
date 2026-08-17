@@ -1,4 +1,5 @@
 import { type as arktype, type Type } from "arktype";
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- Validation metadata stores ArkType error details without interpreting their arbitrary keys. */
 import { type Response } from "express";
 import { maxMessageLength, minMessageLength } from "./config.ts";
 

@@ -1,4 +1,5 @@
 import { type } from "arktype";
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- Jinx structured-output schema is JSON Schema metadata with extensible fields. */
 import { Duration, Effect } from "effect";
 import { mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";

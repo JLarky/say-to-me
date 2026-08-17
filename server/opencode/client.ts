@@ -1,4 +1,5 @@
 import {
+  /* oxlint-disable anti-slop/no-unsafe-dictionary-type -- OpenCode SDK response metadata is an extensible external protocol contract. */
   type Model as OcConfigModel,
   type ModelV2Info as OcModel,
   type Project as OcProject,

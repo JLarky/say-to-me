@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- Worker response JSON is validated by the existing typed response parser before use. */
 import { Effect } from "effect";
 import {
   buildAgentVoicePromptFromMessage,

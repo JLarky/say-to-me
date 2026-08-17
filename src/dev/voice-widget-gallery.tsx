@@ -1,4 +1,5 @@
 import { createComponent } from "solid-js";
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- Development gallery records arbitrary computed-style observations for diagnostics. */
 // @ts-expect-error -- Solid omits declarations for the direct browser runtime.
 import { createRoot as createBrowserSolidRoot } from "solid-js/dist/solid.js";
 import { render } from "solid-js/web";
