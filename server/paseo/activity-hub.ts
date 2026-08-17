@@ -72,6 +72,10 @@ export async function getPaseoActivitySnapshot(
   return limitExternalCliActivitySnapshot(snapshot, limit);
 }
 
+function paseoRejectionMessage(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause);
+}
+
 export function subscribePaseoActivity(
   sessionId: string,
   limit: number,
@@ -83,9 +87,8 @@ export function subscribePaseoActivity(
     onError: listener.onError,
   };
   const unsubscribe = paseoActivityHub.subscribe(sessionId, limitedListener);
-  void paseoActivityHub.snapshot(sessionId).then(limitedListener.onSnapshot, (caught: unknown) => {
-    const message = caught instanceof Error ? caught.message : String(caught);
-    limitedListener.onError(message);
-  });
+  void paseoActivityHub
+    .snapshot(sessionId)
+    .then(limitedListener.onSnapshot, (caught) => limitedListener.onError(paseoRejectionMessage(caught)));
   return unsubscribe;
 }

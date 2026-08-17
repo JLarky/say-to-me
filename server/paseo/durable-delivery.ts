@@ -41,11 +41,11 @@ const nowSql = () => sql`CURRENT_TIMESTAMP`;
 const retryDelayMs = (attempt: number) => Math.min(30_000, 1_000 * 2 ** Math.max(0, attempt - 1));
 
 export function shouldRetryPaseoDelivery(
-  error: unknown,
+  cause: unknown,
   attemptCount: number,
   maxAttempts: number,
 ) {
-  return attemptCount < maxAttempts && (!(error instanceof PaseoCommandError) || error.retryable);
+  return attemptCount < maxAttempts && (!(cause instanceof PaseoCommandError) || cause.retryable);
 }
 
 export function enqueuePaseoDeliveryJob(input: PaseoDeliveryJobInput): boolean {

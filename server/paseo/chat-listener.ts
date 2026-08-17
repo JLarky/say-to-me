@@ -26,9 +26,8 @@ const activeListeners = new Map<string, Fiber.RuntimeFiber<void, never>>();
 const LISTEN_TIMEOUT_MS = Number(process.env.SAY_TO_ME_PASEO_CHAT_WAIT_TIMEOUT_MS || 35_000);
 const RETRY_DELAY_MS = Number(process.env.SAY_TO_ME_PASEO_CHAT_RETRY_MS || 1_000);
 
-function isMissingRoom(error: unknown): boolean {
-  const text = error instanceof Error ? error.message : String(error);
-  return /room not found|chat room.*not found|unknown room/i.test(text);
+function isMissingRoom(error: ListenerError): boolean {
+  return /room not found|chat room.*not found|unknown room/i.test(error.message);
 }
 
 function runListenerCommand(
