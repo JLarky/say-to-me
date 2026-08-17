@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import type { JsonValue } from "@say-to-me/runtime-validation";
 import {
   type ApiMessage,
   type TestServer,
@@ -92,7 +93,7 @@ describe("say API: message forwarding basics", () => {
     const targetSessionId = "ses_164d8c9d7437QDQrFNIXPrOtsa";
     const audioPath = path.join(tmpdir(), "12121212-1212-4212-8212-121212121212.mp3");
     const openCode = await mockOpenCode((req, res) => {
-      const respond = (payload: unknown) => {
+      const respond = (payload: JsonValue) => {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(payload));
       };
@@ -142,7 +143,7 @@ describe("say API: message forwarding basics", () => {
     const targetSessionId = "ses_334fcbba58ddjqbpgCz22Lz823";
     const markdown = "# Timer UI requirements\n\n- trigger now\n- pause or stop";
     const openCode = await mockOpenCode((req, res) => {
-      const respond = (payload: unknown) => {
+      const respond = (payload: JsonValue) => {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(payload));
       };
@@ -206,7 +207,7 @@ describe("say API: message forwarding basics", () => {
     const sourceSessionId = "ses_792ad01e97a5v6UeRxKf79xhmB";
     const targetSessionId = "ses_12f94ae96ffepCN7Wdi3ZUA7zl";
     const openCode = await mockOpenCode((req, res) => {
-      const respond = (payload: unknown) => {
+      const respond = (payload: JsonValue) => {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(payload));
       };
@@ -292,7 +293,7 @@ describe("say API: message forwarding basics", () => {
     const sourceSessionId = "ses_4ba57698639aCv7iJ3bLCFre6x";
     const targetSessionId = "ses_12e688222ffeUE0jc3PK76cS8r";
     const openCode = await mockOpenCode((req, res) => {
-      const respond = (payload: unknown) => {
+      const respond = (payload: JsonValue) => {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(payload));
       };
@@ -361,7 +362,7 @@ describe("say API: message forwarding basics", () => {
     const sourceSessionId = "ses_563defa5d022tlBHB5pPharRsG";
     const targetSessionId = "ses_504c81119a5600Foe7xCxJonF0";
     const openCode = await mockOpenCode((req, res) => {
-      const respond = (payload: unknown) => {
+      const respond = (payload: JsonValue) => {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(payload));
       };

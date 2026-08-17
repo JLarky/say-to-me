@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import type { JsonValue } from "@say-to-me/runtime-validation";
 import {
   type ApiMessage,
   type TestServer,
@@ -81,7 +82,7 @@ describe("say API: message forward completion", () => {
     const targetSessionId = "ses_fd49e6250708U43G45fZkaDtp0";
     let targetStatus: "idle" | "busy" = "idle";
     const openCode = await mockOpenCode((req, res) => {
-      const respond = (payload: unknown) => {
+      const respond = (payload: JsonValue) => {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(payload));
       };
@@ -161,7 +162,7 @@ describe("say API: message forward completion", () => {
     const sessionId = "ses_1b007f064b166Tp0rW6eO8CcwU";
     let status: "idle" | "busy" = "idle";
     const openCode = await mockOpenCode((req, res) => {
-      const respond = (payload: unknown) => {
+      const respond = (payload: JsonValue) => {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(payload));
       };
@@ -270,7 +271,7 @@ describe("say API: message forward completion", () => {
     const targetSessionId = "ses_14855a3877c5Izufbcw3lLAJs1";
     let targetStatus: "idle" | "busy" = "busy";
     const openCode = await mockOpenCode((req, res) => {
-      const respond = (payload: unknown) => {
+      const respond = (payload: JsonValue) => {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(payload));
       };
@@ -361,7 +362,7 @@ describe("say API: message forward completion", () => {
     let targetStatus: "idle" | "busy" = "idle";
     let sourceStatus: "idle" | "busy" = "idle";
     const openCode = await mockOpenCode((req, res) => {
-      const respond = (payload: unknown) => {
+      const respond = (payload: JsonValue) => {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(payload));
       };
@@ -486,7 +487,7 @@ describe("say API: message forward completion", () => {
     const targetSessionId = "ses_86f470a5a309lEnX5IZ13ISKRw";
     let targetStatus: "idle" | "busy" = "busy";
     const openCode = await mockOpenCode((req, res) => {
-      const respond = (payload: unknown) => {
+      const respond = (payload: JsonValue) => {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(payload));
       };
@@ -608,7 +609,7 @@ describe("say API: message forward completion", () => {
     const targetSessionId = "ses_82539735e295v40p9y3wIti5ZV";
     let targetStatus: "idle" | "busy" = "busy";
     const openCode = await mockOpenCode((req, res) => {
-      const respond = (payload: unknown) => {
+      const respond = (payload: JsonValue) => {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(payload));
       };
@@ -727,7 +728,7 @@ describe("say API: message forward completion", () => {
     const sourceSessionId = "ses_9459a64516d6E1j04Uqx1w6aab";
     const targetSessionId = "ses_3a06aaee8b4anycU9jU4xo9Fqw";
     const openCode = await mockOpenCode((req, res) => {
-      const respond = (payload: unknown) => {
+      const respond = (payload: JsonValue) => {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(payload));
       };
@@ -773,7 +774,7 @@ describe("say API: message forward completion", () => {
     const sourceSessionId = "ses_87b9fb471e59AxRMOpU0gr9cSN";
     const targetSessionId = "ses_c3d5425c4b32bLtpOolONE9hBf";
     const openCode = await mockOpenCode((req, res) => {
-      const respond = (status: number, payload: unknown) => {
+      const respond = (status: number, payload: JsonValue) => {
         res.writeHead(status, { "Content-Type": "application/json" });
         res.end(JSON.stringify(payload));
       };

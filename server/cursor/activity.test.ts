@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
+import type { JsonValue } from "@say-to-me/runtime-validation";
 import { parseCursorActivity } from "./activity.ts";
 
-const line = (obj: unknown) => JSON.stringify(obj);
+const line = (obj: JsonValue) => JSON.stringify(obj);
 
 const sample = [
   line({ role: "user", message: { content: [{ type: "text", text: "hi" }] } }),

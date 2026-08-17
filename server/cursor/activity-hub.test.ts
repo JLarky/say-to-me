@@ -1,6 +1,7 @@
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import type { JsonValue } from "@say-to-me/runtime-validation";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { setSessionCwd } from "../sessions.ts";
 import { getCursorActivitySnapshot, shutdownCursorActivityHub } from "./activity-hub.ts";
@@ -8,7 +9,7 @@ import { cursorSessionFilePath } from "./delivery.ts";
 
 const sessionUuid = "a35fda79-2e0e-4884-9085-0a250ef8f965";
 const sessionId = `cur_${sessionUuid}`;
-const line = (obj: unknown) => JSON.stringify(obj);
+const line = (obj: JsonValue) => JSON.stringify(obj);
 
 let testHome: string;
 let testCwd: string;

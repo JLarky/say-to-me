@@ -10,7 +10,7 @@ import {
   createTestSession,
 } from "./api.harness.ts";
 import { MessagesPayload } from "../src/types.ts";
-import { parseJson, UnknownJson } from "@say-to-me/runtime-validation";
+import { parseJson, type JsonValue, UnknownJson } from "@say-to-me/runtime-validation";
 import { opencodeStatusCache } from "./opencode/cache.ts";
 import { setCompletionWatchNextCheckAt } from "./messages.ts";
 import {
@@ -97,7 +97,7 @@ describe.sequential("say API: OpenCode completion watches", () => {
     let remainingSourceFailures = sourceFailures;
 
     const openCode = await mockOpenCode((req, res) => {
-      const respond = (status: number, payload: unknown) => {
+      const respond = (status: number, payload: JsonValue) => {
         res.writeHead(status, { "Content-Type": "application/json" });
         res.end(JSON.stringify(payload));
       };
