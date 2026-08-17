@@ -274,7 +274,8 @@ export function buildSessionOpenCodeReasoningEffortHandlers<
   R,
 >(api: HttpApi.HttpApi<Id, Groups, E, R>) {
   return HttpApiBuilder.group(
-    api as unknown as HttpApi.HttpApi<Id, typeof SessionOpenCodeReasoningEffortGroup, E, R>,
+    // @ts-expect-error SAFETY: Every caller passes the assembled API containing SessionOpenCodeReasoningEffortGroup; Effect cannot express that group-membership constraint for arbitrary Groups.
+    api as HttpApi.HttpApi<Id, typeof SessionOpenCodeReasoningEffortGroup, E, R>,
     "session-opencode-reasoning-effort",
     (handlers) =>
       handlers

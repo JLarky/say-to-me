@@ -496,7 +496,8 @@ export function buildSessionsHandlers<
   R,
 >(api: HttpApi.HttpApi<Id, Groups, E, R>) {
   return HttpApiBuilder.group(
-    api as unknown as HttpApi.HttpApi<Id, typeof SessionsGroup, E, R>,
+    // @ts-expect-error SAFETY: Every caller passes the assembled API containing SessionsGroup; Effect cannot express that group-membership constraint for arbitrary Groups.
+    api as HttpApi.HttpApi<Id, typeof SessionsGroup, E, R>,
     "sessions",
     (handlers) =>
       handlers

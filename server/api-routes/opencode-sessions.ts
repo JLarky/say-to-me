@@ -101,7 +101,8 @@ export function buildOpenCodeSessionsHandlers<
   R,
 >(api: HttpApi.HttpApi<Id, Groups, E, R>) {
   return HttpApiBuilder.group(
-    api as unknown as HttpApi.HttpApi<Id, typeof OpenCodeSessionsGroup, E, R>,
+    // @ts-expect-error SAFETY: Every caller passes the assembled API containing OpenCodeSessionsGroup; Effect cannot express that group-membership constraint for arbitrary Groups.
+    api as HttpApi.HttpApi<Id, typeof OpenCodeSessionsGroup, E, R>,
     "opencode-sessions",
     (handlers) =>
       handlers.handle("createOpenCodeSession", ({ payload }) =>

@@ -84,7 +84,8 @@ export function buildPaseoStopHandlers<
   R,
 >(api: HttpApi.HttpApi<Id, Groups, E, R>) {
   return HttpApiBuilder.group(
-    api as unknown as HttpApi.HttpApi<Id, typeof PaseoStopGroup, E, R>,
+    // @ts-expect-error SAFETY: Every caller passes the assembled API containing PaseoStopGroup; Effect cannot express that group-membership constraint for arbitrary Groups.
+    api as HttpApi.HttpApi<Id, typeof PaseoStopGroup, E, R>,
     "paseo-stop",
     (handlers) =>
       handlers.handle("stopPaseoSession", ({ path }) =>

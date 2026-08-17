@@ -95,7 +95,8 @@ export function buildProviderModelsHandlers<
   R,
 >(api: HttpApi.HttpApi<Id, Groups, E, R>) {
   return HttpApiBuilder.group(
-    api as unknown as HttpApi.HttpApi<Id, typeof ProviderModelsGroup, E, R>,
+    // @ts-expect-error SAFETY: Every caller passes the assembled API containing ProviderModelsGroup; Effect cannot express that group-membership constraint for arbitrary Groups.
+    api as HttpApi.HttpApi<Id, typeof ProviderModelsGroup, E, R>,
     "provider-models",
     (handlers) =>
       handlers.handle("listProviderModels", ({ path }) =>
