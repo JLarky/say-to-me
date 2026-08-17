@@ -1,4 +1,5 @@
 import { desc, eq, inArray } from "drizzle-orm";
+import { type as arktype } from "arktype";
 import { notifications } from "./db/drizzle-schema.ts";
 import { drizzleDb, drizzleSqlite } from "./db/index.ts";
 import { DbNotification, validateDb } from "./db/schemas.ts";
@@ -8,6 +9,7 @@ import { resolveListDisplayName } from "../src/session-display.ts";
 import { formatSseEvent, type SseClient } from "./sse/client.ts";
 
 const maxStoredNotifications = 30;
+const SqliteTableInfoColumn = arktype({ name: "string" });
 export { maxStoredNotifications };
 let notificationSchemaReady = false;
 const notificationClients = new Set<SseClient>();
@@ -92,10 +94,10 @@ function broadcastNotifications(): void {
 function ensureNotificationSchema() {
   if (notificationSchemaReady) return;
   const columns = drizzleSqlite.prepare("PRAGMA table_info(notifications)").all();
-  const hasSessionTitle = columns.some(
-    (column) =>
-      column && typeof column === "object" && "name" in column && column.name === "session_title",
-  );
+  const hasSessionTitle = columns.some((column) => {
+    const parsed = SqliteTableInfoColumn(column);
+    return !(parsed instanceof arktype.errors) && parsed.name === "session_title";
+  });
   if (!hasSessionTitle) {
     addNotificationColumn(
       "ALTER TABLE notifications ADD COLUMN session_title text NOT NULL DEFAULT ''",
