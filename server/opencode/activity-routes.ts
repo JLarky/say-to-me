@@ -154,8 +154,8 @@ export function createOpenCodeActivityEventsResponse(sessionId: string): Respons
           ),
       };
       const unsubscribe = openCodeActivityHub.subscribe(sessionId, listener);
-      void openCodeActivityHub.snapshot(sessionId).then(listener.onSnapshot, (caught: unknown) => {
-        const message = caught instanceof Error ? caught.message : String(caught);
+      void openCodeActivityHub.snapshot(sessionId).then(listener.onSnapshot, (cause: unknown) => {
+        const message = cause instanceof Error ? cause.message : String(cause);
         listener.onError(message);
       });
 

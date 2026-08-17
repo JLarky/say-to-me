@@ -1,8 +1,10 @@
 import { type as arktype } from "arktype";
 
+// oxlint-disable anti-slop/no-unknown-parameters -- ArkType schemas must accept untrusted JSON before validation.
 export type JsonSchema<T> = ((data: unknown) => T | arktype.errors) & {
   assert: (data: unknown) => T;
 };
+// oxlint-enable anti-slop/no-unknown-parameters
 
 /** A value which JSON.parse can produce. */
 export type JsonValue =

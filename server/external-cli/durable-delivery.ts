@@ -239,6 +239,7 @@ export type ExternalCliDurableDeliveryConfig<
   sessionIdColumn: SessionIdColumn;
   forceColumn: ForceColumn;
   jobSelectColumns: DeliveryJobSelectColumns;
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Each worker validates its raw database row with its schema-derived validator.
   validateJob: (row: unknown, context: string) => TJob;
   resolveRuntime: (cwd: string, sessionId: string) => TRuntime;
   ensureBooWorker: (sessionId: string) => Promise<boolean>;

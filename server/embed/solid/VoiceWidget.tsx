@@ -101,7 +101,7 @@ function timersUrl(attributes: VoiceWidgetAttributes): string {
 }
 
 function parsePayload(
-  raw: unknown,
+  raw: JsonValue,
 ): { messages: ReadonlyArray<unknown>; revision?: unknown } | null {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
   const value = raw as { messages?: unknown; revision?: unknown };
@@ -758,7 +758,7 @@ function createOwnedWidget(props: VoiceWidgetProps): HTMLElement {
       setSessionState("unavailable");
       return;
     }
-    const apply = (raw: unknown) => {
+    const apply = (raw: JsonValue) => {
       const payload = parsePayload(raw);
       if (!payload || cancelled) return;
       const decision = decideVoiceWidgetRevision(revision, payload.revision);

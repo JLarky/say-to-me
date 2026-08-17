@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
+import type { JsonValue } from "@say-to-me/runtime-validation";
 import { parseClaudeActivity } from "./activity.ts";
 
-const line = (obj: unknown) => JSON.stringify(obj);
+const line = (obj: JsonValue) => JSON.stringify(obj);
 
 const sample = [
   line({ type: "user", timestamp: "2026-07-01T00:00:00.000Z", message: { content: "hi" } }),

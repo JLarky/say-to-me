@@ -17,13 +17,13 @@ import {
   writeText,
 } from "../server/cli/api-request.ts";
 
-function formatCliFetchError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
+function formatCliFetchError(cause: unknown): string {
+  const message = cause instanceof Error ? cause.message : String(cause);
   const causeMessage =
-    error instanceof Error && error.cause instanceof Error
-      ? error.cause.message
-      : error instanceof Error && typeof error.cause === "string"
-        ? error.cause
+    cause instanceof Error && cause.cause instanceof Error
+      ? cause.cause.message
+      : cause instanceof Error && typeof cause.cause === "string"
+        ? cause.cause
         : "";
   const tlsHint =
     /self-signed|certificate/i.test(`${message}\n${causeMessage}`) ||
