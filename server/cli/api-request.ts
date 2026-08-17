@@ -378,6 +378,9 @@ export function resolveRequestUrl(baseUrl: string, path: string): URL {
 
 const MAX_SAME_ORIGIN_REDIRECTS = 10;
 
+/** The request shape used by the CLI's same-origin transport. */
+export type SameOriginFetch = (url: URL, init: RequestInit) => Promise<Response>;
+
 function isRedirectStatus(status: number): boolean {
   return status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
 }
@@ -390,7 +393,7 @@ function isRedirectStatus(status: number): boolean {
 export async function fetchSameOrigin(
   url: URL,
   init: RequestInit,
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: SameOriginFetch = fetch,
 ): Promise<Response> {
   let current = url;
   let method = (init.method ?? "GET").toUpperCase();
@@ -439,7 +442,7 @@ export async function fetchSameOrigin(
 
 export async function fetchOpenApiDocument(options: {
   baseUrl: string;
-  fetchImpl?: typeof fetch;
+  fetchImpl?: SameOriginFetch;
 }): Promise<OpenApiDocument> {
   const fetchImpl = options.fetchImpl ?? sayToMeCliFetch;
   const url = resolveRequestUrl(options.baseUrl, OPENAPI_PATH);
@@ -459,7 +462,7 @@ export async function resolveCliRequest(options: {
     | { kind: "raw"; method: string; path: string }
     | { kind: "operation"; operationId: string };
   params: Record<string, string>;
-  fetchImpl?: typeof fetch;
+  fetchImpl?: SameOriginFetch;
 }): Promise<RawApiRequest> {
   if (options.target.kind === "raw") {
     if (Object.keys(options.params).length === 0) {
@@ -535,7 +538,7 @@ export async function executeRawApiRequest(options: {
   path: string;
   headers?: Headers;
   body?: string;
-  fetchImpl?: typeof fetch;
+  fetchImpl?: SameOriginFetch;
 }): Promise<ApiRequestResult> {
   const fetchImpl = options.fetchImpl ?? sayToMeCliFetch;
   const url = resolveRequestUrl(options.baseUrl, options.path);

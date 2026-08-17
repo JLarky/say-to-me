@@ -182,7 +182,7 @@ describe("HomePage", () => {
       }
     } as unknown as typeof EventSource;
 
-    globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+    globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
       const url = input instanceof Request ? input.url : input.toString();
       if (url.startsWith("/api/sessions") && !url.includes("/ses_cdca0b2fd4dbxbccXiDaa9dNQe")) {
         return Promise.resolve(
@@ -209,7 +209,7 @@ describe("HomePage", () => {
         );
       }
       return Promise.reject(new Error(`Unexpected fetch ${url}`));
-    }) as typeof fetch;
+    };
 
     try {
       window.confirm = (message?: string) => {
