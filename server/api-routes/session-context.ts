@@ -93,7 +93,8 @@ export function buildSessionContextHandlers<
   R,
 >(api: HttpApi.HttpApi<Id, Groups, E, R>) {
   return HttpApiBuilder.group(
-    api as unknown as HttpApi.HttpApi<Id, typeof SessionContextGroup, E, R>,
+    // @ts-expect-error SAFETY: Every caller passes the assembled API containing SessionContextGroup; Effect cannot express that group-membership constraint for arbitrary Groups.
+    api as HttpApi.HttpApi<Id, typeof SessionContextGroup, E, R>,
     "session-context",
     (handlers) =>
       handlers.handle("getWorkspaceSessionContext", ({ urlParams }) =>

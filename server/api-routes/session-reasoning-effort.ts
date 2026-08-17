@@ -238,7 +238,8 @@ export function buildSessionReasoningEffortHandlers<
   R,
 >(api: HttpApi.HttpApi<Id, Groups, E, R>) {
   return HttpApiBuilder.group(
-    api as unknown as HttpApi.HttpApi<Id, typeof SessionReasoningEffortGroup, E, R>,
+    // @ts-expect-error SAFETY: Every caller passes the assembled API containing SessionReasoningEffortGroup; Effect cannot express that group-membership constraint for arbitrary Groups.
+    api as HttpApi.HttpApi<Id, typeof SessionReasoningEffortGroup, E, R>,
     "session-reasoning-effort",
     (handlers) =>
       handlers

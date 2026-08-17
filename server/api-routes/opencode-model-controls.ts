@@ -415,7 +415,8 @@ export function buildOpenCodeModelControlsHandlers<
   R,
 >(api: HttpApi.HttpApi<Id, Groups, E, R>) {
   return HttpApiBuilder.group(
-    api as unknown as HttpApi.HttpApi<Id, typeof OpenCodeModelControlsGroup, E, R>,
+    // @ts-expect-error SAFETY: Every caller passes the assembled API containing OpenCodeModelControlsGroup; Effect cannot express that group-membership constraint for arbitrary Groups.
+    api as HttpApi.HttpApi<Id, typeof OpenCodeModelControlsGroup, E, R>,
     "opencode-model-controls",
     (handlers) =>
       handlers

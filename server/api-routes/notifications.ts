@@ -119,7 +119,8 @@ export function buildNotificationsHandlers<
   R,
 >(api: HttpApi.HttpApi<Id, Groups, E, R>) {
   return HttpApiBuilder.group(
-    api as unknown as HttpApi.HttpApi<Id, typeof NotificationsGroup, E, R>,
+    // @ts-expect-error SAFETY: Every caller passes the assembled API containing NotificationsGroup; Effect cannot express that group-membership constraint for arbitrary Groups.
+    api as HttpApi.HttpApi<Id, typeof NotificationsGroup, E, R>,
     "notifications",
     (handlers) =>
       handlers
