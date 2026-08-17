@@ -70,13 +70,15 @@ function clearJarvisCreateDeps(extra: Parameters<typeof setJarvisCreateDepsForTe
   installOpenCodeModelDeps(extra);
 }
 
+type CreateJarvisRequest = { name: string; provider: string; modelID?: string };
+
 async function createJarvis(
   spaceId: string,
   name: string,
   provider = "opencode",
   modelID = "openai/gpt-4.1-mini",
 ) {
-  const payload: { name: string; provider: string; modelID?: string } = { name, provider };
+  const payload: CreateJarvisRequest = { name, provider };
   if (provider === "opencode" || modelID) {
     payload.modelID = modelID;
   }
