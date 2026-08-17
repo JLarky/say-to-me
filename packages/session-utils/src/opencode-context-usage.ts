@@ -18,7 +18,9 @@ export function formatTokenCount(value: number): string {
 export function formatContextUsage(activity: ContextUsageActivity): string | null {
   const usage = activity?.contextUsage;
   if (!usage) return null;
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- usedTokens is the declared `number | null` ContextUsage field; typeof narrows the already-typed union.
   if (usage.source === "latestMessageTokens" && typeof usage.usedTokens === "number") {
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof -- limitTokens is the declared `number | null` ContextUsage field; typeof narrows the already-typed union.
     return typeof usage.limitTokens === "number"
       ? `${formatTokenCount(usage.usedTokens)} / ${formatTokenCount(usage.limitTokens)}`
       : formatTokenCount(usage.usedTokens);
@@ -29,11 +31,14 @@ export function formatContextUsage(activity: ContextUsageActivity): string | nul
 export function formatContextUsageDetails(activity: ContextUsageActivity): string | null {
   const usage = activity?.contextUsage;
   if (!usage) return null;
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- percent is the declared `number | null` ContextUsage field; typeof narrows the already-typed union.
   const percent = typeof usage.percent === "number" ? `${Math.round(usage.percent)}%` : null;
   const tokens =
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof -- usedTokens/limitTokens are the declared `number | null` ContextUsage fields; typeof narrows the already-typed union.
     typeof usage.usedTokens === "number" && typeof usage.limitTokens === "number"
       ? `${formatTokenCount(usage.usedTokens)} / ${formatTokenCount(usage.limitTokens)} tokens`
-      : typeof usage.usedTokens === "number"
+      : // oxlint-disable-next-line anti-slop/no-runtime-typeof -- usedTokens is the declared `number | null` ContextUsage field; typeof narrows the already-typed union.
+        typeof usage.usedTokens === "number"
         ? `${formatTokenCount(usage.usedTokens)} input tokens`
         : null;
   return [percent, tokens].filter(Boolean).join(" · ") || null;

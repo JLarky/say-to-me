@@ -365,6 +365,7 @@ describe("resolveCliRequest", () => {
   it("loads openapi.json for operation ids", async () => {
     const fetchImpl = vi.fn<SameOriginFetch>(async (input: URL | RequestInfo) => {
       const href =
+        // oxlint-disable-next-line anti-slop/no-runtime-typeof -- input is the declared `URL | RequestInfo` (RequestInfo = Request | string) union; typeof narrows the already-typed union.
         input instanceof URL ? input.href : typeof input === "string" ? input : input.url;
       if (href.endsWith("/openapi.json")) {
         return new Response(
@@ -489,6 +490,7 @@ describe("fetchSameOrigin", () => {
     const secret = new Headers({ "X-Secret": "s3cr3t" });
     const fetchImpl = vi.fn<SameOriginFetch>(async (input: URL | RequestInfo) => {
       const href =
+        // oxlint-disable-next-line anti-slop/no-runtime-typeof -- input is the declared `URL | RequestInfo` (RequestInfo = Request | string) union; typeof narrows the already-typed union.
         input instanceof URL ? input.href : typeof input === "string" ? input : input.url;
       if (href.endsWith("/api/old")) {
         return new Response(null, {
@@ -520,6 +522,7 @@ describe("fetchSameOrigin", () => {
       const body = method === "DELETE" ? undefined : '{"name":"n"}';
       const fetchImpl = vi.fn<SameOriginFetch>(async (input: URL | RequestInfo) => {
         const href =
+          // oxlint-disable-next-line anti-slop/no-runtime-typeof -- input is the declared `URL | RequestInfo` (RequestInfo = Request | string) union; typeof narrows the already-typed union.
           input instanceof URL ? input.href : typeof input === "string" ? input : input.url;
         if (href.endsWith("/api/old")) {
           return new Response(null, {
@@ -553,6 +556,7 @@ describe("fetchSameOrigin", () => {
   it("converts POST to GET with empty body on same-origin 303", async () => {
     const fetchImpl = vi.fn<SameOriginFetch>(async (input: URL | RequestInfo) => {
       const href =
+        // oxlint-disable-next-line anti-slop/no-runtime-typeof -- input is the declared `URL | RequestInfo` (RequestInfo = Request | string) union; typeof narrows the already-typed union.
         input instanceof URL ? input.href : typeof input === "string" ? input : input.url;
       if (href.endsWith("/api/old")) {
         return new Response(null, {
