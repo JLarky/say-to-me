@@ -13,13 +13,13 @@ type CliSessionRequestBody = {
   reasoningEffort?: CodexReasoningEffort;
 };
 
-export const providerLabels: Record<CreateProvider, string> = {
+export const providerLabels = {
   opencode: "OpenCode",
   claude: "Claude",
   codex: "Codex",
   cursor: "Cursor",
   grok: "Grok",
-};
+} satisfies Record<CreateProvider, string>;
 
 const ProviderModel = arktype({ providerID: "string", id: "string", name: "string" });
 const ProviderModelsPayload = arktype({ models: ProviderModel.array() });

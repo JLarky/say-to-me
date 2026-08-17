@@ -53,14 +53,16 @@ export type SpaceRosterSession = {
   cachedActivityStatus: string | null;
   timerSummary: string | null;
 };
+type SessionWorkspace = { path: string | null; label: string | null };
+type DerivedSpaceRosterStatus = Pick<SpaceRosterSession, "rosterStatus" | "rosterStatusLabel">;
 
-const rosterStatusOrder: Record<SpaceRosterStatusTone, number> = {
+const rosterStatusOrder = {
   error: 0,
   attention: 1,
   working: 2,
   idle: 3,
   unknown: 4,
-};
+} satisfies Record<SpaceRosterStatusTone, number>;
 
 function sessionProviderLabel(session: typeof sessions.$inferSelect): string {
   const backend = detectSessionBackend(session.id);
@@ -93,10 +95,7 @@ function previewLine(text: string | null | undefined, max = 160): string | null 
   return `${compact.slice(0, max - 3)}...`;
 }
 
-function workspaceForSession(session: typeof sessions.$inferSelect): {
-  path: string | null;
-  label: string | null;
-} {
+function workspaceForSession(session: typeof sessions.$inferSelect): SessionWorkspace {
   const pathValue =
     session.cwd?.trim() ||
     session.opencodeDirectory?.trim() ||
@@ -118,7 +117,7 @@ export function deriveSpaceRosterStatus(input: {
   activityAt?: string | null;
   /** Clock snapshot from the Effect roster boundary — required, never Date.now(). */
   nowMs: number;
-}): { rosterStatus: SpaceRosterStatusTone; rosterStatusLabel: string } {
+}): DerivedSpaceRosterStatus {
   const delivery = input.latestDeliveryStatus?.toLowerCase() ?? "";
   if (delivery === "failed" || input.latestDeliveryError?.trim()) {
     return { rosterStatus: "error", rosterStatusLabel: "ERROR" };
