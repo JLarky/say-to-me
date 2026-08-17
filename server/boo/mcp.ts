@@ -17,7 +17,8 @@ type ToolCall = {
   name?: string;
 };
 
-type JsonRpcResult = object | string;
+type JsonRpcResultObject = { readonly [key: string]: unknown };
+type JsonRpcResult = JsonRpcResultObject | readonly unknown[] | string;
 
 const JsonRpcRequestSchema = arktype({
   "id?": "number | string | null",
