@@ -15,6 +15,9 @@ import { ReasoningEffortSelect } from "./ReasoningEffortSelect.tsx";
 
 export { ReasoningEffortSelect } from "./ReasoningEffortSelect.tsx";
 
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Stored model metadata is external JSON; this guard reads only providerID and modelID.
+type StoredModelMetadata = Record<string, unknown>;
+
 /** Keeps picker open across remounts caused by live session snapshot refreshes. */
 const pickerOpenBySessionId = new Map<string, boolean>();
 
@@ -203,7 +206,7 @@ const openCodeGlobalStorageKey = "opencode.global.dat";
 
 function isRecentModel(value: unknown): value is RecentModel {
   if (!value || typeof value !== "object") return false;
-  const model = value as Record<string, unknown>;
+  const model = value as StoredModelMetadata;
   return typeof model.providerID === "string" && typeof model.modelID === "string";
 }
 

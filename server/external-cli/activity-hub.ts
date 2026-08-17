@@ -3,6 +3,7 @@ import { createActivityHub, type ActivityListener } from "../activityHub.ts";
 import { withExternalCliItemHtml } from "../markdown/extra-markdown-html.ts";
 import { detectSessionBackend } from "../session-id.ts";
 
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Provider transcript parsers retain provider-specific item fields before rendering.
 export type ExternalCliActivityItem = { readonly timestamp?: number | null } & Record<
   string,
   unknown

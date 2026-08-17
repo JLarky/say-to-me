@@ -2,6 +2,9 @@ import { describe, expect, it } from "vite-plus/test";
 import { dispatchEffectApiRequest } from "./effect-api.ts";
 import { buildSayToMeOpenApiSpec } from "./merged-api.ts";
 
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- OpenAPI Schema Objects allow vendor-defined properties; these tests inspect only standard fields.
+type OpenApiSchemaProperties = Record<string, unknown>;
+
 describe("live OpenAPI publication", () => {
   it("builds an OpenAPI 3.1 document from SayToMeApi", () => {
     const spec = buildSayToMeOpenApiSpec();
@@ -20,7 +23,7 @@ describe("live OpenAPI publication", () => {
 
     const body: unknown = await response!.json();
     expect(body).toEqual(expect.objectContaining({ openapi: "3.1.0" }));
-    const paths = (body as { paths?: Record<string, unknown> }).paths;
+    const paths = (body as { paths?: OpenApiSchemaProperties }).paths;
     expect(paths).toBeDefined();
     expect(paths!["/api/health"]).toBeDefined();
   });
@@ -44,11 +47,11 @@ describe("live OpenAPI publication", () => {
         anyOf?: unknown[];
         type?: string;
         required?: string[];
-        properties?: Record<string, unknown>;
+        properties?: OpenApiSchemaProperties;
       };
       const publicError =
         errorSchema?.anyOf?.find(
-          (candidate): candidate is { required?: string[]; properties?: Record<string, unknown> } =>
+          (candidate): candidate is { required?: string[]; properties?: OpenApiSchemaProperties } =>
             Boolean(
               candidate &&
               typeof candidate === "object" &&
@@ -76,7 +79,7 @@ describe("live OpenAPI publication", () => {
     const successSchema = responses["200"]?.content?.["application/json"]?.schema as {
       type?: string;
       required?: string[];
-      properties?: Record<string, unknown>;
+      properties?: OpenApiSchemaProperties;
       $id?: string;
       title?: string;
     };
@@ -115,12 +118,12 @@ describe("live OpenAPI publication", () => {
         anyOf?: unknown[];
         type?: string;
         required?: string[];
-        properties?: Record<string, unknown>;
+        properties?: OpenApiSchemaProperties;
       };
       // Prefer the declared public body when decode errors share the status.
       const publicError =
         errorSchema?.anyOf?.find(
-          (candidate): candidate is { required?: string[]; properties?: Record<string, unknown> } =>
+          (candidate): candidate is { required?: string[]; properties?: OpenApiSchemaProperties } =>
             Boolean(
               candidate &&
               typeof candidate === "object" &&

@@ -21,6 +21,9 @@ export type TimerError = {
   status: number;
 };
 
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Route JSON is parsed one field at a time so invalid values receive the existing field-specific errors.
+type TimerRequestBody = Record<string, unknown>;
+
 function timerError(error: string, status = 400): TimerError {
   return { error, status };
 }
@@ -85,7 +88,7 @@ export function publicTimerErrorFromCause(
   return publicTimerError(Option.getOrUndefined(Cause.failureOption(cause)), fallback);
 }
 
-function parseCreate(body: Record<string, unknown>): CreateJarvisTimerInput | TimerError {
+function parseCreate(body: TimerRequestBody): CreateJarvisTimerInput | TimerError {
   const sessionId = normalizeSessionId(typeof body.sessionId === "string" ? body.sessionId : null);
   if (!sessionId) return timerError("Invalid target session id.");
   const title = textField(body.title, "Title", 80);
@@ -99,7 +102,7 @@ function parseCreate(body: Record<string, unknown>): CreateJarvisTimerInput | Ti
   return { sessionId, title, message, dueAt, intervalMs };
 }
 
-function parseUpdate(body: Record<string, unknown>): UpdateJarvisTimerInput | TimerError {
+function parseUpdate(body: TimerRequestBody): UpdateJarvisTimerInput | TimerError {
   const input: UpdateJarvisTimerInput = {};
   if (body.sessionId !== undefined) {
     const sessionId = normalizeSessionId(

@@ -1,5 +1,6 @@
 import { safeJsonParse, UnknownJson } from "@say-to-me/runtime-validation";
 
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- The widget projects provider message fields lazily; its transport contract deliberately retains other JSON fields.
 export type VoiceWidgetMessage = Record<string, unknown>;
 
 export type VoiceWidgetMessagesPayload = {

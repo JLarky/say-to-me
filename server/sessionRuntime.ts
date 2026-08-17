@@ -1,5 +1,6 @@
 import { Duration, Effect, Fiber, Ref } from "effect";
 
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Backend adapters own additional snapshot fields; this registry only reads status.
 export type SessionActivitySnapshot = { status?: string | null } & Record<string, unknown>;
 
 export type SessionRuntimePhase = "warm" | "idle_shutdown_pending";
@@ -13,6 +14,12 @@ export type SessionRuntimeLogEvent =
   | "activity"
   | "dispose"
   | "shutdown";
+
+export type SessionRuntimeLogDetail =
+  | { readonly runtimeId: number }
+  | { readonly attachedClients: number; readonly runtimeId: number }
+  | { readonly idleShutdownMs: number; readonly runtimeId: number }
+  | { readonly runtimeId: number; readonly status: string | null };
 
 export type SessionRuntimeInspection = {
   sessionId: string;
@@ -55,7 +62,7 @@ export function createSessionRuntimeRegistry({
   },
 }: {
   idleShutdownMs?: number;
-  log?: (event: SessionRuntimeLogEvent, sessionId: string, detail: Record<string, unknown>) => void;
+  log?: (event: SessionRuntimeLogEvent, sessionId: string, detail: SessionRuntimeLogDetail) => void;
 } = {}): SessionRuntimeRegistry {
   const runtimes = new Map<string, SessionRuntime>();
   let nextRuntimeId = 1;

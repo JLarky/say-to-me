@@ -22,6 +22,9 @@ import {
   updateSessionState,
 } from "../sessions.ts";
 import { publicRouteErrorResponse } from "./route-errors.ts";
+
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- The effect route accepts untrusted JSON and validates each supported field below.
+type SessionUpdatePayload = Record<string, unknown>;
 import { resolveDashboardPlacement } from "../dashboard-placement.ts";
 import { toSpacesError } from "../spaces.ts";
 import { openApiDocs } from "./openapi-docs.ts";
@@ -197,8 +200,7 @@ export function updateSessionEffect(
 ): Effect.Effect<SessionUpdated, SessionValidationError, SessionMutationService> {
   return Effect.gen(function* () {
     const sessionId = normalizeSessionId(rawSessionId);
-    const record =
-      payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
+    const record = payload && typeof payload === "object" ? (payload as SessionUpdatePayload) : {};
     const hasState = "state" in record;
     const hasCwd = "cwd" in record;
     const hasAlias = "alias" in record;

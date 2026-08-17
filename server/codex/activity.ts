@@ -10,6 +10,9 @@ import {
 } from "../external-cli/activity-parsing.ts";
 import { safeJsonParse, UnknownJson } from "@say-to-me/runtime-validation";
 
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Codex transcript payloads are provider-defined; this reader narrows only the fields it renders.
+type CodexTranscriptObject = Record<string, unknown>;
+
 export type { CodexActivity, CodexActivityItem, CodexActivityKind };
 
 function textFromAssistantContent(content: unknown): string | null {
@@ -36,7 +39,7 @@ export function parseCodexActivity(jsonl: string, limit: number): CodexActivity 
     const entry = safeJsonParse(UnknownJson, trimmed) as {
       type?: unknown;
       timestamp?: unknown;
-      payload?: Record<string, unknown>;
+      payload?: CodexTranscriptObject;
     } | null;
     if (!entry) continue;
     const timestamp = parseTimestamp(entry.timestamp);
@@ -79,7 +82,7 @@ export function parseCodexActivity(jsonl: string, limit: number): CodexActivity 
     if (payloadType === "web_search_call") {
       const action =
         payload.action && typeof payload.action === "object"
-          ? (payload.action as Record<string, unknown>)
+          ? (payload.action as CodexTranscriptObject)
           : null;
       const query = action && typeof action.query === "string" ? action.query : "search";
       items.push({

@@ -8,9 +8,12 @@ import {
 
 type AttachmentRecord = { readonly id: number; readonly originalName: string };
 
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Attachment metadata is raw server JSON, narrowed to id and originalName before rendering.
+type AttachmentPayload = Record<string, unknown>;
+
 function attachmentRecord(value: unknown): AttachmentRecord | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const row = value as Record<string, unknown>;
+  const row = value as AttachmentPayload;
   return typeof row.id === "number" &&
     Number.isInteger(row.id) &&
     typeof row.originalName === "string"
