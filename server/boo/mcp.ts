@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- JSON-RPC params and tool results are intentionally extensible protocol payloads, narrowed at each tool boundary. */
 import { createInterface } from "node:readline";
 import { type as arktype } from "arktype";
 import { safeJsonParse } from "@say-to-me/runtime-validation";
@@ -217,7 +218,9 @@ function requiredString(args: Record<string, unknown>, key: string): string {
   return value;
 }
 
-function toolResult(value: JsonRpcResult): object {
+type ToolResult = { content: Array<{ type: "text"; text: string }> };
+
+function toolResult(value: JsonRpcResult): ToolResult {
   return { content: [{ text: JSON.stringify(value, null, 2), type: "text" }] };
 }
 
