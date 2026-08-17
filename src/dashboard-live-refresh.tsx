@@ -24,7 +24,8 @@ type LiveRefreshContextValue = {
 
 const LiveRefreshContext = createContext<LiveRefreshContextValue | null>(null);
 
-function errorMessage(error: unknown) {
+function errorMessage(cause: unknown) {
+  const error = cause;
   return error instanceof Error && error.message ? error.message : String(error);
 }
 

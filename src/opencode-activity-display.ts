@@ -2,6 +2,7 @@ import type { OpenCodeActivity } from "./types.ts";
 
 export type OpenCodeActivityCard = NonNullable<OpenCodeActivity["recentItems"]>[number];
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- SDK status JSON is guarded before message inspection.
 export function openCodeStatusRawMessage(statusRaw: unknown): string | null {
   if (!statusRaw || typeof statusRaw !== "object" || Array.isArray(statusRaw)) return null;
   const message = (statusRaw as { message?: unknown }).message;

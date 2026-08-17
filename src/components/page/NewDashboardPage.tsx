@@ -532,7 +532,8 @@ function ExplorerDashboard() {
           Object.fromEntries(instances.map((instance) => [instance.id, instance.label])),
         ),
       )
-      .catch((error: unknown) => {
+      .catch((cause: unknown) => {
+        const error = cause;
         if (!controller.signal.aborted) {
           setImportError(error instanceof Error ? error.message : "Unable to list T3 instances.");
         }
@@ -563,7 +564,8 @@ function ExplorerDashboard() {
           })),
         );
       })
-      .catch((error: unknown) => {
+      .catch((cause: unknown) => {
+        const error = cause;
         if (!controller.signal.aborted) {
           setT3ImportSessions([]);
           setImportError(error instanceof Error ? error.message : "Unable to scan T3 instances.");
@@ -589,7 +591,8 @@ function ExplorerDashboard() {
           Object.fromEntries(instances.map((instance) => [instance.id, instance.label])),
         );
       })
-      .catch((error: unknown) => {
+      .catch((cause: unknown) => {
+        const error = cause;
         if (!controller.signal.aborted)
           setImportError(
             error instanceof Error ? error.message : "Unable to list Paseo instances.",
@@ -625,7 +628,8 @@ function ExplorerDashboard() {
           }),
         );
       })
-      .catch((error: unknown) => {
+      .catch((cause: unknown) => {
+        const error = cause;
         if (!controller.signal.aborted) {
           setPaseoImportSessions([]);
           setImportError(
@@ -790,7 +794,8 @@ function ExplorerDashboard() {
         setPrototype(next);
         setRequestError(null);
       })
-      .catch((error: unknown) => {
+      .catch((cause: unknown) => {
+        const error = cause;
         if (!spacesFetchGate.isCurrent(token)) return;
         setRequestError(error instanceof Error ? error.message : "Unable to load spaces.");
       })
@@ -857,7 +862,8 @@ function ExplorerDashboard() {
           );
         });
       })
-      .catch((error: unknown) => {
+      .catch((cause: unknown) => {
+        const error = cause;
         if (!active) return;
         setProviderModels([]);
         setSessionModelId("");

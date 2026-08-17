@@ -236,6 +236,7 @@ describe("Create Jarvis frontend flows", () => {
 
   it("blocks Escape through the dashboard while create is busy", async () => {
     const { createJarvisInSpace } = await import("./jarvis-create-api.ts");
+    // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Controlled Promise resolver forwards the mocked success value unchanged.
     let resolveCreate!: (value: unknown) => void;
     vi.mocked(createJarvisInSpace).mockImplementation(
       () =>
@@ -317,6 +318,7 @@ describe("Create Jarvis frontend flows", () => {
 
   it("reports busy while creating so Escape will not close the dialog", async () => {
     const { createJarvisInSpace } = await import("./jarvis-create-api.ts");
+    // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Controlled Promise resolver forwards the mocked success value unchanged.
     let resolveCreate!: (value: unknown) => void;
     vi.mocked(createJarvisInSpace).mockImplementation(
       () =>
@@ -403,6 +405,7 @@ describe("Create Jarvis frontend flows", () => {
 
   it("keeps Tab focus inside the dialog while creating and restores the opener", async () => {
     const { createJarvisInSpace } = await import("./jarvis-create-api.ts");
+    // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Controlled Promise resolver forwards the mocked success value unchanged.
     let resolveCreate!: (value: unknown) => void;
     vi.mocked(createJarvisInSpace).mockImplementation(
       () =>
