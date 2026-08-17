@@ -45,7 +45,7 @@ describe("OpenCodeActivityPreview", () => {
     }
 
     globalThis.EventSource = MockEventSource as unknown as typeof EventSource;
-    globalThis.fetch = ((input: RequestInfo | URL) => {
+    globalThis.fetch = (input: RequestInfo | URL) => {
       const url = input instanceof Request ? input.url : input.toString();
       if (url === "/api/debug/opencode-activity/ses_af261eb974e5Tz4bVO2cbTzOz1?limit=8") {
         fetchCount += 1;
@@ -60,7 +60,7 @@ describe("OpenCodeActivityPreview", () => {
         );
       }
       return Promise.reject(new Error(`Unexpected fetch ${url}`));
-    }) as typeof fetch;
+    };
 
     try {
       await act(async () => {
@@ -186,7 +186,7 @@ describe("OpenCodeActivityPreview", () => {
     }
 
     globalThis.EventSource = MockEventSource as unknown as typeof EventSource;
-    globalThis.fetch = ((input: RequestInfo | URL) => {
+    globalThis.fetch = (input: RequestInfo | URL) => {
       const url = input instanceof Request ? input.url : input.toString();
       if (url === "/api/debug/opencode-activity/ses_9dd0e37709acUEbZH4UglxV3ko?limit=8") {
         return Promise.resolve(
@@ -206,7 +206,7 @@ describe("OpenCodeActivityPreview", () => {
         );
       }
       return Promise.reject(new Error(`Unexpected fetch ${url}`));
-    }) as typeof fetch;
+    };
 
     try {
       await act(async () => {
@@ -257,7 +257,7 @@ describe("OpenCodeActivityPreview", () => {
       "**done**\n\n- item\n\n| Library | Role |\n|---|---|\n| marked | parser |\n\n<shell_metadata>User aborted the command</shell_metadata>\n\n<script>alert('xss')</script>\n\n[docs](https://example.com)\n\n[bad](javascript:alert('xss'))\n\n![image](https://example.com/image.png)";
 
     globalThis.EventSource = MockEventSource as unknown as typeof EventSource;
-    globalThis.fetch = ((input: RequestInfo | URL) => {
+    globalThis.fetch = (input: RequestInfo | URL) => {
       const url = input instanceof Request ? input.url : input.toString();
       if (url === "/api/debug/opencode-activity/ses_af261eb974e5Tz4bVO2cbTzOz1?limit=8") {
         return Promise.resolve(
@@ -279,7 +279,7 @@ describe("OpenCodeActivityPreview", () => {
         );
       }
       return Promise.reject(new Error(`Unexpected fetch ${url}`));
-    }) as typeof fetch;
+    };
 
     try {
       await act(async () => {
@@ -325,7 +325,7 @@ describe("OpenCodeActivityPreview", () => {
     }
 
     globalThis.EventSource = MockEventSource as unknown as typeof EventSource;
-    globalThis.fetch = ((input: RequestInfo | URL) => {
+    globalThis.fetch = (input: RequestInfo | URL) => {
       const url = input instanceof Request ? input.url : input.toString();
       if (url === "/api/debug/opencode-activity/ses_af261eb974e5Tz4bVO2cbTzOz1?limit=8") {
         return Promise.resolve(
@@ -350,7 +350,7 @@ describe("OpenCodeActivityPreview", () => {
         );
       }
       return Promise.reject(new Error(`Unexpected fetch ${url}`));
-    }) as typeof fetch;
+    };
 
     try {
       await act(async () => {
