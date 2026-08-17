@@ -32,13 +32,13 @@ type CliSessionRequestBody = {
   reasoningEffort?: CodexReasoningEffort;
 };
 
-const providerLabels: Record<CreateProvider, string> = {
+const providerLabels = {
   opencode: "OpenCode",
   claude: "Claude",
   codex: "Codex",
   cursor: "Cursor",
   grok: "Grok",
-};
+} satisfies Record<CreateProvider, string>;
 
 const DiscoverableSessionSchema = type({
   sessionId: "string",

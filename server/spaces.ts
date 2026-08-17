@@ -50,6 +50,7 @@ type SpaceReparentUpdate = {
   sortOrder?: number;
   updatedAt: SQL;
 };
+type SyncedRepository = { repositoryId: string; checkoutIds: string[] };
 
 function syncRepositoryRecord(repo: GitRepository): string {
   const current = drizzleDb
@@ -75,7 +76,7 @@ function syncRepositoryRecord(repo: GitRepository): string {
   return actualRepository.id;
 }
 
-function syncRepository(repo: GitRepository): { repositoryId: string; checkoutIds: string[] } {
+function syncRepository(repo: GitRepository): SyncedRepository {
   const repositoryId = syncRepositoryRecord(repo);
   const checkoutIds: string[] = [];
   for (const checkout of repo.checkouts) {
