@@ -42,7 +42,8 @@ export async function openCodeFetch(
         ...requestInit,
         dispatcher: agent,
       } as Parameters<typeof undiciFetch>[1]);
-      return response as unknown as Response;
+      // @ts-expect-error SAFETY: Undici implements the Fetch Response contract returned by this local HTTPS adapter.
+      return response as Response;
     }
   }
   return fetch(input, init);

@@ -158,7 +158,7 @@ describe("HomePage", () => {
     const deleted: string[] = [];
     const confirmations: string[] = [];
 
-    // Stub EventSource so PageShell's notifications SSE does not throw.
+    // @ts-expect-error SAFETY: This inline class is the home-page test's controlled EventSource replacement.
     globalThis.EventSource = class {
       constructor(_url: string) {}
       addEventListener() {}
@@ -176,7 +176,7 @@ describe("HomePage", () => {
       dispatchEvent() {
         return false;
       }
-    } as unknown as typeof EventSource;
+    } as typeof EventSource;
 
     globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
       const url = input instanceof Request ? input.url : input.toString();
