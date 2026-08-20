@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vite-plus/test";
+import type { RetryDeliveryOutcome } from "./durable-delivery.ts";
 
 const testDbDir = mkdtempSync(path.join(tmpdir(), "say-to-me-test-delivery-retry-"));
 process.env.SAY_TO_ME_DB = path.join(testDbDir, "queue.sqlite");
@@ -41,7 +42,8 @@ type BackendSuite<TJob extends Lease> = {
   markDispatched: (job: TJob) => Promise<boolean>;
   fail: (job: TJob, error: string) => Promise<boolean>;
   /** The human override under test. */
-  retryJob: (messageId: number) => TJob | null;
+  retryJob: (messageId: number) => { outcome: RetryDeliveryOutcome; job: TJob } | null;
+  complete: (job: TJob, reply: string | null) => Promise<boolean>;
 };
 
 let sessionCounter = 0;
@@ -125,7 +127,7 @@ function describeBackend<TJob extends Lease>(backend: BackendSuite<TJob>): void 
       await expect(backend.claim("worker-b", sessionId)).resolves.toBeNull();
 
       const retried = backend.retryJob(messageId);
-      expect(retried?.id).toBe(jobId);
+      expect(retried).toMatchObject({ outcome: "retried", job: { id: jobId } });
 
       expect(jobRow(backend.table, jobId)).toMatchObject({
         status: "pending",
@@ -158,6 +160,102 @@ function describeBackend<TJob extends Lease>(backend: BackendSuite<TJob>): void 
         promptDispatchedAt: null,
       });
       expect(row.nextAttemptAt).toBeLessThanOrEqual(Date.now());
+    });
+
+    it("refuses a job a worker is still running and leaves its marker set", async () => {
+      const sessionId = nextSessionId(backend.prefix);
+      const messageId = seedMessage(sessionId, "retry must not interrupt a live send");
+      backend.enqueue(messageId, sessionId);
+      const claimed = await backend.claim("worker-a", sessionId);
+      if (!claimed) throw new Error(`Expected ${backend.label} to hand out a job.`);
+      await backend.markDispatched(claimed.job);
+
+      const before = jobRow(backend.table, claimed.job.id);
+      expect(before.status).toBe("running");
+      expect(before.promptDispatchedAt).not.toBeNull();
+
+      expect(backend.retryJob(messageId)).toMatchObject({ outcome: "in_flight" });
+
+      // Resetting this row would break worker-a's lease CAS and let a second
+      // worker prompt the agent again — the duplicate turn the marker forbids.
+      expect(jobRow(backend.table, claimed.job.id)).toMatchObject({
+        status: "running",
+        lockedBy: "worker-a",
+        promptDispatchedAt: before.promptDispatchedAt,
+      });
+      // No second claimable copy, for this worker or any other.
+      await expect(backend.claim("worker-b", sessionId)).resolves.toBeNull();
+
+      // worker-a still owns the lease, so it can still finish honestly.
+      await expect(backend.fail(claimed.job, "provider ran and failed")).resolves.toBe(true);
+    });
+
+    it("refuses a running job through the route with a 409", async () => {
+      const sessionId = nextSessionId(backend.prefix);
+      const messageId = seedMessage(sessionId, "route must not interrupt a live send");
+      backend.enqueue(messageId, sessionId);
+      const claimed = await backend.claim("worker-a", sessionId);
+      if (!claimed) throw new Error(`Expected ${backend.label} to hand out a job.`);
+      await backend.markDispatched(claimed.job);
+      const dispatchedAt = jobRow(backend.table, claimed.job.id).promptDispatchedAt;
+
+      const response = await retryRequest(messageId);
+
+      // A silent 200 would tell the user we resent something we did not.
+      expect(response.status).toBe(409);
+      expect(await response.json()).toMatchObject({
+        error: "Delivery is already in progress for this message.",
+      });
+      expect(jobRow(backend.table, claimed.job.id)).toMatchObject({
+        status: "running",
+        promptDispatchedAt: dispatchedAt,
+      });
+    });
+
+    it("refuses an already-delivered job through the route with a 409", async () => {
+      const sessionId = nextSessionId(backend.prefix);
+      const messageId = seedMessage(sessionId, "already landed");
+      backend.enqueue(messageId, sessionId);
+      const claimed = await backend.claim("worker-a", sessionId);
+      if (!claimed) throw new Error(`Expected ${backend.label} to hand out a job.`);
+      await backend.markDispatched(claimed.job);
+      await backend.complete(claimed.job, null);
+      expect(jobRow(backend.table, claimed.job.id).status).toBe("succeeded");
+
+      const response = await retryRequest(messageId);
+
+      expect(response.status).toBe(409);
+      expect(jobRow(backend.table, claimed.job.id)).toMatchObject({
+        status: "succeeded",
+        promptDispatchedAt: expect.any(Number),
+      });
+    });
+
+    it("is an idempotent no-op for a job that is already queued", async () => {
+      const sessionId = nextSessionId(backend.prefix);
+      const messageId = seedMessage(sessionId, "already waiting its turn");
+      backend.enqueue(messageId, sessionId);
+      const queued = await backend.claim("worker-a", sessionId);
+      if (!queued) throw new Error(`Expected ${backend.label} to hand out a job.`);
+      // Put it back in the queue without a dispatch marker.
+      await backend.fail(queued.job, "transient");
+      backend.enqueue(messageId, sessionId);
+      expect(jobRow(backend.table, queued.job.id).status).toBe("pending");
+
+      const before = jobRow(backend.table, queued.job.id);
+
+      expect(backend.retryJob(messageId)).toMatchObject({ outcome: "already_queued" });
+      await expect(retryRequest(messageId).then((r) => r.status)).resolves.toBe(200);
+
+      // Idempotent: the row is untouched, and in particular no marker was
+      // cleared that we could not prove was unowned. Asserted as row state
+      // rather than by re-claiming, since a pending job is fair game for any
+      // worker the moment it is due.
+      expect(jobRow(backend.table, queued.job.id)).toMatchObject({
+        status: "pending",
+        promptDispatchedAt: before.promptDispatchedAt,
+        lockedBy: before.lockedBy,
+      });
     });
 
     it("enqueues a fresh job when the retry route finds no job row", async () => {
@@ -212,6 +310,7 @@ describe("external CLI delivery retry", () => {
     claim: cursor.claimCursorDeliveryJobForWorker,
     markDispatched: cursor.markCursorDeliveryJobDispatchedFromWorker,
     fail: cursor.failCursorDeliveryJobFromWorker,
+    complete: cursor.completeCursorDeliveryJobFromWorker,
     retryJob: cursor.retryCursorDeliveryJob,
   });
 
@@ -230,6 +329,7 @@ describe("external CLI delivery retry", () => {
     claim: claude.claimClaudeDeliveryJobForWorker,
     markDispatched: claude.markClaudeDeliveryJobDispatchedFromWorker,
     fail: claude.failClaudeDeliveryJobFromWorker,
+    complete: claude.completeClaudeDeliveryJobFromWorker,
     retryJob: claude.retryClaudeDeliveryJob,
   });
 
@@ -248,6 +348,7 @@ describe("external CLI delivery retry", () => {
     claim: codex.claimCodexDeliveryJobForWorker,
     markDispatched: codex.markCodexDeliveryJobDispatchedFromWorker,
     fail: codex.failCodexDeliveryJobFromWorker,
+    complete: codex.completeCodexDeliveryJobFromWorker,
     retryJob: codex.retryCodexDeliveryJob,
   });
 
@@ -266,6 +367,7 @@ describe("external CLI delivery retry", () => {
     claim: grok.claimGrokDeliveryJobForWorker,
     markDispatched: grok.markGrokDeliveryJobDispatchedFromWorker,
     fail: grok.failGrokDeliveryJobFromWorker,
+    complete: grok.completeGrokDeliveryJobFromWorker,
     retryJob: grok.retryGrokDeliveryJob,
   });
 

@@ -20,6 +20,7 @@ import { enqueueClaudeDeliveryJob, retryClaudeDeliveryJob } from "../claude/dura
 import { enqueueCodexDeliveryJob, retryCodexDeliveryJob } from "../codex/durable-delivery.ts";
 import { enqueueCursorDeliveryJob, retryCursorDeliveryJob } from "../cursor/durable-delivery.ts";
 import { enqueueGrokDeliveryJob, retryGrokDeliveryJob } from "../grok/durable-delivery.ts";
+import type { RetryDeliveryOutcome } from "../external-cli/durable-delivery.ts";
 import {
   enqueueOpenCodeDeliveryJob,
   retryOpenCodeDeliveryJob,
@@ -114,7 +115,9 @@ function requireMessageId(rawId: string): Effect.Effect<number, MessageControlEr
   });
 }
 
-function deliveryKind(reply: DbMessage): "forward_target_message" | "direct_user_message" {
+type DeliveryKind = "forward_target_message" | "direct_user_message";
+
+function deliveryKind(reply: DbMessage): DeliveryKind {
   return reply.forwardRole === "target" ? "forward_target_message" : "direct_user_message";
 }
 
@@ -124,6 +127,73 @@ const noDeliveryBackend = {
   error: "Message is not in a delivery-backed session.",
   status: 400,
 };
+
+/**
+ * Refusals, not failures. Resetting a job a worker is mid-way through would
+ * break its lease CAS and let a second worker prompt the agent again, so the
+ * retry declines and says so instead of reporting a send that never happened.
+ */
+const deliveryInFlight = {
+  _tag: "MessageControlError" as const,
+  error: "Delivery is already in progress for this message.",
+  status: 409,
+};
+
+const deliveryAlreadySent = {
+  _tag: "MessageControlError" as const,
+  error: "This message was already delivered.",
+  status: 409,
+};
+
+/** The four CLI backends differ only in which session-id field they enqueue. */
+type CliDeliveryRetry = {
+  retry: (messageId: number) => { outcome: RetryDeliveryOutcome } | null;
+  enqueue: (input: {
+    messageId: number;
+    messageSessionId: string;
+    sessionId: string;
+    kind: DeliveryKind;
+  }) => void;
+};
+
+function retryCliDelivery(
+  handler: CliDeliveryRetry,
+  input: { messageId: number; messageSessionId: string; sessionId: string; kind: DeliveryKind },
+): Effect.Effect<void, MessageControlError> {
+  return Effect.gen(function* () {
+    const result = yield* Effect.sync(() => handler.retry(input.messageId));
+    if (!result) {
+      // No job row at all: mirror the OpenCode branch and queue a fresh one.
+      yield* Effect.sync(() => handler.enqueue(input));
+      return;
+    }
+    if (result.outcome === "in_flight") return yield* Effect.fail(deliveryInFlight);
+    if (result.outcome === "already_delivered") return yield* Effect.fail(deliveryAlreadySent);
+  });
+}
+
+const cliDeliveryRetries = {
+  cursor: {
+    retry: retryCursorDeliveryJob,
+    enqueue: ({ messageId, messageSessionId, sessionId, kind }) =>
+      enqueueCursorDeliveryJob({ messageId, messageSessionId, cursorSessionId: sessionId, kind }),
+  },
+  claude: {
+    retry: retryClaudeDeliveryJob,
+    enqueue: ({ messageId, messageSessionId, sessionId, kind }) =>
+      enqueueClaudeDeliveryJob({ messageId, messageSessionId, claudeSessionId: sessionId, kind }),
+  },
+  codex: {
+    retry: retryCodexDeliveryJob,
+    enqueue: ({ messageId, messageSessionId, sessionId, kind }) =>
+      enqueueCodexDeliveryJob({ messageId, messageSessionId, codexSessionId: sessionId, kind }),
+  },
+  grok: {
+    retry: retryGrokDeliveryJob,
+    enqueue: ({ messageId, messageSessionId, sessionId, kind }) =>
+      enqueueGrokDeliveryJob({ messageId, messageSessionId, grokSessionId: sessionId, kind }),
+  },
+} satisfies Record<"cursor" | "claude" | "codex" | "grok", CliDeliveryRetry>;
 
 /**
  * Retry delivery for OpenCode or an external CLI backend. Explicit human retry
@@ -167,60 +237,16 @@ export function retryDeliveryEffect(
         }
         break;
       }
-      case "cursor": {
-        const retried = yield* Effect.sync(() => retryCursorDeliveryJob(id) != null);
-        if (!retried) {
-          yield* Effect.sync(() => {
-            enqueueCursorDeliveryJob({
-              messageId: id,
-              messageSessionId: reply.sessionId,
-              cursorSessionId: targetSessionId,
-              kind,
-            });
-          });
-        }
-        break;
-      }
-      case "claude": {
-        const retried = yield* Effect.sync(() => retryClaudeDeliveryJob(id) != null);
-        if (!retried) {
-          yield* Effect.sync(() => {
-            enqueueClaudeDeliveryJob({
-              messageId: id,
-              messageSessionId: reply.sessionId,
-              claudeSessionId: targetSessionId,
-              kind,
-            });
-          });
-        }
-        break;
-      }
-      case "codex": {
-        const retried = yield* Effect.sync(() => retryCodexDeliveryJob(id) != null);
-        if (!retried) {
-          yield* Effect.sync(() => {
-            enqueueCodexDeliveryJob({
-              messageId: id,
-              messageSessionId: reply.sessionId,
-              codexSessionId: targetSessionId,
-              kind,
-            });
-          });
-        }
-        break;
-      }
+      case "cursor":
+      case "claude":
+      case "codex":
       case "grok": {
-        const retried = yield* Effect.sync(() => retryGrokDeliveryJob(id) != null);
-        if (!retried) {
-          yield* Effect.sync(() => {
-            enqueueGrokDeliveryJob({
-              messageId: id,
-              messageSessionId: reply.sessionId,
-              grokSessionId: targetSessionId,
-              kind,
-            });
-          });
-        }
+        yield* retryCliDelivery(cliDeliveryRetries[backend], {
+          messageId: id,
+          messageSessionId: reply.sessionId,
+          sessionId: targetSessionId,
+          kind,
+        });
         break;
       }
       default:

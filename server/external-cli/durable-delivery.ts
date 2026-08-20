@@ -59,6 +59,24 @@ export type ExternalCliDeliveryJobRow = {
   updatedAt: string;
 };
 
+/**
+ * Terminal and unowned, so a human retry may reset the row and clear the
+ * dispatch marker without stranding a worker mid-flight.
+ */
+const RETRYABLE_JOB_STATUSES = ["failed", "cancelled"] as const;
+
+/**
+ * Why a human retry did or did not resend. `in_flight` and `already_delivered`
+ * are refusals: the route turns them into a 409 rather than a silent success,
+ * because the caller asked us to send something we deliberately did not send.
+ */
+export type RetryDeliveryOutcome = "retried" | "already_queued" | "in_flight" | "already_delivered";
+
+export type RetryDeliveryJobResult<TJob> = {
+  outcome: RetryDeliveryOutcome;
+  job: TJob;
+};
+
 const WORKER_POLL_MS = Number(process.env.SAY_TO_ME_EXTERNAL_CLI_DELIVERY_POLL_MS || 250);
 const JOB_LEASE_MS = 30_000;
 const DEFAULT_MAX_ATTEMPTS = 3;
@@ -303,22 +321,43 @@ export function createExternalCliDurableDelivery<
   }
 
   /**
-   * Human override: reset a delivery job and clear the dispatch marker so it can
-   * be sent again. Automatic re-enqueue paths must not clear the marker.
+   * Human override: reset a terminal delivery job and clear the dispatch marker
+   * so it can be sent again. Automatic re-enqueue paths must not clear it.
+   *
+   * Only `failed` and `cancelled` qualify. Both are terminal with no worker
+   * holding the lease, so clearing the marker cannot strand anyone. A `running`
+   * job must be refused: resetting it would break the in-flight worker's
+   * lease CAS (`leaseHeld` matches on status, attemptCount and lockedBy), and a
+   * second worker would then claim the cleared row and prompt the agent again —
+   * the duplicate turn the marker exists to forbid. Two retries racing on a
+   * `failed` job hit the same hazard, which is why the status is re-read and
+   * gated inside the transaction rather than trusted from the caller.
    */
-  function retryDeliveryJob(messageId: number): TJob | null {
-    const row = drizzleDb
-      .select(config.jobSelectColumns)
-      .from(config.jobsTable)
-      .where(eq(config.jobsTable.messageId, messageId))
-      .orderBy(asc(config.jobsTable.id))
-      .limit(1)
-      .get();
-    if (!row) return null;
-    const job = config.validateJob(row, `retry${config.backendLabel}DeliveryJob`);
-
+  function retryDeliveryJob(messageId: number): RetryDeliveryJobResult<TJob> | null {
+    const context = `retry${config.backendLabel}DeliveryJob`;
     const result = drizzleDb.transaction((tx) => {
-      tx.update(config.jobsTable)
+      const row = tx
+        .select(config.jobSelectColumns)
+        .from(config.jobsTable)
+        .where(eq(config.jobsTable.messageId, messageId))
+        .orderBy(asc(config.jobsTable.id))
+        .limit(1)
+        .get();
+      if (!row) return null;
+      const job = config.validateJob(row, context);
+
+      // A worker is mid-flight, or the prompt already landed: leave both the row
+      // and the marker exactly as they are.
+      if (job.status === "running") return { outcome: "in_flight" as const, job };
+      if (job.status === "succeeded") return { outcome: "already_delivered" as const, job };
+      // Another attempt is already coming. Idempotent: never clear a marker we
+      // cannot prove is unowned.
+      if (job.status === "pending" || job.status === "retrying") {
+        return { outcome: "already_queued" as const, job };
+      }
+
+      const reset = tx
+        .update(config.jobsTable)
         .set({
           status: "pending",
           nextAttemptAt: Date.now(),
@@ -328,8 +367,15 @@ export function createExternalCliDurableDelivery<
           promptDispatchedAt: null,
           updatedAt: nowSql(),
         })
-        .where(eq(config.jobsTable.id, job.id))
+        .where(
+          and(
+            eq(config.jobsTable.id, job.id),
+            inArray(config.jobsTable.status, RETRYABLE_JOB_STATUSES),
+          ),
+        )
         .run();
+      if (reset.changes === 0) return { outcome: "in_flight" as const, job };
+
       updateOpencodeDelivery(messageId, "queued", null, null);
       const refreshed = tx
         .select(config.jobSelectColumns)
@@ -340,16 +386,21 @@ export function createExternalCliDurableDelivery<
       if (!refreshed) {
         throw new Error(`Failed to load ${config.backendLabel} delivery job after retry.`);
       }
-      return config.validateJob(refreshed, `retry${config.backendLabel}DeliveryJob`);
+      return { outcome: "retried" as const, job: config.validateJob(refreshed, context) };
     });
 
-    const sessionId = getSessionId(result);
-    void config.ensureBooWorker(sessionId).catch((error) => {
-      console.error(
-        `[${config.backendLabel}-delivery] failed to ensure boo worker for ${sessionId}:`,
-        error,
-      );
-    });
+    if (!result) return null;
+    // A reset job with no worker polling its session sits pending forever, and so
+    // does one that was already queued when the user pressed Retry.
+    if (result.outcome === "retried" || result.outcome === "already_queued") {
+      const sessionId = getSessionId(result.job);
+      void config.ensureBooWorker(sessionId).catch((error) => {
+        console.error(
+          `[${config.backendLabel}-delivery] failed to ensure boo worker for ${sessionId}:`,
+          error,
+        );
+      });
+    }
     return result;
   }
 
