@@ -316,6 +316,7 @@ describe("MessageList", () => {
       message({
         id: 31,
         author: "user",
+        sessionId: "ses_82c41693cb14xpTRmGfTDe4Qs6",
         status: "received",
         text: "<say-to-me-system>ses_76df45e4b138exNzpW0u2nXj8h is idle now</say-to-me-system>",
         opencodeDeliveryStatus: "queued",
@@ -365,6 +366,7 @@ describe("MessageList", () => {
       message({
         id: 31,
         author: "user",
+        sessionId: "ses_82c41693cb14xpTRmGfTDe4Qs6",
         status: "received",
         text: "<say-to-me-system>ses_76df45e4b138exNzpW0u2nXj8h is idle now</say-to-me-system>",
         opencodeDeliveryStatus: "failed",
@@ -405,6 +407,7 @@ describe("MessageList", () => {
       message({
         id: 33,
         author: "user",
+        sessionId: "ses_82c41693cb14xpTRmGfTDe4Qs6",
         status: "received",
         text: "<say-to-me-system>ses_76df45e4b138exNzpW0u2nXj8h is idle now</say-to-me-system>",
         opencodeDeliveryStatus: "queued",
@@ -623,6 +626,7 @@ describe("MessageList", () => {
       message({
         id: 1,
         author: "user",
+        sessionId: "ses_82c41693cb14xpTRmGfTDe4Qs6",
         status: "received",
         opencodeDeliveryStatus: "failed",
         opencodeDeliveryError: "OpenCode returned HTTP 500",
@@ -667,6 +671,7 @@ describe("MessageList", () => {
       message({
         id: 1,
         author: "user",
+        sessionId: "ses_82c41693cb14xpTRmGfTDe4Qs6",
         status: "received",
         opencodeDeliveryStatus: "cli_timed_out",
         opencodeDeliveryError:

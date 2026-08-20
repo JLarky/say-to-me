@@ -1,4 +1,4 @@
-import { Context, Data, Effect } from "effect";
+import { Context, Data, Effect, Either } from "effect";
 
 export type ExternalCliDeliveryJobKind = "direct_user_message" | "forward_target_message";
 
@@ -28,9 +28,16 @@ export type ExternalCliDeliveryJob = {
   lockedAt: number | null;
   lockedBy: string | null;
   lastError: string | null;
+  promptDispatchedAt: number | null;
   createdAt: string;
   updatedAt: string;
 };
+
+/**
+ * How a terminal delivery is reported on the message. A dispatched job whose
+ * outcome is unknown must not claim "failed to send".
+ */
+export type DeliveryTerminalOutcome = "failed" | "unconfirmed";
 
 export type DeliveryOutcome = "sent" | "failed" | "cancelled";
 
@@ -155,7 +162,7 @@ export type PromptClientService = {
   sendPrompt: (
     job: ExternalCliDeliveryJob,
     message: DeliveryMessage,
-  ) => Effect.Effect<string, unknown>;
+  ) => Effect.Effect<string, ProviderPromptError>;
 };
 
 export type WorkerIdentityService = { id: string };
@@ -271,9 +278,15 @@ export function makeExternalCliDeliveryWorkflow(
     store: MessageStoreService,
     fx: DeliveryEffectsService,
     error = failureMessage,
+    outcome: DeliveryTerminalOutcome = "failed",
   ): Effect.Effect<void, MessageStoreError | DeliveryEffectsError> {
     return Effect.gen(function* () {
-      yield* store.updateOpencodeDelivery(message.id, "failed", error, null);
+      yield* store.updateOpencodeDelivery(
+        message.id,
+        outcome === "unconfirmed" ? "cli_unconfirmed" : "failed",
+        error,
+        null,
+      );
       if (message.forwardRole) yield* store.updateForwardStatus(message.id, "failed");
       if (message.forwardRole === "target" && message.forwardSourceMessageId != null) {
         yield* store.updateForwardTarget(message.forwardSourceMessageId, message.id, "failed");
@@ -309,34 +322,58 @@ export function makeExternalCliDeliveryWorkflow(
         yield* store.markCompletionWorkSeen(message.id);
       }
       yield* fx.broadcastQueue(message.sessionId);
-      const outcome = yield* prompt.sendPrompt(job, message).pipe(
-        Effect.map((reply) => ({ _tag: "sent" as const, reply })),
-        Effect.catchAll((error) =>
-          Effect.succeed({
-            _tag: "failed" as const,
-            error: error instanceof Error ? error.message : String(error),
-          }),
-        ),
-      );
 
-      if (outcome._tag === "sent") {
-        yield* fx.insertAgentReply(job.externalSessionId, outcome.reply);
+      // Mark dispatched before prompting. Both orderings have a window; this
+      // one fails towards an honest unconfirmed report rather than a duplicate turn.
+      const promptDispatched = yield* queue.markDispatched(job);
+      if (!promptDispatched) {
+        // Another worker owns the job; record nothing.
+        return true;
+      }
+
+      const outcome = yield* Effect.either(prompt.sendPrompt(job, message));
+
+      if (Either.isRight(outcome)) {
+        yield* fx.insertAgentReply(job.externalSessionId, outcome.right);
         const completed = yield* queue.complete(job, "sent");
         if (completed) yield* afterDelivery(job, message, store, fx);
         return true;
       }
 
-      if (job.attemptCount >= job.maxAttempts) {
-        const failed = yield* queue.fail(job, outcome.error);
-        if (failed) yield* afterDeliveryFailure(message, store, fx, outcome.error);
-      } else {
-        const retried = yield* queue.retry(job, outcome.error);
-        if (retried) {
-          yield* store.updateOpencodeDelivery(message.id, "queued", outcome.error, null);
+      const action = deliveryFailureAction({
+        failure: outcome.left,
+        promptDispatched,
+        attemptCount: job.attemptCount,
+        maxAttempts: job.maxAttempts,
+      });
+
+      switch (action._tag) {
+        case "abandon":
+          return true;
+        case "retry": {
+          const retried = yield* queue.retry(job, action.error);
+          if (retried) {
+            yield* store.updateOpencodeDelivery(message.id, "queued", action.error, null);
+          }
+          yield* fx.broadcastQueue(message.sessionId);
+          return true;
+        }
+        case "failed": {
+          const failed = yield* queue.fail(job, action.error);
+          if (failed) yield* afterDeliveryFailure(message, store, fx, action.error, "failed");
+          else yield* fx.broadcastQueue(message.sessionId);
+          return true;
+        }
+        case "unconfirmed": {
+          const recorded = yield* queue.fail(job, action.error);
+          if (recorded) {
+            yield* afterDeliveryFailure(message, store, fx, action.error, "unconfirmed");
+          } else {
+            yield* fx.broadcastQueue(message.sessionId);
+          }
+          return true;
         }
       }
-      yield* fx.broadcastQueue(message.sessionId);
-      return true;
     }).pipe(Effect.catchAll(() => Effect.succeed(true)));
   }
 

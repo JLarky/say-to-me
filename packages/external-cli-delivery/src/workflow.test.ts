@@ -5,6 +5,8 @@ import {
   ExternalCliDeliveryQueueError,
   makeExternalCliDeliveryWorkflow,
   MessageStoreError,
+  ProviderFailedError,
+  ProviderNotStartedError,
   type DeliveryEffectsService,
   type DeliveryMessage,
   type DeliveryQueueService,
@@ -33,7 +35,11 @@ function userMessage(
   };
 }
 
-function directJob(messageId: number, sessionId: string): ExternalCliDeliveryJob {
+function directJob(
+  messageId: number,
+  sessionId: string,
+  overrides: Partial<ExternalCliDeliveryJob> = {},
+): ExternalCliDeliveryJob {
   return {
     id: 1,
     messageId,
@@ -47,8 +53,10 @@ function directJob(messageId: number, sessionId: string): ExternalCliDeliveryJob
     lockedAt: 100,
     lockedBy: "unit-worker",
     lastError: null,
+    promptDispatchedAt: null,
     createdAt: "2026-06-29 00:00:00",
     updatedAt: "2026-06-29 00:00:00",
+    ...overrides,
   };
 }
 
@@ -97,6 +105,18 @@ function recordingEffects(): {
   return { layer: Layer.succeed(workflow.DeliveryEffects, service), replies, broadcasts };
 }
 
+function unusedQueue(): DeliveryQueueService {
+  return {
+    claimNext: () => Effect.die("unused"),
+    markDispatched: () => Effect.die("unused"),
+    complete: () => Effect.die("unused"),
+    retry: () => Effect.die("unused"),
+    fail: () => Effect.die("unused"),
+    cancel: () => Effect.die("unused"),
+    renew: () => Effect.die("unused"),
+  };
+}
+
 describe("external-cli delivery workflow (in-memory, no DB)", () => {
   it("marks a delivered message sent, inserts reply, and broadcasts", async () => {
     const sessionId = "cc_unitDirect";
@@ -104,19 +124,21 @@ describe("external-cli delivery workflow (in-memory, no DB)", () => {
     const store = inMemoryStore([userMessage({ id: 42, sessionId, text: "please echo" })]);
     const fx = recordingEffects();
     let completed = false;
+    let dispatched = false;
 
     const queue = Layer.succeed(workflow.DeliveryQueue, {
+      ...unusedQueue(),
       claimNext: () => Effect.succeed(job),
-      markDispatched: () => Effect.succeed(true),
+      markDispatched: () =>
+        Effect.sync(() => {
+          dispatched = true;
+          return true;
+        }),
       complete: () =>
         Effect.sync(() => {
           completed = true;
           return true;
         }),
-      retry: () => Effect.die("unused"),
-      fail: () => Effect.die("unused"),
-      cancel: () => Effect.die("unused"),
-      renew: () => Effect.die("unused"),
     } satisfies DeliveryQueueService);
     const prompt = Layer.succeed(workflow.PromptClient, {
       sendPrompt: (_job, message) => Effect.succeed(`echo: ${message.text}`),
@@ -132,10 +154,146 @@ describe("external-cli delivery workflow (in-memory, no DB)", () => {
     );
 
     expect(handled).toBe(true);
+    expect(dispatched).toBe(true);
     expect(completed).toBe(true);
     expect(store.get(42)?.opencodeDeliveryStatus).toBe("sent");
     expect(fx.replies).toEqual(["echo: please echo"]);
     expect(fx.broadcasts).toContain(sessionId);
+  });
+
+  it("does not re-prompt after a post-dispatch provider failure", async () => {
+    const sessionId = "cc_postDispatch";
+    const job = directJob(42, sessionId);
+    const store = inMemoryStore([userMessage({ id: 42, sessionId, text: "prompt once" })]);
+    const fx = recordingEffects();
+    let promptCount = 0;
+    let failed = false;
+    let retried = false;
+
+    const queue = Layer.succeed(workflow.DeliveryQueue, {
+      ...unusedQueue(),
+      claimNext: () => Effect.succeed(job),
+      markDispatched: () => Effect.succeed(true),
+      fail: () =>
+        Effect.sync(() => {
+          failed = true;
+          return true;
+        }),
+      retry: () =>
+        Effect.sync(() => {
+          retried = true;
+          return true;
+        }),
+    } satisfies DeliveryQueueService);
+    const prompt = Layer.succeed(workflow.PromptClient, {
+      sendPrompt: () => {
+        promptCount += 1;
+        return Effect.fail(new ProviderFailedError({ message: "exited with code 1" }));
+      },
+    } satisfies PromptClientService);
+    const worker = Layer.succeed(workflow.WorkerIdentity, { id: "unit-worker" });
+
+    await Effect.runPromise(
+      workflow
+        .runDeliveryOnce(sessionId)
+        .pipe(Effect.provide(Layer.mergeAll(queue, prompt, worker, store.layer, fx.layer))),
+    );
+
+    expect(promptCount).toBe(1);
+    expect(failed).toBe(true);
+    expect(retried).toBe(false);
+    expect(store.get(42)?.opencodeDeliveryStatus).toBe("cli_unconfirmed");
+  });
+
+  it("retries a spawn failure even though the job is already marked dispatched", async () => {
+    const sessionId = "cc_spawnFail";
+    const job = directJob(42, sessionId);
+    const store = inMemoryStore([userMessage({ id: 42, sessionId, text: "spawn boom" })]);
+    const fx = recordingEffects();
+    let retried = false;
+    let failed = false;
+
+    const queue = Layer.succeed(workflow.DeliveryQueue, {
+      ...unusedQueue(),
+      claimNext: () => Effect.succeed(job),
+      markDispatched: () => Effect.succeed(true),
+      retry: () =>
+        Effect.sync(() => {
+          retried = true;
+          return true;
+        }),
+      fail: () =>
+        Effect.sync(() => {
+          failed = true;
+          return true;
+        }),
+    } satisfies DeliveryQueueService);
+    const prompt = Layer.succeed(workflow.PromptClient, {
+      sendPrompt: () => Effect.fail(new ProviderNotStartedError({ message: "spawn ENOENT" })),
+    } satisfies PromptClientService);
+    const worker = Layer.succeed(workflow.WorkerIdentity, { id: "unit-worker" });
+
+    await Effect.runPromise(
+      workflow
+        .runDeliveryOnce(sessionId)
+        .pipe(Effect.provide(Layer.mergeAll(queue, prompt, worker, store.layer, fx.layer))),
+    );
+
+    expect(retried).toBe(true);
+    expect(failed).toBe(false);
+    expect(store.get(42)?.opencodeDeliveryStatus).toBe("queued");
+  });
+
+  it("records nothing when markDispatched reports the lease is lost", async () => {
+    const sessionId = "cc_leaseLost";
+    const job = directJob(42, sessionId);
+    const store = inMemoryStore([userMessage({ id: 42, sessionId, text: "do not send" })]);
+    const fx = recordingEffects();
+    let prompted = false;
+    let failed = false;
+    let retried = false;
+    let completed = false;
+
+    const queue = Layer.succeed(workflow.DeliveryQueue, {
+      ...unusedQueue(),
+      claimNext: () => Effect.succeed(job),
+      markDispatched: () => Effect.succeed(false),
+      complete: () =>
+        Effect.sync(() => {
+          completed = true;
+          return true;
+        }),
+      retry: () =>
+        Effect.sync(() => {
+          retried = true;
+          return true;
+        }),
+      fail: () =>
+        Effect.sync(() => {
+          failed = true;
+          return true;
+        }),
+    } satisfies DeliveryQueueService);
+    const prompt = Layer.succeed(workflow.PromptClient, {
+      sendPrompt: () => {
+        prompted = true;
+        return Effect.succeed("should not run");
+      },
+    } satisfies PromptClientService);
+    const worker = Layer.succeed(workflow.WorkerIdentity, { id: "unit-worker" });
+
+    const handled = await Effect.runPromise(
+      workflow
+        .runDeliveryOnce(sessionId)
+        .pipe(Effect.provide(Layer.mergeAll(queue, prompt, worker, store.layer, fx.layer))),
+    );
+
+    expect(handled).toBe(true);
+    expect(prompted).toBe(false);
+    expect(failed).toBe(false);
+    expect(retried).toBe(false);
+    expect(completed).toBe(false);
+    expect(store.get(42)?.opencodeDeliveryStatus).toBe("pending");
   });
 
   it("handles a typed store failure instead of dying the worker", async () => {
@@ -155,13 +313,8 @@ describe("external-cli delivery workflow (in-memory, no DB)", () => {
       updateForwardTarget: () => Effect.die("unused"),
     } satisfies MessageStoreService);
     const queue = Layer.succeed(workflow.DeliveryQueue, {
+      ...unusedQueue(),
       claimNext: () => Effect.succeed(job),
-      markDispatched: () => Effect.die("unused"),
-      complete: () => Effect.die("unused"),
-      retry: () => Effect.die("unused"),
-      fail: () => Effect.die("unused"),
-      cancel: () => Effect.die("unused"),
-      renew: () => Effect.die("unused"),
     } satisfies DeliveryQueueService);
     const prompt = Layer.succeed(workflow.PromptClient, {
       sendPrompt: () => Effect.die("should not send"),
@@ -188,6 +341,7 @@ describe("external-cli delivery workflow (in-memory, no DB)", () => {
   it("handles a typed queue failure instead of dying the worker", async () => {
     const boom = new Error("sqlite queue exploded");
     const queue = Layer.succeed(workflow.DeliveryQueue, {
+      ...unusedQueue(),
       claimNext: () =>
         Effect.try({
           try: () => {
@@ -195,12 +349,6 @@ describe("external-cli delivery workflow (in-memory, no DB)", () => {
           },
           catch: (cause) => new ExternalCliDeliveryQueueError({ cause }),
         }),
-      markDispatched: () => Effect.die("unused"),
-      complete: () => Effect.die("unused"),
-      retry: () => Effect.die("unused"),
-      fail: () => Effect.die("unused"),
-      cancel: () => Effect.die("unused"),
-      renew: () => Effect.die("unused"),
     } satisfies DeliveryQueueService);
     const store = inMemoryStore([]);
     const prompt = Layer.succeed(workflow.PromptClient, {
@@ -231,12 +379,9 @@ describe("external-cli delivery workflow (in-memory, no DB)", () => {
     const heldByRenewWorker = (candidate: ExternalCliDeliveryJob) =>
       candidate.lockedBy === "renew-worker" && candidate.attemptCount === job.attemptCount;
     const queue = Layer.succeed(workflow.DeliveryQueue, {
-      claimNext: () => Effect.die("unused"),
+      ...unusedQueue(),
       markDispatched: (candidate) => Effect.succeed(heldByRenewWorker(candidate)),
       complete: (candidate) => Effect.succeed(heldByRenewWorker(candidate)),
-      retry: () => Effect.die("unused"),
-      fail: () => Effect.die("unused"),
-      cancel: () => Effect.die("unused"),
       renew: (candidate) =>
         Effect.sync(() => {
           if (!heldByRenewWorker(candidate)) return null;
