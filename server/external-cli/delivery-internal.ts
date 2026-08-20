@@ -29,6 +29,8 @@ export type ExternalCliDeliveryInternalConfig<TLease extends ExternalCliDelivery
   completeDeliveryJobFromWorker: (job: TLease, reply: string | null) => Promise<boolean>;
   retryDeliveryJobFromWorker: (job: TLease, error: string) => Promise<boolean>;
   failDeliveryJobFromWorker: (job: TLease, error: string) => Promise<boolean>;
+  markDeliveryJobDispatchedFromWorker: (job: TLease) => Promise<boolean>;
+  markDeliveryJobUnconfirmedFromWorker: (job: TLease, error: string) => Promise<boolean>;
   cancelDeliveryJobFromWorker: (job: TLease, reason: string) => Promise<boolean>;
   renewDeliveryJobFromWorker: (job: TLease) => Promise<TLease | null>;
 };
@@ -143,6 +145,20 @@ export function createExternalCliDeliveryInternalDispatcher<
         optionalStringField(body, config.sessionIdField),
       );
       return json({ claimed });
+    }
+
+    if (pathname === `${config.basePath}/dispatch`) {
+      const job = leaseField(body, config.sessionIdLeaseField);
+      if (!job) return error("Missing valid job lease.");
+      return json({ ok: await config.markDeliveryJobDispatchedFromWorker(job) });
+    }
+
+    if (pathname === `${config.basePath}/unconfirmed`) {
+      const job = leaseField(body, config.sessionIdLeaseField);
+      const message = stringField(body, "error");
+      if (!job) return error("Missing valid job lease.");
+      if (!message) return error("Missing error.");
+      return json({ ok: await config.markDeliveryJobUnconfirmedFromWorker(job, message) });
     }
 
     if (pathname === `${config.basePath}/complete`) {

@@ -40,6 +40,13 @@ export function classifyWaitingState(
     if (userMsgStatus === "unavailable" || userMsgStatus === "unreachable") {
       return { state: "unknown", reason: "OpenCode is unavailable for this session." };
     }
+    if (delivery === "cli_unconfirmed") {
+      return {
+        state: "blocked",
+        reason: "The last message reached the CLI, but the delivery was never confirmed.",
+        action: "Check the session before resending",
+      };
+    }
     if (delivery === "failed" || delivery === "cli_timed_out") {
       return {
         state: "blocked",

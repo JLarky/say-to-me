@@ -44,12 +44,19 @@ function getDeliveryBadge(status: DeliveryStatusValue) {
     case "queued":
     case "pending":
     case "cli_timed_out":
+    case "cli_unconfirmed":
       return deliveryBadge.warning;
   }
 }
 
+/**
+ * An unconfirmed delivery may still be in progress inside the agent, so it reads
+ * as a warning rather than an error the way a failed send does.
+ */
 function getDeliveryDetailTone(status: DeliveryStatusValue | null) {
-  return status === "cli_timed_out" ? delivery.detailWarning : delivery.detailError;
+  return status === "cli_timed_out" || status === "cli_unconfirmed"
+    ? delivery.detailWarning
+    : delivery.detailError;
 }
 
 const authorBadge = stylex.create({
@@ -981,7 +988,8 @@ function DeliveryStatus({
     ? (message.opencodeDeliveryStatus as DeliveryStatusValue)
     : null;
   const provider = deliveryProviderLabel(message);
-  const detailIsVisibleByDefault = status === "failed" || status === "cli_timed_out";
+  const detailIsVisibleByDefault =
+    status === "failed" || status === "cli_timed_out" || status === "cli_unconfirmed";
   const canRetryDelivery = provider === "OpenCode";
 
   return (

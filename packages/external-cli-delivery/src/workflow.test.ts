@@ -107,6 +107,7 @@ describe("external-cli delivery workflow (in-memory, no DB)", () => {
 
     const queue = Layer.succeed(workflow.DeliveryQueue, {
       claimNext: () => Effect.succeed(job),
+      markDispatched: () => Effect.succeed(true),
       complete: () =>
         Effect.sync(() => {
           completed = true;
@@ -155,6 +156,7 @@ describe("external-cli delivery workflow (in-memory, no DB)", () => {
     } satisfies MessageStoreService);
     const queue = Layer.succeed(workflow.DeliveryQueue, {
       claimNext: () => Effect.succeed(job),
+      markDispatched: () => Effect.die("unused"),
       complete: () => Effect.die("unused"),
       retry: () => Effect.die("unused"),
       fail: () => Effect.die("unused"),
@@ -193,6 +195,7 @@ describe("external-cli delivery workflow (in-memory, no DB)", () => {
           },
           catch: (cause) => new ExternalCliDeliveryQueueError({ cause }),
         }),
+      markDispatched: () => Effect.die("unused"),
       complete: () => Effect.die("unused"),
       retry: () => Effect.die("unused"),
       fail: () => Effect.die("unused"),
@@ -222,20 +225,22 @@ describe("external-cli delivery workflow (in-memory, no DB)", () => {
     expect(Exit.isFailure(exit) && Cause.isDie(exit.cause)).toBe(false);
   });
 
-  it("renews a lease and rejects stale completions without a database", async () => {
+  it("gates transitions on the lease holder, not on the renewed lease timestamp", async () => {
     let lockedAt = 100;
     const job = directJob(9, "cc_lease");
+    const heldByRenewWorker = (candidate: ExternalCliDeliveryJob) =>
+      candidate.lockedBy === "renew-worker" && candidate.attemptCount === job.attemptCount;
     const queue = Layer.succeed(workflow.DeliveryQueue, {
       claimNext: () => Effect.die("unused"),
-      complete: (candidate) =>
-        Effect.succeed(candidate.lockedAt === lockedAt && candidate.lockedBy === "renew-worker"),
+      markDispatched: (candidate) => Effect.succeed(heldByRenewWorker(candidate)),
+      complete: (candidate) => Effect.succeed(heldByRenewWorker(candidate)),
       retry: () => Effect.die("unused"),
       fail: () => Effect.die("unused"),
       cancel: () => Effect.die("unused"),
       renew: (candidate) =>
         Effect.sync(() => {
-          if (candidate.lockedBy !== "renew-worker") return null;
-          lockedAt = 200;
+          if (!heldByRenewWorker(candidate)) return null;
+          lockedAt += 100;
           return { ...candidate, lockedAt };
         }),
     } satisfies DeliveryQueueService);
@@ -243,17 +248,22 @@ describe("external-cli delivery workflow (in-memory, no DB)", () => {
     const result = await Effect.runPromise(
       Effect.gen(function* () {
         const q = yield* workflow.DeliveryQueue;
-        const claimed = { ...job, lockedBy: "renew-worker", lockedAt: 100 };
+        const claimed = { ...job, lockedBy: "renew-worker", lockedAt };
         const renewed = yield* q.renew(claimed);
         expect(renewed).not.toBeNull();
         if (!renewed) throw new Error("Expected renewed job.");
         return {
-          oldComplete: yield* q.complete(claimed, "sent"),
-          newComplete: yield* q.complete(renewed, "sent"),
+          completeWithPreRenewalLease: yield* q.complete(claimed, "sent"),
+          completeWithRenewedLease: yield* q.complete(renewed, "sent"),
+          completeFromAnotherHolder: yield* q.complete({ ...claimed, lockedBy: "other" }, "sent"),
         };
       }).pipe(Effect.provide(queue)),
     );
 
-    expect(result).toEqual({ oldComplete: false, newComplete: true });
+    expect(result).toEqual({
+      completeWithPreRenewalLease: true,
+      completeWithRenewedLease: true,
+      completeFromAnotherHolder: false,
+    });
   });
 });

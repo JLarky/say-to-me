@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, lte, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lte, sql, type SQL } from "drizzle-orm";
 import { Effect, Layer, Schedule } from "effect";
 import { randomUUID } from "node:crypto";
 import {
@@ -53,6 +53,7 @@ export type ExternalCliDeliveryJobRow = {
   lockedAt: number | null;
   lockedBy: string | null;
   lastError: string | null;
+  promptDispatchedAt: number | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -60,6 +61,13 @@ export type ExternalCliDeliveryJobRow = {
 const WORKER_POLL_MS = Number(process.env.SAY_TO_ME_EXTERNAL_CLI_DELIVERY_POLL_MS || 250);
 const JOB_LEASE_MS = 30_000;
 const DEFAULT_MAX_ATTEMPTS = 3;
+
+/**
+ * How a terminal delivery is reported. A dispatched job that could not be
+ * confirmed is not the same thing as a delivery that never left the queue, and
+ * saying "failed to send" for it would be untrue.
+ */
+export type DeliveryTerminalOutcome = "failed" | "unconfirmed";
 
 type DeliveryJobsTable =
   | typeof claudeDeliveryJobs
@@ -81,6 +89,7 @@ type DeliveryJobSelectColumns =
       lockedAt: typeof claudeDeliveryJobs.lockedAt;
       lockedBy: typeof claudeDeliveryJobs.lockedBy;
       lastError: typeof claudeDeliveryJobs.lastError;
+      promptDispatchedAt: typeof claudeDeliveryJobs.promptDispatchedAt;
       createdAt: typeof claudeDeliveryJobs.createdAt;
       updatedAt: typeof claudeDeliveryJobs.updatedAt;
     }
@@ -97,6 +106,7 @@ type DeliveryJobSelectColumns =
       lockedAt: typeof cursorDeliveryJobs.lockedAt;
       lockedBy: typeof cursorDeliveryJobs.lockedBy;
       lastError: typeof cursorDeliveryJobs.lastError;
+      promptDispatchedAt: typeof cursorDeliveryJobs.promptDispatchedAt;
       createdAt: typeof cursorDeliveryJobs.createdAt;
       updatedAt: typeof cursorDeliveryJobs.updatedAt;
     }
@@ -113,6 +123,7 @@ type DeliveryJobSelectColumns =
       lockedAt: typeof codexDeliveryJobs.lockedAt;
       lockedBy: typeof codexDeliveryJobs.lockedBy;
       lastError: typeof codexDeliveryJobs.lastError;
+      promptDispatchedAt: typeof codexDeliveryJobs.promptDispatchedAt;
       createdAt: typeof codexDeliveryJobs.createdAt;
       updatedAt: typeof codexDeliveryJobs.updatedAt;
     }
@@ -129,6 +140,7 @@ type DeliveryJobSelectColumns =
       lockedAt: typeof grokDeliveryJobs.lockedAt;
       lockedBy: typeof grokDeliveryJobs.lockedBy;
       lastError: typeof grokDeliveryJobs.lastError;
+      promptDispatchedAt: typeof grokDeliveryJobs.promptDispatchedAt;
       createdAt: typeof grokDeliveryJobs.createdAt;
       updatedAt: typeof grokDeliveryJobs.updatedAt;
     };
@@ -151,6 +163,11 @@ export type ExternalCliDurableDeliveryConfig<
   sessionIdField: TSessionIdField;
   runtimeKey: TRuntimeKey;
   failureMessage: string;
+  /**
+   * Reported when a job was handed to the provider but its outcome is unknown.
+   * Must not claim the delivery failed: the agent may be acting on it right now.
+   */
+  unconfirmedMessage: string;
   noCwdMessage: string;
   jobsTable: DeliveryJobsTable;
   sessionIdColumn: SessionIdColumn;
@@ -246,6 +263,8 @@ export function createExternalCliDurableDelivery<
         return job;
       }
       if (job.status === "failed") {
+        // Revive only jobs whose prompt never reached the provider. The marker is
+        // never cleared, so a dispatched job stays terminal across re-enqueues.
         const cas = tx
           .update(config.jobsTable)
           .set({
@@ -256,7 +275,13 @@ export function createExternalCliDurableDelivery<
             lastError: null,
             updatedAt: nowSql(),
           })
-          .where(and(eq(config.jobsTable.id, job.id), eq(config.jobsTable.status, "failed")))
+          .where(
+            and(
+              eq(config.jobsTable.id, job.id),
+              eq(config.jobsTable.status, "failed"),
+              isNull(config.jobsTable.promptDispatchedAt),
+            ),
+          )
           .run();
         if (cas.changes === 1) {
           updateOpencodeDelivery(input.messageId, "queued", null, null);
@@ -369,34 +394,84 @@ export function createExternalCliDurableDelivery<
     };
   }
 
-  function leaseWhere(
-    job: Pick<ExternalCliDeliveryJob, "id" | "attemptCount" | "lockedAt" | "lockedBy">,
+  /**
+   * The compare-and-set predicate every worker-driven transition is built from:
+   * the job, the attempt, and the attempt's holder.
+   *
+   * `lockedAt` is deliberately absent. Lease renewal bumps it, so it identifies a
+   * moment rather than an owner; matching on it lets a renewal that commits while
+   * a worker is finishing make a successful delivery fail to record its reply.
+   */
+  function leaseHeld(
+    job: Pick<ExternalCliDeliveryJob, "id" | "attemptCount" | "lockedBy">,
   ): SQL | undefined {
-    if (job.lockedAt == null || job.lockedBy == null) return sql`1 = 0`;
+    if (job.lockedBy == null) return sql`1 = 0`;
     return and(
       eq(config.jobsTable.id, job.id),
       eq(config.jobsTable.status, "running"),
       eq(config.jobsTable.attemptCount, job.attemptCount),
-      eq(config.jobsTable.lockedAt, job.lockedAt),
       eq(config.jobsTable.lockedBy, job.lockedBy),
     );
+  }
+
+  /**
+   * Return expired leases to the queue, except for jobs already handed to the
+   * provider: re-queueing those would prompt the agent a second time, so they go
+   * terminal-unconfirmed instead.
+   */
+  function reclaimExpiredLeases(staleBefore: number): void {
+    const expired = drizzleDb
+      .select({
+        id: config.jobsTable.id,
+        messageId: config.jobsTable.messageId,
+        promptDispatchedAt: config.jobsTable.promptDispatchedAt,
+      })
+      .from(config.jobsTable)
+      .where(
+        and(eq(config.jobsTable.status, "running"), lte(config.jobsTable.lockedAt, staleBefore)),
+      )
+      .all();
+    if (expired.length === 0) return;
+
+    const undispatched = expired.flatMap((row) => (row.promptDispatchedAt == null ? [row.id] : []));
+    if (undispatched.length > 0) {
+      drizzleDb
+        .update(config.jobsTable)
+        .set({ status: "retrying", lockedAt: null, lockedBy: null, updatedAt: nowSql() })
+        .where(
+          and(
+            eq(config.jobsTable.status, "running"),
+            inArray(config.jobsTable.id, undispatched),
+            isNull(config.jobsTable.promptDispatchedAt),
+          ),
+        )
+        .run();
+    }
+
+    for (const row of expired) {
+      if (row.promptDispatchedAt == null) continue;
+      const abandoned = drizzleDb
+        .update(config.jobsTable)
+        .set({
+          status: "failed",
+          lockedAt: null,
+          lockedBy: null,
+          lastError: config.unconfirmedMessage,
+          updatedAt: nowSql(),
+        })
+        .where(and(eq(config.jobsTable.id, row.id), eq(config.jobsTable.status, "running")))
+        .run();
+      if (abandoned.changes === 0) continue;
+      const message = getMessage(row.messageId);
+      if (message) afterDeliveryFailure(message, config.unconfirmedMessage, "unconfirmed");
+    }
   }
 
   const DeliveryQueueLive = Layer.succeed(DeliveryQueue, {
     claimNext: (workerId, sessionId) =>
       tryQueue(() => {
         const now = Date.now();
-        const staleBefore = now - JOB_LEASE_MS;
-        drizzleDb
-          .update(config.jobsTable)
-          .set({ status: "retrying", lockedAt: null, lockedBy: null, updatedAt: nowSql() })
-          .where(
-            and(
-              eq(config.jobsTable.status, "running"),
-              lte(config.jobsTable.lockedAt, staleBefore),
-            ),
-          )
-          .run();
+        reclaimExpiredLeases(now - JOB_LEASE_MS);
 
         const candidate = drizzleDb.transaction((tx) => {
           const where = sessionId
@@ -456,6 +531,21 @@ export function createExternalCliDurableDelivery<
         });
         return candidate;
       }),
+    markDispatched: (job) =>
+      tryQueue(() => {
+        // better-sqlite3 writes synchronously, so this statement has committed by
+        // the time the internal request that carries it answers the worker. The
+        // worker only spawns the provider after that answer.
+        const result = drizzleDb
+          .update(config.jobsTable)
+          .set({
+            promptDispatchedAt: sql`COALESCE(${config.jobsTable.promptDispatchedAt}, ${Date.now()})`,
+            updatedAt: nowSql(),
+          })
+          .where(leaseHeld(job))
+          .run();
+        return result.changes > 0;
+      }),
     complete: (job, outcome) =>
       tryQueue(() => {
         const result = drizzleDb
@@ -466,7 +556,7 @@ export function createExternalCliDurableDelivery<
             lockedBy: null,
             updatedAt: nowSql(),
           })
-          .where(leaseWhere(job))
+          .where(leaseHeld(job))
           .run();
         return result.changes > 0;
       }),
@@ -482,7 +572,7 @@ export function createExternalCliDurableDelivery<
             lastError: error,
             updatedAt: nowSql(),
           })
-          .where(leaseWhere(job))
+          .where(leaseHeld(job))
           .run();
         return result.changes > 0;
       }),
@@ -497,7 +587,7 @@ export function createExternalCliDurableDelivery<
             lastError: error,
             updatedAt: nowSql(),
           })
-          .where(leaseWhere(job))
+          .where(leaseHeld(job))
           .run();
         return result.changes > 0;
       }),
@@ -512,7 +602,7 @@ export function createExternalCliDurableDelivery<
             lastError: reason,
             updatedAt: nowSql(),
           })
-          .where(leaseWhere(job))
+          .where(leaseHeld(job))
           .run();
         return result.changes > 0;
       }),
@@ -521,7 +611,7 @@ export function createExternalCliDurableDelivery<
         const result = drizzleDb
           .update(config.jobsTable)
           .set({ lockedAt: Date.now(), updatedAt: nowSql() })
-          .where(leaseWhere(job))
+          .where(leaseHeld(job))
           .run();
         if (result.changes === 0) return null;
         const loaded = loadJob(job.id);
@@ -597,8 +687,17 @@ export function createExternalCliDurableDelivery<
     }
   }
 
-  function afterDeliveryFailure(message: DbMessage, error = config.failureMessage): void {
-    updateOpencodeDelivery(message.id, "failed", error, null);
+  function afterDeliveryFailure(
+    message: DbMessage,
+    error = config.failureMessage,
+    outcome: DeliveryTerminalOutcome = "failed",
+  ): void {
+    updateOpencodeDelivery(
+      message.id,
+      outcome === "unconfirmed" ? "cli_unconfirmed" : "failed",
+      error,
+      null,
+    );
     if (message.forwardRole) updateForwardStatus(message.id, "failed");
     if (message.forwardRole === "target" && message.forwardSourceMessageId != null) {
       updateForwardTarget(message.forwardSourceMessageId, message.id, "failed");
@@ -665,7 +764,11 @@ export function createExternalCliDurableDelivery<
     return retried;
   }
 
-  async function failDeliveryJobFromWorker(job: TJob, error: string): Promise<boolean> {
+  async function endDeliveryJobFromWorker(
+    job: TJob,
+    error: string,
+    outcome: DeliveryTerminalOutcome,
+  ): Promise<boolean> {
     const message = getMessage(job.messageId);
     const failed = await queueProgram(
       Effect.gen(function* () {
@@ -673,9 +776,27 @@ export function createExternalCliDurableDelivery<
         return yield* queue.fail(toWorkflowJob(job), error);
       }),
     );
-    if (failed && message) afterDeliveryFailure(message, error);
+    if (failed && message) afterDeliveryFailure(message, error, outcome);
     if (message) broadcastQueue(message.sessionId);
     return failed;
+  }
+
+  function failDeliveryJobFromWorker(job: TJob, error: string): Promise<boolean> {
+    return endDeliveryJobFromWorker(job, error, "failed");
+  }
+
+  /** Terminal, but honest: the prompt reached the provider and the outcome is unknown. */
+  function markDeliveryJobUnconfirmedFromWorker(job: TJob, error: string): Promise<boolean> {
+    return endDeliveryJobFromWorker(job, error, "unconfirmed");
+  }
+
+  function markDeliveryJobDispatchedFromWorker(job: TJob): Promise<boolean> {
+    return queueProgram(
+      Effect.gen(function* () {
+        const queue = yield* DeliveryQueue;
+        return yield* queue.markDispatched(toWorkflowJob(job));
+      }),
+    );
   }
 
   async function cancelDeliveryJobFromWorker(job: TJob, reason: string): Promise<boolean> {
@@ -745,6 +866,8 @@ export function createExternalCliDurableDelivery<
     completeDeliveryJobFromWorker,
     retryDeliveryJobFromWorker,
     failDeliveryJobFromWorker,
+    markDeliveryJobDispatchedFromWorker,
+    markDeliveryJobUnconfirmedFromWorker,
     cancelDeliveryJobFromWorker,
     renewDeliveryJobFromWorker,
     runDeliveryOnce,

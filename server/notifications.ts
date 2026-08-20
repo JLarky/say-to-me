@@ -120,9 +120,12 @@ function ensureTargetIdleNotification(sessionId: string, clientMessageId: string
 
 function shouldDeliverNotification(message: ReturnType<typeof getMessage>): boolean {
   if (!message) return false;
+  // `cli_unconfirmed` may already have reached the agent, so re-delivering it
+  // would risk the duplicate turn the dispatch marker exists to prevent.
   if (
     message.opencodeDeliveryStatus === "sent" ||
     message.opencodeDeliveryStatus === "cli_timed_out" ||
+    message.opencodeDeliveryStatus === "cli_unconfirmed" ||
     message.opencodeDeliveryStatus === "pending" ||
     message.opencodeDeliveryStatus === "ui_only"
   ) {
@@ -134,6 +137,7 @@ function shouldDeliverNotification(message: ReturnType<typeof getMessage>): bool
     return (
       merged?.opencodeDeliveryStatus !== "sent" &&
       merged?.opencodeDeliveryStatus !== "cli_timed_out" &&
+      merged?.opencodeDeliveryStatus !== "cli_unconfirmed" &&
       merged?.opencodeDeliveryStatus !== "pending"
     );
   }

@@ -5,6 +5,8 @@ import {
   claimCodexDeliveryJobForWorker,
   completeCodexDeliveryJobFromWorker,
   failCodexDeliveryJobFromWorker,
+  markCodexDeliveryJobDispatchedFromWorker,
+  markCodexDeliveryJobUnconfirmedFromWorker,
   renewCodexDeliveryJobFromWorker,
   retryCodexDeliveryJobFromWorker,
   type CodexDeliveryLease,
@@ -25,6 +27,8 @@ export const dispatchCodexDeliveryInternalRequest =
     completeDeliveryJobFromWorker: completeCodexDeliveryJobFromWorker,
     retryDeliveryJobFromWorker: retryCodexDeliveryJobFromWorker,
     failDeliveryJobFromWorker: failCodexDeliveryJobFromWorker,
+    markDeliveryJobDispatchedFromWorker: markCodexDeliveryJobDispatchedFromWorker,
+    markDeliveryJobUnconfirmedFromWorker: markCodexDeliveryJobUnconfirmedFromWorker,
     cancelDeliveryJobFromWorker: cancelCodexDeliveryJobFromWorker,
     renewDeliveryJobFromWorker: renewCodexDeliveryJobFromWorker,
   });

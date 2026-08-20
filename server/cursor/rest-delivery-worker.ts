@@ -2,6 +2,11 @@ import { spawn } from "node:child_process";
 import { Effect } from "effect";
 import { buildAgentVoicePrompt } from "../agent-voice-prompt.ts";
 import type { DbCursorDeliveryJob, DbMessage } from "../db/schemas.ts";
+import {
+  ProviderFailedError,
+  ProviderNotStartedError,
+  type ProviderPromptError,
+} from "@say-to-me/external-cli-delivery/workflow";
 import { createExternalCliRestDeliveryWorker } from "../external-cli/rest-delivery-worker.ts";
 import { workerBin, workerVersion } from "../external-cli/worker-env.ts";
 import { safeJsonParse, UnknownJson } from "@say-to-me/runtime-validation";
@@ -38,8 +43,8 @@ export function cursorCommandArgs(resumeId: string, prompt: string, model?: stri
 function runCursorPrompt(
   job: DbCursorDeliveryJob,
   claimed: ClaimedJobWithMessage,
-): Effect.Effect<string | null, Error> {
-  return Effect.async<string | null, Error>((resume) => {
+): Effect.Effect<string | null, ProviderPromptError> {
+  return Effect.async<string | null, ProviderPromptError>((resume) => {
     const child = spawn(
       workerBin("CURSOR", "agent"),
       cursorCommandArgs(
@@ -54,7 +59,7 @@ function runCursorPrompt(
     let stdout = "";
     let stderr = "";
 
-    const settle = (effect: Effect.Effect<string | null, Error>) => {
+    const settle = (effect: Effect.Effect<string | null, ProviderPromptError>) => {
       if (settled) return;
       settled = true;
       resume(effect);
@@ -66,15 +71,36 @@ function runCursorPrompt(
     child.stderr.on("data", (chunk: Buffer) => {
       stderr += chunk.toString("utf8");
     });
-    child.on("error", (error) => settle(Effect.fail(error)));
+    // `error` fires when the child never ran, so the prompt cannot have been
+    // read. A non-zero `close` means it ran and may well have read it.
+    child.on("error", (error) =>
+      settle(
+        Effect.fail(
+          new ProviderNotStartedError({
+            message: `Cursor agent could not be started: ${error.message}`,
+            cause: error,
+          }),
+        ),
+      ),
+    );
     child.on("close", (code) => {
       if (code !== 0) {
-        settle(Effect.fail(new Error(`Cursor agent exited with code ${code}: ${stderr.trim()}`)));
+        settle(
+          Effect.fail(
+            new ProviderFailedError({
+              message: `Cursor agent exited with code ${code}: ${stderr.trim()}`,
+            }),
+          ),
+        );
         return;
       }
       const parsed = parseCursorJsonOutput(stdout);
       if (parsed.isError) {
-        settle(Effect.fail(new Error(parsed.text ?? "Cursor delivery failed.")));
+        settle(
+          Effect.fail(
+            new ProviderFailedError({ message: parsed.text ?? "Cursor delivery failed." }),
+          ),
+        );
         return;
       }
       const reply = parsed.text?.trim() ?? "";

@@ -26,6 +26,7 @@ const jobSelectColumns = {
   lockedAt: grokDeliveryJobs.lockedAt,
   lockedBy: grokDeliveryJobs.lockedBy,
   lastError: grokDeliveryJobs.lastError,
+  promptDispatchedAt: grokDeliveryJobs.promptDispatchedAt,
   createdAt: grokDeliveryJobs.createdAt,
   updatedAt: grokDeliveryJobs.updatedAt,
 };
@@ -42,6 +43,8 @@ const grokDelivery = createExternalCliDurableDelivery<
   sessionIdField: "grokSessionId",
   runtimeKey: "grok",
   failureMessage: "Grok delivery failed.",
+  unconfirmedMessage:
+    "Grok was given this message, but the delivery could not be confirmed. Check the session before resending.",
   noCwdMessage: "Grok session has no working directory.",
   jobsTable: grokDeliveryJobs,
   sessionIdColumn: grokDeliveryJobs.grokSessionId,
@@ -120,6 +123,10 @@ export const claimGrokDeliveryJobForWorker = grokDelivery.claimDeliveryJobForWor
 export const completeGrokDeliveryJobFromWorker = grokDelivery.completeDeliveryJobFromWorker;
 export const retryGrokDeliveryJobFromWorker = grokDelivery.retryDeliveryJobFromWorker;
 export const failGrokDeliveryJobFromWorker = grokDelivery.failDeliveryJobFromWorker;
+export const markGrokDeliveryJobDispatchedFromWorker =
+  grokDelivery.markDeliveryJobDispatchedFromWorker;
+export const markGrokDeliveryJobUnconfirmedFromWorker =
+  grokDelivery.markDeliveryJobUnconfirmedFromWorker;
 export const cancelGrokDeliveryJobFromWorker = grokDelivery.cancelDeliveryJobFromWorker;
 export const renewGrokDeliveryJobFromWorker = grokDelivery.renewDeliveryJobFromWorker;
 export const runGrokDeliveryOnce = grokDelivery.runDeliveryOnce;
