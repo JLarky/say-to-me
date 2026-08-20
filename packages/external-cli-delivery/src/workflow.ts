@@ -346,19 +346,13 @@ export function makeExternalCliDeliveryWorkflow(
           yield* fx.broadcastQueue(message.sessionId);
           return true;
         }
-        case "failed": {
-          const failed = yield* queue.fail(job, action.error);
-          if (failed) yield* afterDeliveryFailure(message, store, fx, action.error);
-          else yield* fx.broadcastQueue(message.sessionId);
-          return true;
-        }
+        // Both are terminal `failed` on the message: an unconfirmed dispatch is
+        // reported as a failure the user can retry, with its own explanation.
+        case "failed":
         case "unconfirmed": {
           const recorded = yield* queue.fail(job, action.error);
-          if (recorded) {
-            yield* afterDeliveryFailure(message, store, fx, action.error);
-          } else {
-            yield* fx.broadcastQueue(message.sessionId);
-          }
+          if (recorded) yield* afterDeliveryFailure(message, store, fx, action.error);
+          else yield* fx.broadcastQueue(message.sessionId);
           return true;
         }
       }

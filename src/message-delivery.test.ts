@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
-  canRetryOpenCodeDelivery,
+  canForceSendDelivery,
+  canRetryDelivery,
   deliveryProviderLabel,
   deliveryStatusLabel,
   idleNotificationSessionId,
@@ -45,15 +46,40 @@ describe("message-delivery", () => {
     ).toBe("Grok");
   });
 
-  it("offers OpenCode retry only for ses_ targets, never via label fallthrough", () => {
-    expect(canRetryOpenCodeDelivery(message({ sessionId: "ses_82c41693cb14xpTRmGfTDe4Qs6" }))).toBe(
+  it("offers retry for every delivery-backed provider, resolved from the target session", () => {
+    expect(canRetryDelivery(message({ sessionId: "ses_82c41693cb14xpTRmGfTDe4Qs6" }))).toBe(true);
+    expect(canRetryDelivery(message({ sessionId: "gr_1" }))).toBe(true);
+    expect(canRetryDelivery(message({ sessionId: "cur_1" }))).toBe(true);
+    expect(canRetryDelivery(message({ sessionId: "cc_1" }))).toBe(true);
+    expect(canRetryDelivery(message({ sessionId: "cx_1" }))).toBe(true);
+    expect(canRetryDelivery(message({ sessionId: "t3_1" }))).toBe(false);
+    expect(
+      canRetryDelivery(
+        message({
+          sessionId: "t3_1",
+          forwardTargetSessionId: "gr_1",
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      canRetryDelivery(
+        message({
+          sessionId: "gr_1",
+          forwardTargetSessionId: "t3_1",
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it("offers force send only for ses_ targets, never via label fallthrough", () => {
+    expect(canForceSendDelivery(message({ sessionId: "ses_82c41693cb14xpTRmGfTDe4Qs6" }))).toBe(
       true,
     );
-    expect(canRetryOpenCodeDelivery(message({ sessionId: "gr_1" }))).toBe(false);
-    expect(canRetryOpenCodeDelivery(message({ sessionId: "cur_1" }))).toBe(false);
-    expect(canRetryOpenCodeDelivery(message({ sessionId: "t3_1" }))).toBe(false);
+    expect(canForceSendDelivery(message({ sessionId: "gr_1" }))).toBe(false);
+    expect(canForceSendDelivery(message({ sessionId: "cur_1" }))).toBe(false);
+    expect(canForceSendDelivery(message({ sessionId: "t3_1" }))).toBe(false);
     expect(
-      canRetryOpenCodeDelivery(
+      canForceSendDelivery(
         message({
           sessionId: "gr_1",
           forwardTargetSessionId: "ses_82c41693cb14xpTRmGfTDe4Qs6",
@@ -61,7 +87,7 @@ describe("message-delivery", () => {
       ),
     ).toBe(true);
     expect(
-      canRetryOpenCodeDelivery(
+      canForceSendDelivery(
         message({
           sessionId: "ses_82c41693cb14xpTRmGfTDe4Qs6",
           forwardTargetSessionId: "gr_1",

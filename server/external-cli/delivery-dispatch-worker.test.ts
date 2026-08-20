@@ -127,7 +127,7 @@ describe("Cursor REST delivery worker dispatch fencing", () => {
     expect(job.promptDispatchedAt).not.toBeNull();
     expect(job.lastError).toContain("exited with code 1");
     expect(getMessage(messageId)).toMatchObject({
-      opencodeDeliveryStatus: "cli_unconfirmed",
+      opencodeDeliveryStatus: "failed",
       opencodeDeliveryError: job.lastError,
     });
 
@@ -138,14 +138,17 @@ describe("Cursor REST delivery worker dispatch fencing", () => {
     expect(invocationCount()).toBe(1);
   });
 
-  it("reports a dispatched-but-unconfirmed delivery instead of claiming it failed to send", async () => {
+  it("reports a dispatched-but-unconfirmed delivery as failed, keeping the explanation", async () => {
     process.env.SAY_TO_ME_CURSOR_BIN = writeFakeProvider(1);
-    const { sessionId, messageId } = seedSession("unconfirmed is not failed");
+    const { sessionId, messageId } = seedSession("unconfirmed is a retryable failure");
 
     await Effect.runPromise(runCursorRestDeliveryOnce("worker-a", sessionId));
 
-    expect(getMessage(messageId)?.opencodeDeliveryStatus).toBe("cli_unconfirmed");
-    expect(getMessage(messageId)?.opencodeDeliveryStatus).not.toBe("failed");
+    // One actionable state for the user; the uncertainty stays in the detail
+    // text instead of a separate status they cannot act on.
+    expect(getMessage(messageId)?.opencodeDeliveryStatus).toBe("failed");
+    expect(getMessage(messageId)?.opencodeDeliveryError).toContain("exited with code 1");
+    expect(getMessage(messageId)?.opencodeDeliveryError).not.toBe("Cursor delivery failed.");
   });
 
   it("retries a spawn failure even though the job is already marked dispatched", async () => {

@@ -203,7 +203,7 @@ describe("Claude REST delivery worker dispatch fencing", () => {
     expect(job.promptDispatchedAt).not.toBeNull();
     expect(job.lastError).toContain("exited with code 1");
     expect(getMessage(messageId)).toMatchObject({
-      opencodeDeliveryStatus: "cli_unconfirmed",
+      opencodeDeliveryStatus: "failed",
       opencodeDeliveryError: job.lastError,
     });
 
@@ -267,7 +267,7 @@ describe("Codex REST delivery worker dispatch fencing", () => {
     expect(job.promptDispatchedAt).not.toBeNull();
     expect(job.lastError).toContain("exited with code 1");
     expect(getMessage(messageId)).toMatchObject({
-      opencodeDeliveryStatus: "cli_unconfirmed",
+      opencodeDeliveryStatus: "failed",
       opencodeDeliveryError: job.lastError,
     });
 
@@ -329,7 +329,7 @@ describe("Grok REST delivery worker dispatch fencing", () => {
     expect(job.promptDispatchedAt).not.toBeNull();
     expect(job.lastError).toContain("exited with code 1");
     expect(getMessage(messageId)).toMatchObject({
-      opencodeDeliveryStatus: "cli_unconfirmed",
+      opencodeDeliveryStatus: "failed",
       opencodeDeliveryError: job.lastError,
     });
 

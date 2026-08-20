@@ -45,7 +45,7 @@ function renderMessages(
           onDelete={noop}
           onInsertSessionMention={options.onInsertSessionMention}
           onPlay={noop}
-          onRetryOpenCodeDelivery={noop}
+          onRetryDelivery={noop}
           onStop={noop}
           speakingId={null}
         />
@@ -659,7 +659,8 @@ describe("MessageList", () => {
     expect(container.textContent).toContain("Cursor failed");
     expect(container.querySelector("details")?.hasAttribute("open")).toBe(true);
     expect(container.textContent).toContain("You've hit your usage limit");
-    expect(container.textContent).not.toContain("Retry");
+    // Retry is available for every delivery-backed provider, not just OpenCode.
+    expect(container.textContent).toContain("Retry");
   });
 
   it("shows CLI timeout delivery without retry", () => {
