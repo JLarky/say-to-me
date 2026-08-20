@@ -818,7 +818,13 @@ export function createExternalCliDurableDelivery<
     return endDeliveryJobFromWorker(job, error);
   }
 
-  /** Terminal with the unconfirmed explanation: prompt may have reached the provider. */
+  /**
+   * Deliberately identical to `failDeliveryJobFromWorker` now that
+   * `cli_unconfirmed` has collapsed into `failed`: the two differ only in the
+   * error text the caller supplies. Both survive because workers post to
+   * separate internal endpoints (`/fail` and `/unconfirmed`), so merging them
+   * would be a wire change and a worker version bump.
+   */
   function markDeliveryJobUnconfirmedFromWorker(job: TJob, error: string): Promise<boolean> {
     return endDeliveryJobFromWorker(job, error);
   }

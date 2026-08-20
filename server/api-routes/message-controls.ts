@@ -118,6 +118,13 @@ function deliveryKind(reply: DbMessage): "forward_target_message" | "direct_user
   return reply.forwardRole === "target" ? "forward_target_message" : "direct_user_message";
 }
 
+/** No queue can carry this message: neither OpenCode nor an external CLI backend. */
+const noDeliveryBackend = {
+  _tag: "MessageControlError" as const,
+  error: "Message is not in a delivery-backed session.",
+  status: 400,
+};
+
 /**
  * Retry delivery for OpenCode or an external CLI backend. Explicit human retry
  * clears the CLI dispatch marker; automatic re-enqueue must not.
@@ -140,6 +147,9 @@ export function retryDeliveryEffect(
     const parent = reply.parentId === null ? null : yield* service.getMessage(reply.parentId);
     const deliverySessionId = parent?.attachedSessionId || parent?.sessionId;
     const targetSessionId = deliverySessionId || reply.sessionId;
+    if (!targetSessionId) {
+      return yield* Effect.fail(noDeliveryBackend);
+    }
     const backend = detectSessionBackend(targetSessionId);
     const kind = deliveryKind(reply);
 
@@ -150,7 +160,7 @@ export function retryDeliveryEffect(
           yield* service.enqueueOpenCodeDeliveryJob({
             messageId: id,
             messageSessionId: reply.sessionId,
-            opencodeSessionId: targetSessionId!,
+            opencodeSessionId: targetSessionId,
             kind,
             force: true,
           });
@@ -164,7 +174,7 @@ export function retryDeliveryEffect(
             enqueueCursorDeliveryJob({
               messageId: id,
               messageSessionId: reply.sessionId,
-              cursorSessionId: targetSessionId!,
+              cursorSessionId: targetSessionId,
               kind,
             });
           });
@@ -178,7 +188,7 @@ export function retryDeliveryEffect(
             enqueueClaudeDeliveryJob({
               messageId: id,
               messageSessionId: reply.sessionId,
-              claudeSessionId: targetSessionId!,
+              claudeSessionId: targetSessionId,
               kind,
             });
           });
@@ -192,7 +202,7 @@ export function retryDeliveryEffect(
             enqueueCodexDeliveryJob({
               messageId: id,
               messageSessionId: reply.sessionId,
-              codexSessionId: targetSessionId!,
+              codexSessionId: targetSessionId,
               kind,
             });
           });
@@ -206,7 +216,7 @@ export function retryDeliveryEffect(
             enqueueGrokDeliveryJob({
               messageId: id,
               messageSessionId: reply.sessionId,
-              grokSessionId: targetSessionId!,
+              grokSessionId: targetSessionId,
               kind,
             });
           });
@@ -214,11 +224,7 @@ export function retryDeliveryEffect(
         break;
       }
       default:
-        return yield* Effect.fail({
-          _tag: "MessageControlError" as const,
-          error: "Message is not in a delivery-backed session.",
-          status: 400,
-        });
+        return yield* Effect.fail(noDeliveryBackend);
     }
 
     yield* service.broadcast(reply.sessionId);
