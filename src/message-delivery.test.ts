@@ -29,7 +29,9 @@ describe("message-delivery", () => {
     expect(deliveryProviderLabel(message({ sessionId: "ses_82c41693cb14xpTRmGfTDe4Qs6" }))).toBe(
       "OpenCode",
     );
-    expect(deliveryProviderLabel(message({ sessionId: "t3_1" }))).toBe("Unknown");
+    expect(() => deliveryProviderLabel(message({ sessionId: "t3_1" }))).toThrow(
+      /session id "t3_1".*no known delivery provider/,
+    );
   });
 
   it("labels from the forward target when present", () => {

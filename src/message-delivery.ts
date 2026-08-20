@@ -48,7 +48,9 @@ export function deliveryProviderLabel(message: Message): string {
   for (const { prefix, label } of DELIVERY_PROVIDER_PREFIXES) {
     if (target.startsWith(prefix)) return label;
   }
-  return "Unknown";
+  throw new Error(
+    `Message carried a delivery status but session id "${target}" has no known delivery provider`,
+  );
 }
 
 /**
