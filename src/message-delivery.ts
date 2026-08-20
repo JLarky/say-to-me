@@ -22,12 +22,42 @@ export const sessionStateLabel: Record<string, string> = {
   unknown: "Unknown",
 };
 
+/**
+ * Loose prefix → label table for delivery badges. Kept deliberately loose (short
+ * ids like `cur_1` match) so UI classification stays aligned with how messages
+ * are stored, without requiring a full UUID body.
+ *
+ * OpenCode is a positive `ses_` entry — not a fallthrough — so an unrecognized
+ * prefix cannot be mistaken for a provider that supports Retry.
+ */
+const DELIVERY_PROVIDER_PREFIXES = [
+  { prefix: "cur_", label: "Cursor" },
+  { prefix: "cc_", label: "Claude" },
+  { prefix: "cx_", label: "Codex" },
+  { prefix: "gr_", label: "Grok" },
+  { prefix: "ses_", label: "OpenCode" },
+] as const;
+
+/** Same target `deliveryProviderLabel` and retry capability both read. */
+export function deliveryTargetSessionId(message: Message): string {
+  return message.forwardTargetSessionId ?? message.sessionId;
+}
+
 export function deliveryProviderLabel(message: Message): string {
-  const target = message.forwardTargetSessionId ?? message.sessionId;
-  if (target.startsWith("cur_")) return "Cursor";
-  if (target.startsWith("cc_")) return "Claude";
-  if (target.startsWith("cx_")) return "Codex";
-  return "OpenCode";
+  const target = deliveryTargetSessionId(message);
+  for (const { prefix, label } of DELIVERY_PROVIDER_PREFIXES) {
+    if (target.startsWith(prefix)) return label;
+  }
+  return "Unknown";
+}
+
+/**
+ * OpenCode Retry / Force send are wired to `/api/messages/:id/retry-opencode`,
+ * which only accepts `ses_` sessions. Derive that capability from the session id,
+ * never from the display label (a wrong fallthrough used to show a broken Retry).
+ */
+export function canRetryOpenCodeDelivery(message: Message): boolean {
+  return deliveryTargetSessionId(message).startsWith("ses_");
 }
 
 export function deliveryStatusLabel(

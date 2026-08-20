@@ -6,9 +6,11 @@ import {
   ExternalCliDeliveryQueueError,
   makeExternalCliDeliveryWorkflow,
   MessageStoreError,
+  ProviderNotStartedError,
   type DeliveryEffectsService,
   type DeliveryMessage,
   type DeliveryQueueService,
+  type DeliveryTerminalOutcome,
   type ExternalCliDeliveryJob,
   type ExternalCliDeliveryJobKind,
   type MessageStoreService,
@@ -39,7 +41,10 @@ import {
 } from "../notifications.ts";
 import { echoReplyDelayMs, workerMode, type ExternalCliWorkerEnvPrefix } from "./worker-env.ts";
 
-export type { ExternalCliDeliveryJobKind } from "@say-to-me/external-cli-delivery/workflow";
+export type {
+  DeliveryTerminalOutcome,
+  ExternalCliDeliveryJobKind,
+} from "@say-to-me/external-cli-delivery/workflow";
 
 export type ExternalCliDeliveryJobRow = {
   id: number;
@@ -61,13 +66,6 @@ export type ExternalCliDeliveryJobRow = {
 const WORKER_POLL_MS = Number(process.env.SAY_TO_ME_EXTERNAL_CLI_DELIVERY_POLL_MS || 250);
 const JOB_LEASE_MS = 30_000;
 const DEFAULT_MAX_ATTEMPTS = 3;
-
-/**
- * How a terminal delivery is reported. A dispatched job that could not be
- * confirmed is not the same thing as a delivery that never left the queue, and
- * saying "failed to send" for it would be untrue.
- */
-export type DeliveryTerminalOutcome = "failed" | "unconfirmed";
 
 type DeliveryJobsTable =
   | typeof claudeDeliveryJobs
@@ -374,6 +372,7 @@ export function createExternalCliDurableDelivery<
       lockedAt: job.lockedAt,
       lockedBy: job.lockedBy,
       lastError: job.lastError,
+      promptDispatchedAt: job.promptDispatchedAt,
       createdAt: job.createdAt,
       updatedAt: job.updatedAt,
     };
@@ -825,8 +824,13 @@ export function createExternalCliDurableDelivery<
   const PromptClientLive = Layer.succeed(PromptClient, {
     sendPrompt: (_job, message) => {
       if (workerMode(config.envPrefix) !== "echo") {
+        // Non-echo mode means this Effect path never starts a provider; the REST
+        // worker is what actually spawns. Treat that as ProviderNotStartedError
+        // so a dispatched job remains retryable rather than unconfirmed.
         return Effect.fail(
-          new Error(`Only echo ${config.backendLabel} worker mode is implemented.`),
+          new ProviderNotStartedError({
+            message: `Only echo ${config.backendLabel} worker mode is implemented.`,
+          }),
         );
       }
       const delayMs = echoReplyDelayMs(config.envPrefix);

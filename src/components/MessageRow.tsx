@@ -17,6 +17,7 @@ import { badge, queue } from "../styles/feed.stylex.ts";
 import type { Message, OpenCodeStatus } from "../types.ts";
 import { formatMessageTime, playedStatuses } from "../utils.ts";
 import {
+  canRetryOpenCodeDelivery,
   cardStatusLabel,
   deliveryProviderLabel,
   deliveryStatusLabel,
@@ -990,7 +991,7 @@ function DeliveryStatus({
   const provider = deliveryProviderLabel(message);
   const detailIsVisibleByDefault =
     status === "failed" || status === "cli_timed_out" || status === "cli_unconfirmed";
-  const canRetryDelivery = provider === "OpenCode";
+  const canRetryDelivery = canRetryOpenCodeDelivery(message);
 
   return (
     <div {...stylex.props(delivery.row)}>

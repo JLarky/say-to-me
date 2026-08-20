@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  canRetryOpenCodeDelivery,
   deliveryProviderLabel,
   deliveryStatusLabel,
   idleNotificationSessionId,
@@ -24,9 +25,47 @@ describe("message-delivery", () => {
     expect(deliveryProviderLabel(message({ sessionId: "cur_1" }))).toBe("Cursor");
     expect(deliveryProviderLabel(message({ sessionId: "cc_1" }))).toBe("Claude");
     expect(deliveryProviderLabel(message({ sessionId: "cx_1" }))).toBe("Codex");
+    expect(deliveryProviderLabel(message({ sessionId: "gr_1" }))).toBe("Grok");
     expect(deliveryProviderLabel(message({ sessionId: "ses_82c41693cb14xpTRmGfTDe4Qs6" }))).toBe(
       "OpenCode",
     );
+    expect(deliveryProviderLabel(message({ sessionId: "t3_1" }))).toBe("Unknown");
+  });
+
+  it("labels from the forward target when present", () => {
+    expect(
+      deliveryProviderLabel(
+        message({
+          sessionId: "ses_82c41693cb14xpTRmGfTDe4Qs6",
+          forwardTargetSessionId: "gr_1",
+        }),
+      ),
+    ).toBe("Grok");
+  });
+
+  it("offers OpenCode retry only for ses_ targets, never via label fallthrough", () => {
+    expect(canRetryOpenCodeDelivery(message({ sessionId: "ses_82c41693cb14xpTRmGfTDe4Qs6" }))).toBe(
+      true,
+    );
+    expect(canRetryOpenCodeDelivery(message({ sessionId: "gr_1" }))).toBe(false);
+    expect(canRetryOpenCodeDelivery(message({ sessionId: "cur_1" }))).toBe(false);
+    expect(canRetryOpenCodeDelivery(message({ sessionId: "t3_1" }))).toBe(false);
+    expect(
+      canRetryOpenCodeDelivery(
+        message({
+          sessionId: "gr_1",
+          forwardTargetSessionId: "ses_82c41693cb14xpTRmGfTDe4Qs6",
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      canRetryOpenCodeDelivery(
+        message({
+          sessionId: "ses_82c41693cb14xpTRmGfTDe4Qs6",
+          forwardTargetSessionId: "gr_1",
+        }),
+      ),
+    ).toBe(false);
   });
 
   it("formats known delivery statuses", () => {
