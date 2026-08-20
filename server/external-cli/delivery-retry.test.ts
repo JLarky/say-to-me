@@ -70,6 +70,7 @@ function jobRow(table: DeliveryJobsTable, jobId: number) {
   const row = drizzleDb
     .select({
       status: table.status,
+      nextAttemptAt: table.nextAttemptAt,
       lockedAt: table.lockedAt,
       lockedBy: table.lockedBy,
       lastError: table.lastError,
@@ -140,18 +141,23 @@ function describeBackend<TJob extends Lease>(backend: BackendSuite<TJob>): void 
     });
 
     it("clears the dispatch marker through the retry route", async () => {
-      const { sessionId, messageId, jobId } = await seedDispatchedFailure(backend);
+      const { messageId, jobId } = await seedDispatchedFailure(backend);
 
       const response = await retryRequest(messageId);
       expect(response.status).toBe(200);
 
       // The 200 alone would pass even if the marker survived, so assert the row.
-      expect(jobRow(backend.table, jobId)).toMatchObject({
+      // Claimability is asserted as row state rather than by racing a claim: once
+      // the job is pending and due, any worker is *entitled* to take it, so a test
+      // that demands it still be sitting there asserts the opposite of the intent.
+      // The direct-call test above owns the end-to-end claim.
+      const row = jobRow(backend.table, jobId);
+      expect(row).toMatchObject({
         status: "pending",
+        lockedBy: null,
         promptDispatchedAt: null,
       });
-      const reclaimed = await backend.claim("worker-b", sessionId);
-      expect(reclaimed?.job.id).toBe(jobId);
+      expect(row.nextAttemptAt).toBeLessThanOrEqual(Date.now());
     });
 
     it("enqueues a fresh job when the retry route finds no job row", async () => {
