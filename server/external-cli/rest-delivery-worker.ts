@@ -1,6 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { Effect, Fiber } from "effect";
+import { Effect, Either, Fiber } from "effect";
 import { type as arktype } from "arktype";
+import {
+  deliveryFailureAction,
+  DeliveryLeaseLostError,
+  ProviderNotStartedError,
+  type DeliveryFailure,
+  type ProviderPromptError,
+} from "@say-to-me/external-cli-delivery/workflow";
 import type { DbMessage } from "../db/schemas.ts";
 import { postInternalJson } from "./internal-http.ts";
 import {
@@ -39,7 +46,7 @@ export type ExternalCliRestWorkerConfig<
   runPrompt: (
     job: TJob,
     claimed: TClaimed & { message: DbMessage },
-  ) => Effect.Effect<string | null, Error>;
+  ) => Effect.Effect<string | null, ProviderPromptError>;
 };
 
 export function createExternalCliRestDeliveryWorker<
@@ -49,13 +56,19 @@ export function createExternalCliRestDeliveryWorker<
   type ClaimResult = TClaimed | "stale-worker" | null;
   type ClaimedJobWithMessage = TClaimed & { message: DbMessage };
 
-  function echoDelivery(prompt: string): Effect.Effect<string, unknown> {
+  function echoDelivery(prompt: string): Effect.Effect<string, ProviderPromptError> {
     if (workerMode(config.envPrefix) !== "echo") {
-      return Effect.fail(new Error(`Only echo ${config.backendLabel} worker mode is implemented.`));
+      return Effect.fail(
+        new ProviderNotStartedError({
+          message: `Only echo ${config.backendLabel} worker mode is implemented.`,
+        }),
+      );
     }
     if (echoFailBeforeAccept(config.envPrefix)) {
       return Effect.sleep(echoAcceptDelay(config.envPrefix)).pipe(
-        Effect.zipRight(Effect.fail(new Error("Echo failed before accept."))),
+        Effect.zipRight(
+          Effect.fail(new ProviderNotStartedError({ message: "Echo failed before accept." })),
+        ),
       );
     }
     return Effect.gen(function* () {
@@ -67,7 +80,9 @@ export function createExternalCliRestDeliveryWorker<
     });
   }
 
-  function runDelivery(claimed: ClaimedJobWithMessage): Effect.Effect<string | null, unknown> {
+  function runDelivery(
+    claimed: ClaimedJobWithMessage,
+  ): Effect.Effect<string | null, ProviderPromptError> {
     if (isRealWorkerMode(config.envPrefix, config.realWorkerMode)) {
       return config.runPrompt(claimed.job, claimed);
     }
@@ -107,6 +122,46 @@ export function createExternalCliRestDeliveryWorker<
         {
           job,
           reply,
+        },
+        OkResponse,
+      );
+      return body.ok;
+    });
+  }
+
+  /**
+   * Record that this job's prompt is about to be handed to the provider.
+   *
+   * `false` means "not confirmed dispatched": either the lease is gone, or the
+   * request never got an answer. Either way the caller must not spawn. A mark
+   * that committed but lost its response leaves the job looking dispatched and
+   * un-prompted, which the stale-lease sweep resolves as unconfirmed — the
+   * honest failure this ordering is chosen for.
+   */
+  function markDispatched(job: TJob): Effect.Effect<boolean> {
+    return Effect.tryPromise(async () => {
+      const body = await postInternalJson(`${config.apiBasePath}/dispatch`, { job }, OkResponse);
+      return body.ok;
+    }).pipe(
+      Effect.catchAll((error) =>
+        Effect.sync(() => {
+          console.error(
+            `[${config.backendLabel}-delivery-worker] could not mark the prompt dispatched; not prompting:`,
+            error,
+          );
+          return false;
+        }),
+      ),
+    );
+  }
+
+  function markUnconfirmed(job: TJob, error: string): Effect.Effect<boolean> {
+    return Effect.promise(async () => {
+      const body = await postInternalJson(
+        `${config.apiBasePath}/unconfirmed`,
+        {
+          job,
+          error,
         },
         OkResponse,
       );
@@ -167,6 +222,19 @@ export function createExternalCliRestDeliveryWorker<
     });
   }
 
+  /**
+   * A worker that no longer owns a job says so and records nothing. Losing the
+   * lease is not a delivery failure, and reporting it as one would blame the
+   * provider for a handoff the queue already gave to somebody else.
+   */
+  function reportLeaseLost(job: TJob, context: string): Effect.Effect<void> {
+    return Effect.sync(() => {
+      console.error(
+        `[${config.backendLabel}-delivery-worker] lease lost for job ${job.id} (${context}); recorded no outcome.`,
+      );
+    });
+  }
+
   function runOnce(workerId: string, sessionId: string): Effect.Effect<boolean | "stale-worker"> {
     return Effect.gen(function* () {
       const claimed = yield* claim(workerId, sessionId);
@@ -183,44 +251,85 @@ export function createExternalCliRestDeliveryWorker<
         return true;
       }
 
+      // Mark dispatched, and wait for that write, *before* spawning. Both
+      // orderings have a window; this one fails towards an honest unconfirmed
+      // report rather than towards a silently duplicated agent turn.
+      const promptDispatched = yield* markDispatched(job);
+      if (!promptDispatched) {
+        console.error(
+          `[${config.backendLabel}-delivery-worker] no longer holds job ${job.id}; recording nothing.`,
+        );
+        return true;
+      }
+
+      let leaseLost = false;
       const heartbeat = yield* Effect.gen(function* () {
         yield* Effect.sleep(`${LEASE_RENEW_MS} millis`);
         const renewed = yield* renew(job);
-        if (renewed) job = renewed;
-        else yield* Effect.fail(new Error(`${config.backendLabel} delivery lease renewal failed.`));
+        if (!renewed) {
+          return yield* Effect.fail(
+            new DeliveryLeaseLostError({
+              message: `${config.backendLabel} delivery lease renewal failed.`,
+            }),
+          );
+        }
+        job = renewed;
       }).pipe(
         Effect.forever,
         Effect.catchAll((error) =>
           Effect.sync(() => {
+            leaseLost = true;
             console.error(`[${config.backendLabel}-delivery-worker] lease renewal failed:`, error);
           }),
         ),
         Effect.fork,
       );
 
-      const outcome = yield* runDelivery({
-        ...claimed,
-        job,
-        message,
-      } as ClaimedJobWithMessage).pipe(
-        Effect.map((reply) => ({ _tag: "sent" as const, reply })),
-        Effect.catchAll((error) =>
-          Effect.succeed({
-            _tag: "failed" as const,
-            error: error instanceof Error ? error.message : String(error),
-          }),
-        ),
-        Effect.ensuring(Fiber.interrupt(heartbeat)),
-      );
+      const outcome = yield* Effect.either(
+        runDelivery({ ...claimed, job, message } as ClaimedJobWithMessage),
+      ).pipe(Effect.ensuring(Fiber.interrupt(heartbeat)));
 
-      if (outcome._tag === "sent") {
-        yield* complete(job, outcome.reply);
+      if (Either.isRight(outcome)) {
+        // Even a worker that saw a renewal failure tries to complete: the
+        // compare-and-set is the authority on ownership, and a reply we hold is
+        // worth recording whenever it still matches the lease holder.
+        const completed = yield* complete(job, outcome.right);
+        if (!completed) yield* reportLeaseLost(job, "completion");
         return true;
       }
 
-      if (job.attemptCount >= job.maxAttempts) yield* fail(job, outcome.error);
-      else yield* retry(job, outcome.error);
-      return true;
+      const failure: DeliveryFailure = leaseLost
+        ? new DeliveryLeaseLostError({
+            message: `${config.backendLabel} delivery lease was lost before the outcome was recorded.`,
+          })
+        : outcome.left;
+      const action = deliveryFailureAction({
+        failure,
+        promptDispatched,
+        attemptCount: job.attemptCount,
+        maxAttempts: job.maxAttempts,
+      });
+
+      switch (action._tag) {
+        case "abandon":
+          yield* reportLeaseLost(job, action.reason);
+          return true;
+        case "retry": {
+          const retried = yield* retry(job, action.error);
+          if (!retried) yield* reportLeaseLost(job, "retry");
+          return true;
+        }
+        case "failed": {
+          const failed = yield* fail(job, action.error);
+          if (!failed) yield* reportLeaseLost(job, "failure");
+          return true;
+        }
+        case "unconfirmed": {
+          const recorded = yield* markUnconfirmed(job, action.error);
+          if (!recorded) yield* reportLeaseLost(job, "unconfirmed outcome");
+          return true;
+        }
+      }
     }).pipe(
       Effect.catchAllCause((cause) =>
         Effect.sync(

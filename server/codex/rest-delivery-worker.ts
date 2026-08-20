@@ -6,6 +6,11 @@ import { spawn } from "node:child_process";
 import { Effect } from "effect";
 import { buildAgentVoicePrompt } from "../agent-voice-prompt.ts";
 import type { DbCodexDeliveryJob, DbMessage } from "../db/schemas.ts";
+import {
+  ProviderFailedError,
+  ProviderNotStartedError,
+  type ProviderPromptError,
+} from "@say-to-me/external-cli-delivery/workflow";
 import { createExternalCliRestDeliveryWorker } from "../external-cli/rest-delivery-worker.ts";
 import { workerBin, workerVersion } from "../external-cli/worker-env.ts";
 import { codexReasoningEffortConfigArg, type CodexReasoningEffort } from "./reasoning-effort.ts";
@@ -48,8 +53,8 @@ export function parseCodexLastMessage(output: string): string {
 function runCodexPrompt(
   job: DbCodexDeliveryJob,
   claimed: ClaimedJobWithMessage,
-): Effect.Effect<string | null, Error> {
-  return Effect.async<string | null, Error>((resume) => {
+): Effect.Effect<string | null, ProviderPromptError> {
+  return Effect.async<string | null, ProviderPromptError>((resume) => {
     // `-o` last-message file avoids parsing unstable `--json` event streams; per-job uuid temp path is race-safe.
     const outFile = path.join(tmpdir(), `say-to-me-codex-${randomUUID()}.txt`);
     const args = [
@@ -70,7 +75,7 @@ function runCodexPrompt(
     let settled = false;
     let stderr = "";
 
-    const settle = (effect: Effect.Effect<string | null, Error>) => {
+    const settle = (effect: Effect.Effect<string | null, ProviderPromptError>) => {
       if (settled) return;
       settled = true;
       resume(effect);
@@ -87,20 +92,43 @@ function runCodexPrompt(
     child.stderr.on("data", (chunk: Buffer) => {
       stderr += chunk.toString("utf8");
     });
+    // `error` fires when the child never ran, so the prompt cannot have been
+    // read. A non-zero `close`, or an unreadable last-message file, means it ran
+    // and may well have read it.
     child.on("error", (error) => {
       cleanup();
-      settle(Effect.fail(error));
+      settle(
+        Effect.fail(
+          new ProviderNotStartedError({
+            message: `Codex could not be started: ${error.message}`,
+            cause: error,
+          }),
+        ),
+      );
     });
     child.on("close", (code) => {
       try {
         if (code !== 0) {
-          settle(Effect.fail(new Error(`Codex exited with code ${code}: ${stderr.trim()}`)));
+          settle(
+            Effect.fail(
+              new ProviderFailedError({
+                message: `Codex exited with code ${code}: ${stderr.trim()}`,
+              }),
+            ),
+          );
           return;
         }
         const reply = parseCodexLastMessage(readFileSync(outFile, "utf8"));
         settle(Effect.succeed(reply || null));
       } catch (error) {
-        settle(Effect.fail(error instanceof Error ? error : new Error(String(error))));
+        settle(
+          Effect.fail(
+            new ProviderFailedError({
+              message: `Codex output could not be read: ${error instanceof Error ? error.message : String(error)}`,
+              cause: error,
+            }),
+          ),
+        );
       } finally {
         cleanup();
       }

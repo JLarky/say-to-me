@@ -5,6 +5,8 @@ import {
   claimGrokDeliveryJobForWorker,
   completeGrokDeliveryJobFromWorker,
   failGrokDeliveryJobFromWorker,
+  markGrokDeliveryJobDispatchedFromWorker,
+  markGrokDeliveryJobUnconfirmedFromWorker,
   renewGrokDeliveryJobFromWorker,
   retryGrokDeliveryJobFromWorker,
   type GrokDeliveryLease,
@@ -25,6 +27,8 @@ export const dispatchGrokDeliveryInternalRequest =
     completeDeliveryJobFromWorker: completeGrokDeliveryJobFromWorker,
     retryDeliveryJobFromWorker: retryGrokDeliveryJobFromWorker,
     failDeliveryJobFromWorker: failGrokDeliveryJobFromWorker,
+    markDeliveryJobDispatchedFromWorker: markGrokDeliveryJobDispatchedFromWorker,
+    markDeliveryJobUnconfirmedFromWorker: markGrokDeliveryJobUnconfirmedFromWorker,
     cancelDeliveryJobFromWorker: cancelGrokDeliveryJobFromWorker,
     renewDeliveryJobFromWorker: renewGrokDeliveryJobFromWorker,
   });

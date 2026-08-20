@@ -5,6 +5,8 @@ import {
   claimCursorDeliveryJobForWorker,
   completeCursorDeliveryJobFromWorker,
   failCursorDeliveryJobFromWorker,
+  markCursorDeliveryJobDispatchedFromWorker,
+  markCursorDeliveryJobUnconfirmedFromWorker,
   renewCursorDeliveryJobFromWorker,
   retryCursorDeliveryJobFromWorker,
   type CursorDeliveryLease,
@@ -25,6 +27,8 @@ export const dispatchCursorDeliveryInternalRequest =
     completeDeliveryJobFromWorker: completeCursorDeliveryJobFromWorker,
     retryDeliveryJobFromWorker: retryCursorDeliveryJobFromWorker,
     failDeliveryJobFromWorker: failCursorDeliveryJobFromWorker,
+    markDeliveryJobDispatchedFromWorker: markCursorDeliveryJobDispatchedFromWorker,
+    markDeliveryJobUnconfirmedFromWorker: markCursorDeliveryJobUnconfirmedFromWorker,
     cancelDeliveryJobFromWorker: cancelCursorDeliveryJobFromWorker,
     renewDeliveryJobFromWorker: renewCursorDeliveryJobFromWorker,
   });

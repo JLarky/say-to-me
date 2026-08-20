@@ -31,6 +31,7 @@ const jobSelectColumns = {
   lockedAt: codexDeliveryJobs.lockedAt,
   lockedBy: codexDeliveryJobs.lockedBy,
   lastError: codexDeliveryJobs.lastError,
+  promptDispatchedAt: codexDeliveryJobs.promptDispatchedAt,
   createdAt: codexDeliveryJobs.createdAt,
   updatedAt: codexDeliveryJobs.updatedAt,
 };
@@ -47,6 +48,8 @@ const codexDelivery = createExternalCliDurableDelivery<
   sessionIdField: "codexSessionId",
   runtimeKey: "codex",
   failureMessage: "Codex delivery failed.",
+  unconfirmedMessage:
+    "Codex was given this message, but the delivery could not be confirmed. Check the session before resending.",
   noCwdMessage: "Codex session has no working directory.",
   jobsTable: codexDeliveryJobs,
   sessionIdColumn: codexDeliveryJobs.codexSessionId,
@@ -125,6 +128,10 @@ export const claimCodexDeliveryJobForWorker = codexDelivery.claimDeliveryJobForW
 export const completeCodexDeliveryJobFromWorker = codexDelivery.completeDeliveryJobFromWorker;
 export const retryCodexDeliveryJobFromWorker = codexDelivery.retryDeliveryJobFromWorker;
 export const failCodexDeliveryJobFromWorker = codexDelivery.failDeliveryJobFromWorker;
+export const markCodexDeliveryJobDispatchedFromWorker =
+  codexDelivery.markDeliveryJobDispatchedFromWorker;
+export const markCodexDeliveryJobUnconfirmedFromWorker =
+  codexDelivery.markDeliveryJobUnconfirmedFromWorker;
 export const cancelCodexDeliveryJobFromWorker = codexDelivery.cancelDeliveryJobFromWorker;
 export const renewCodexDeliveryJobFromWorker = codexDelivery.renewDeliveryJobFromWorker;
 export const runCodexDeliveryOnce = codexDelivery.runDeliveryOnce;

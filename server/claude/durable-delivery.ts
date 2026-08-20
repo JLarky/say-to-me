@@ -30,6 +30,7 @@ const jobSelectColumns = {
   lockedAt: claudeDeliveryJobs.lockedAt,
   lockedBy: claudeDeliveryJobs.lockedBy,
   lastError: claudeDeliveryJobs.lastError,
+  promptDispatchedAt: claudeDeliveryJobs.promptDispatchedAt,
   createdAt: claudeDeliveryJobs.createdAt,
   updatedAt: claudeDeliveryJobs.updatedAt,
 };
@@ -46,6 +47,8 @@ const claudeDelivery = createExternalCliDurableDelivery<
   sessionIdField: "claudeSessionId",
   runtimeKey: "claude",
   failureMessage: "Claude delivery failed.",
+  unconfirmedMessage:
+    "Claude was given this message, but the delivery could not be confirmed. Check the session before resending.",
   noCwdMessage: "Claude session has no working directory.",
   jobsTable: claudeDeliveryJobs,
   sessionIdColumn: claudeDeliveryJobs.claudeSessionId,
@@ -123,6 +126,10 @@ export const claimClaudeDeliveryJobForWorker = claudeDelivery.claimDeliveryJobFo
 export const completeClaudeDeliveryJobFromWorker = claudeDelivery.completeDeliveryJobFromWorker;
 export const retryClaudeDeliveryJobFromWorker = claudeDelivery.retryDeliveryJobFromWorker;
 export const failClaudeDeliveryJobFromWorker = claudeDelivery.failDeliveryJobFromWorker;
+export const markClaudeDeliveryJobDispatchedFromWorker =
+  claudeDelivery.markDeliveryJobDispatchedFromWorker;
+export const markClaudeDeliveryJobUnconfirmedFromWorker =
+  claudeDelivery.markDeliveryJobUnconfirmedFromWorker;
 export const cancelClaudeDeliveryJobFromWorker = claudeDelivery.cancelDeliveryJobFromWorker;
 export const renewClaudeDeliveryJobFromWorker = claudeDelivery.renewDeliveryJobFromWorker;
 export const runClaudeDeliveryOnce = claudeDelivery.runDeliveryOnce;

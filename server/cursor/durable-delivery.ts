@@ -26,6 +26,7 @@ const jobSelectColumns = {
   lockedAt: cursorDeliveryJobs.lockedAt,
   lockedBy: cursorDeliveryJobs.lockedBy,
   lastError: cursorDeliveryJobs.lastError,
+  promptDispatchedAt: cursorDeliveryJobs.promptDispatchedAt,
   createdAt: cursorDeliveryJobs.createdAt,
   updatedAt: cursorDeliveryJobs.updatedAt,
 };
@@ -42,6 +43,8 @@ const cursorDelivery = createExternalCliDurableDelivery<
   sessionIdField: "cursorSessionId",
   runtimeKey: "cursor",
   failureMessage: "Cursor delivery failed.",
+  unconfirmedMessage:
+    "Cursor was given this message, but the delivery could not be confirmed. Check the session before resending.",
   noCwdMessage: "Cursor session has no working directory.",
   jobsTable: cursorDeliveryJobs,
   sessionIdColumn: cursorDeliveryJobs.cursorSessionId,
@@ -119,6 +122,10 @@ export const claimCursorDeliveryJobForWorker = cursorDelivery.claimDeliveryJobFo
 export const completeCursorDeliveryJobFromWorker = cursorDelivery.completeDeliveryJobFromWorker;
 export const retryCursorDeliveryJobFromWorker = cursorDelivery.retryDeliveryJobFromWorker;
 export const failCursorDeliveryJobFromWorker = cursorDelivery.failDeliveryJobFromWorker;
+export const markCursorDeliveryJobDispatchedFromWorker =
+  cursorDelivery.markDeliveryJobDispatchedFromWorker;
+export const markCursorDeliveryJobUnconfirmedFromWorker =
+  cursorDelivery.markDeliveryJobUnconfirmedFromWorker;
 export const cancelCursorDeliveryJobFromWorker = cursorDelivery.cancelDeliveryJobFromWorker;
 export const renewCursorDeliveryJobFromWorker = cursorDelivery.renewDeliveryJobFromWorker;
 export const runCursorDeliveryOnce = cursorDelivery.runDeliveryOnce;

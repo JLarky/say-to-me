@@ -48,11 +48,88 @@ export class DeliveryEffectsError extends Data.TaggedError("ExternalCliDeliveryE
   readonly cause: unknown;
 }> {}
 
+/**
+ * The provider process never ran, so it cannot have read the prompt: the
+ * executable is missing, the session `cwd` is gone, or the spawn itself failed.
+ * Because the dispatch marker is written before the spawn is attempted, this is
+ * the one failure that is safe to retry on an already-dispatched job.
+ */
+export class ProviderNotStartedError extends Data.TaggedError("ExternalCliProviderNotStarted")<{
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
+
+/**
+ * The provider started and then failed: it exited non-zero, timed out, or
+ * produced output that could not be parsed. It may already have read the
+ * prompt, so a dispatched job must never be prompted again.
+ */
+export class ProviderFailedError extends Data.TaggedError("ExternalCliProviderFailed")<{
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
+
+/**
+ * Another worker owns this job now. This is not a delivery failure: a worker
+ * that no longer holds the lease must record no outcome at all.
+ */
+export class DeliveryLeaseLostError extends Data.TaggedError("ExternalCliDeliveryLeaseLost")<{
+  readonly message: string;
+}> {}
+
+/** Everything a provider prompt may fail with, distinguishable without parsing text. */
+export type ProviderPromptError = ProviderNotStartedError | ProviderFailedError;
+
+export type DeliveryFailure = ProviderPromptError | DeliveryLeaseLostError;
+
+/** What a worker may do with a delivery job after an attempt failed. */
+export type DeliveryFailureAction =
+  /** Record nothing: this worker no longer owns the job. */
+  | { readonly _tag: "abandon"; readonly reason: string }
+  /** Return the job to the queue; the prompt provably never reached the provider. */
+  | { readonly _tag: "retry"; readonly error: string }
+  /** Terminal, and the prompt never reached the provider. */
+  | { readonly _tag: "failed"; readonly error: string }
+  /** Terminal, and whether the prompt reached the provider is unknown. */
+  | { readonly _tag: "unconfirmed"; readonly error: string };
+
+/**
+ * The one place the re-prompt rule lives.
+ *
+ * A delivery may be prompted again only when the prompt provably never reached
+ * the provider: either the job was never marked dispatched, or the spawn itself
+ * never started. Attempts still bound how many times such a delivery is retried,
+ * but the marker rather than the budget is what prevents a duplicate turn.
+ */
+export function deliveryFailureAction(input: {
+  readonly failure: DeliveryFailure;
+  readonly promptDispatched: boolean;
+  readonly attemptCount: number;
+  readonly maxAttempts: number;
+}): DeliveryFailureAction {
+  const { failure } = input;
+  if (failure._tag === "ExternalCliDeliveryLeaseLost") {
+    return { _tag: "abandon", reason: failure.message };
+  }
+  const mayHaveReachedProvider =
+    input.promptDispatched && failure._tag !== "ExternalCliProviderNotStarted";
+  if (mayHaveReachedProvider) return { _tag: "unconfirmed", error: failure.message };
+  if (input.attemptCount < input.maxAttempts) return { _tag: "retry", error: failure.message };
+  return { _tag: "failed", error: failure.message };
+}
+
 export type DeliveryQueueService = {
   claimNext: (
     workerId: string,
     sessionId?: string,
   ) => Effect.Effect<ExternalCliDeliveryJob | null, ExternalCliDeliveryQueueError>;
+  /**
+   * Record that the prompt is being handed to the provider, conditional on this
+   * worker still holding the lease. Returns false when it does not.
+   */
+  markDispatched: (
+    job: ExternalCliDeliveryJob,
+  ) => Effect.Effect<boolean, ExternalCliDeliveryQueueError>;
   complete: (
     job: ExternalCliDeliveryJob,
     outcome: DeliveryOutcome,

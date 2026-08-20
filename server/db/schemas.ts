@@ -192,6 +192,8 @@ export const DbClaudeDeliveryJob = arktype({
   lockedAt: "number | null",
   lockedBy: "string | null",
   lastError: "string | null",
+  /** Set before the provider prompt is spawned; blocks any re-prompt of this job. */
+  promptDispatchedAt: "number | null",
   createdAt: "string",
   updatedAt: "string",
 });
@@ -210,6 +212,8 @@ export const DbCursorDeliveryJob = arktype({
   lockedAt: "number | null",
   lockedBy: "string | null",
   lastError: "string | null",
+  /** Set before the provider prompt is spawned; blocks any re-prompt of this job. */
+  promptDispatchedAt: "number | null",
   createdAt: "string",
   updatedAt: "string",
 });
@@ -228,6 +232,8 @@ export const DbCodexDeliveryJob = arktype({
   lockedAt: "number | null",
   lockedBy: "string | null",
   lastError: "string | null",
+  /** Set before the provider prompt is spawned; blocks any re-prompt of this job. */
+  promptDispatchedAt: "number | null",
   createdAt: "string",
   updatedAt: "string",
 });
@@ -246,6 +252,8 @@ export const DbGrokDeliveryJob = arktype({
   lockedAt: "number | null",
   lockedBy: "string | null",
   lastError: "string | null",
+  /** Set before the provider prompt is spawned; blocks any re-prompt of this job. */
+  promptDispatchedAt: "number | null",
   createdAt: "string",
   updatedAt: "string",
 });

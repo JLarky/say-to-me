@@ -1,7 +1,14 @@
 import type { Message } from "./types.ts";
 import { formatMessageTime } from "./utils.ts";
 
-export const deliveryStatuses = ["queued", "pending", "sent", "failed", "cli_timed_out"] as const;
+export const deliveryStatuses = [
+  "queued",
+  "pending",
+  "sent",
+  "failed",
+  "cli_timed_out",
+  "cli_unconfirmed",
+] as const;
 export type DeliveryStatusValue = (typeof deliveryStatuses)[number];
 export const deliveryStatusSet = new Set<string>(deliveryStatuses);
 
@@ -40,6 +47,8 @@ export function deliveryStatusLabel(
       return `${provider} failed`;
     case "cli_timed_out":
       return `${provider} CLI timed out`;
+    case "cli_unconfirmed":
+      return `Not confirmed by ${provider} — check the session before resending`;
   }
 }
 

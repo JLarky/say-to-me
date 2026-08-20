@@ -4,12 +4,16 @@ export type ExternalCliWorkerEnvPrefix = "CLAUDE" | "CURSOR" | "CODEX" | "GROK";
  * Increment when the server/worker protocol or worker behavior changes in a way
  * that makes already-running Boo workers unsafe or incompatible. Stale idle
  * workers exit after a version mismatch so Say To Me can start a fresh worker.
+ *
+ * Current generation writes the dispatch marker before prompting a provider. A
+ * worker from an earlier generation does not, so it would still double-prompt
+ * and must be retired rather than left running.
  */
 export const WORKER_VERSIONS: Record<ExternalCliWorkerEnvPrefix, number> = {
-  CLAUDE: 3,
-  CODEX: 1,
-  GROK: 2,
-  CURSOR: 2,
+  CLAUDE: 4,
+  CODEX: 2,
+  GROK: 3,
+  CURSOR: 3,
 };
 
 export function workerVersion(prefix: ExternalCliWorkerEnvPrefix): number {

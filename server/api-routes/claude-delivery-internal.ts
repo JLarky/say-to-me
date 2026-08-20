@@ -5,6 +5,8 @@ import {
   claimClaudeDeliveryJobForWorker,
   completeClaudeDeliveryJobFromWorker,
   failClaudeDeliveryJobFromWorker,
+  markClaudeDeliveryJobDispatchedFromWorker,
+  markClaudeDeliveryJobUnconfirmedFromWorker,
   renewClaudeDeliveryJobFromWorker,
   retryClaudeDeliveryJobFromWorker,
   type ClaudeDeliveryLease,
@@ -25,6 +27,8 @@ export const dispatchClaudeDeliveryInternalRequest =
     completeDeliveryJobFromWorker: completeClaudeDeliveryJobFromWorker,
     retryDeliveryJobFromWorker: retryClaudeDeliveryJobFromWorker,
     failDeliveryJobFromWorker: failClaudeDeliveryJobFromWorker,
+    markDeliveryJobDispatchedFromWorker: markClaudeDeliveryJobDispatchedFromWorker,
+    markDeliveryJobUnconfirmedFromWorker: markClaudeDeliveryJobUnconfirmedFromWorker,
     cancelDeliveryJobFromWorker: cancelClaudeDeliveryJobFromWorker,
     renewDeliveryJobFromWorker: renewClaudeDeliveryJobFromWorker,
   });
