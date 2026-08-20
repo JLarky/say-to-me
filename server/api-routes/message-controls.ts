@@ -16,12 +16,16 @@ import {
   setMessageStatus,
 } from "../messages.ts";
 import type { DbMessage } from "../db/schemas.ts";
+import { enqueueClaudeDeliveryJob, retryClaudeDeliveryJob } from "../claude/durable-delivery.ts";
+import { enqueueCodexDeliveryJob, retryCodexDeliveryJob } from "../codex/durable-delivery.ts";
+import { enqueueCursorDeliveryJob, retryCursorDeliveryJob } from "../cursor/durable-delivery.ts";
+import { enqueueGrokDeliveryJob, retryGrokDeliveryJob } from "../grok/durable-delivery.ts";
 import {
   enqueueOpenCodeDeliveryJob,
   retryOpenCodeDeliveryJob,
   type EnqueueOpenCodeDeliveryInput,
 } from "../opencode/durable-delivery.ts";
-import { validateSessionId } from "../session-id.ts";
+import { detectSessionBackend, validateSessionId } from "../session-id.ts";
 import { publicRouteErrorResponse } from "./route-errors.ts";
 import { openApiDocs } from "./openapi-docs.ts";
 
@@ -110,7 +114,15 @@ function requireMessageId(rawId: string): Effect.Effect<number, MessageControlEr
   });
 }
 
-export function retryOpenCodeDeliveryEffect(
+function deliveryKind(reply: DbMessage): "forward_target_message" | "direct_user_message" {
+  return reply.forwardRole === "target" ? "forward_target_message" : "direct_user_message";
+}
+
+/**
+ * Retry delivery for OpenCode or an external CLI backend. Explicit human retry
+ * clears the CLI dispatch marker; automatic re-enqueue must not.
+ */
+export function retryDeliveryEffect(
   rawId: string,
 ): Effect.Effect<MessageControlWithMessage, MessageControlError, MessageControlService> {
   return Effect.gen(function* () {
@@ -128,24 +140,87 @@ export function retryOpenCodeDeliveryEffect(
     const parent = reply.parentId === null ? null : yield* service.getMessage(reply.parentId);
     const deliverySessionId = parent?.attachedSessionId || parent?.sessionId;
     const targetSessionId = deliverySessionId || reply.sessionId;
-    if (!targetSessionId || !validateSessionId(targetSessionId)) {
-      return yield* Effect.fail({
-        _tag: "MessageControlError" as const,
-        error: "Message is not in an OpenCode-backed session.",
-        status: 400,
-      });
+    const backend = detectSessionBackend(targetSessionId);
+    const kind = deliveryKind(reply);
+
+    switch (backend) {
+      case "opencode": {
+        const retried = yield* service.retryOpenCodeDeliveryJob(id);
+        if (!retried) {
+          yield* service.enqueueOpenCodeDeliveryJob({
+            messageId: id,
+            messageSessionId: reply.sessionId,
+            opencodeSessionId: targetSessionId!,
+            kind,
+            force: true,
+          });
+        }
+        break;
+      }
+      case "cursor": {
+        const retried = yield* Effect.sync(() => retryCursorDeliveryJob(id) != null);
+        if (!retried) {
+          yield* Effect.sync(() => {
+            enqueueCursorDeliveryJob({
+              messageId: id,
+              messageSessionId: reply.sessionId,
+              cursorSessionId: targetSessionId!,
+              kind,
+            });
+          });
+        }
+        break;
+      }
+      case "claude": {
+        const retried = yield* Effect.sync(() => retryClaudeDeliveryJob(id) != null);
+        if (!retried) {
+          yield* Effect.sync(() => {
+            enqueueClaudeDeliveryJob({
+              messageId: id,
+              messageSessionId: reply.sessionId,
+              claudeSessionId: targetSessionId!,
+              kind,
+            });
+          });
+        }
+        break;
+      }
+      case "codex": {
+        const retried = yield* Effect.sync(() => retryCodexDeliveryJob(id) != null);
+        if (!retried) {
+          yield* Effect.sync(() => {
+            enqueueCodexDeliveryJob({
+              messageId: id,
+              messageSessionId: reply.sessionId,
+              codexSessionId: targetSessionId!,
+              kind,
+            });
+          });
+        }
+        break;
+      }
+      case "grok": {
+        const retried = yield* Effect.sync(() => retryGrokDeliveryJob(id) != null);
+        if (!retried) {
+          yield* Effect.sync(() => {
+            enqueueGrokDeliveryJob({
+              messageId: id,
+              messageSessionId: reply.sessionId,
+              grokSessionId: targetSessionId!,
+              kind,
+            });
+          });
+        }
+        break;
+      }
+      default:
+        return yield* Effect.fail({
+          _tag: "MessageControlError" as const,
+          error: "Message is not in a delivery-backed session.",
+          status: 400,
+        });
     }
 
-    const retried = yield* service.retryOpenCodeDeliveryJob(id);
-    if (!retried) {
-      yield* service.enqueueOpenCodeDeliveryJob({
-        messageId: id,
-        messageSessionId: reply.sessionId,
-        opencodeSessionId: targetSessionId,
-        kind: reply.forwardRole === "target" ? "forward_target_message" : "direct_user_message",
-        force: true,
-      });
-    }
     yield* service.broadcast(reply.sessionId);
     const message = yield* service.getMessage(id);
     return { ok: true, message: deserializeMessage(message!) };
@@ -283,12 +358,24 @@ export function updateMessagePinnedEffect(
 
 export const MessageControlsGroup = HttpApiGroup.make("message-controls")
   .add(
+    HttpApiEndpoint.post("retryDelivery", "/api/messages/:id/retry-delivery")
+      .setPath(MessagePath)
+      .annotateContext(
+        openApiDocs(
+          "Retry delivery",
+          "Forces a re-enqueue of delivery for a failed or stuck message (OpenCode or external CLI).",
+        ),
+      )
+      .addSuccess(MessageControlWithMessage)
+      .addError(MessageControlError, { status: 400 }),
+  )
+  .add(
     HttpApiEndpoint.post("retryOpenCodeDelivery", "/api/messages/:id/retry-opencode")
       .setPath(MessagePath)
       .annotateContext(
         openApiDocs(
-          "Retry OpenCode delivery",
-          "Forces a re-enqueue of OpenCode delivery for a failed or stuck message.",
+          "Retry OpenCode delivery (deprecated)",
+          "Deprecated alias of retry-delivery. Prefer POST /api/messages/:id/retry-delivery.",
         ),
       )
       .addSuccess(MessageControlWithMessage)
@@ -362,8 +449,11 @@ export function buildMessageControlsHandlers<
     "message-controls",
     (handlers) =>
       handlers
+        .handle("retryDelivery", ({ path }) =>
+          retryDeliveryEffect(path.id).pipe(Effect.catchAll(publicRouteErrorResponse)),
+        )
         .handle("retryOpenCodeDelivery", ({ path }) =>
-          retryOpenCodeDeliveryEffect(path.id).pipe(Effect.catchAll(publicRouteErrorResponse)),
+          retryDeliveryEffect(path.id).pipe(Effect.catchAll(publicRouteErrorResponse)),
         )
         .handle("attachMessageSession", ({ path, payload }) =>
           attachMessageSessionEffect(path.id, payload).pipe(

@@ -10,7 +10,6 @@ import {
   type DeliveryEffectsService,
   type DeliveryMessage,
   type DeliveryQueueService,
-  type DeliveryTerminalOutcome,
   type ExternalCliDeliveryJob,
   type ExternalCliDeliveryJobKind,
   type MessageStoreService,
@@ -41,10 +40,7 @@ import {
 } from "../notifications.ts";
 import { echoReplyDelayMs, workerMode, type ExternalCliWorkerEnvPrefix } from "./worker-env.ts";
 
-export type {
-  DeliveryTerminalOutcome,
-  ExternalCliDeliveryJobKind,
-} from "@say-to-me/external-cli-delivery/workflow";
+export type { ExternalCliDeliveryJobKind } from "@say-to-me/external-cli-delivery/workflow";
 
 export type ExternalCliDeliveryJobRow = {
   id: number;
@@ -163,7 +159,7 @@ export type ExternalCliDurableDeliveryConfig<
   failureMessage: string;
   /**
    * Reported when a job was handed to the provider but its outcome is unknown.
-   * Must not claim the delivery failed: the agent may be acting on it right now.
+   * Surfaced as `failed` with this explanation so the user can retry after checking.
    */
   unconfirmedMessage: string;
   noCwdMessage: string;
@@ -297,6 +293,57 @@ export function createExternalCliDurableDelivery<
       }
       return job;
     });
+    void config.ensureBooWorker(sessionId).catch((error) => {
+      console.error(
+        `[${config.backendLabel}-delivery] failed to ensure boo worker for ${sessionId}:`,
+        error,
+      );
+    });
+    return result;
+  }
+
+  /**
+   * Human override: reset a delivery job and clear the dispatch marker so it can
+   * be sent again. Automatic re-enqueue paths must not clear the marker.
+   */
+  function retryDeliveryJob(messageId: number): TJob | null {
+    const row = drizzleDb
+      .select(config.jobSelectColumns)
+      .from(config.jobsTable)
+      .where(eq(config.jobsTable.messageId, messageId))
+      .orderBy(asc(config.jobsTable.id))
+      .limit(1)
+      .get();
+    if (!row) return null;
+    const job = config.validateJob(row, `retry${config.backendLabel}DeliveryJob`);
+
+    const result = drizzleDb.transaction((tx) => {
+      tx.update(config.jobsTable)
+        .set({
+          status: "pending",
+          nextAttemptAt: Date.now(),
+          lockedAt: null,
+          lockedBy: null,
+          lastError: null,
+          promptDispatchedAt: null,
+          updatedAt: nowSql(),
+        })
+        .where(eq(config.jobsTable.id, job.id))
+        .run();
+      updateOpencodeDelivery(messageId, "queued", null, null);
+      const refreshed = tx
+        .select(config.jobSelectColumns)
+        .from(config.jobsTable)
+        .where(eq(config.jobsTable.id, job.id))
+        .limit(1)
+        .get();
+      if (!refreshed) {
+        throw new Error(`Failed to load ${config.backendLabel} delivery job after retry.`);
+      }
+      return config.validateJob(refreshed, `retry${config.backendLabel}DeliveryJob`);
+    });
+
+    const sessionId = getSessionId(result);
     void config.ensureBooWorker(sessionId).catch((error) => {
       console.error(
         `[${config.backendLabel}-delivery] failed to ensure boo worker for ${sessionId}:`,
@@ -462,7 +509,7 @@ export function createExternalCliDurableDelivery<
         .run();
       if (abandoned.changes === 0) continue;
       const message = getMessage(row.messageId);
-      if (message) afterDeliveryFailure(message, config.unconfirmedMessage, "unconfirmed");
+      if (message) afterDeliveryFailure(message, config.unconfirmedMessage);
     }
   }
 
@@ -686,17 +733,8 @@ export function createExternalCliDurableDelivery<
     }
   }
 
-  function afterDeliveryFailure(
-    message: DbMessage,
-    error = config.failureMessage,
-    outcome: DeliveryTerminalOutcome = "failed",
-  ): void {
-    updateOpencodeDelivery(
-      message.id,
-      outcome === "unconfirmed" ? "cli_unconfirmed" : "failed",
-      error,
-      null,
-    );
+  function afterDeliveryFailure(message: DbMessage, error = config.failureMessage): void {
+    updateOpencodeDelivery(message.id, "failed", error, null);
     if (message.forwardRole) updateForwardStatus(message.id, "failed");
     if (message.forwardRole === "target" && message.forwardSourceMessageId != null) {
       updateForwardTarget(message.forwardSourceMessageId, message.id, "failed");
@@ -763,11 +801,7 @@ export function createExternalCliDurableDelivery<
     return retried;
   }
 
-  async function endDeliveryJobFromWorker(
-    job: TJob,
-    error: string,
-    outcome: DeliveryTerminalOutcome,
-  ): Promise<boolean> {
+  async function endDeliveryJobFromWorker(job: TJob, error: string): Promise<boolean> {
     const message = getMessage(job.messageId);
     const failed = await queueProgram(
       Effect.gen(function* () {
@@ -775,18 +809,18 @@ export function createExternalCliDurableDelivery<
         return yield* queue.fail(toWorkflowJob(job), error);
       }),
     );
-    if (failed && message) afterDeliveryFailure(message, error, outcome);
+    if (failed && message) afterDeliveryFailure(message, error);
     if (message) broadcastQueue(message.sessionId);
     return failed;
   }
 
   function failDeliveryJobFromWorker(job: TJob, error: string): Promise<boolean> {
-    return endDeliveryJobFromWorker(job, error, "failed");
+    return endDeliveryJobFromWorker(job, error);
   }
 
-  /** Terminal, but honest: the prompt reached the provider and the outcome is unknown. */
+  /** Terminal with the unconfirmed explanation: prompt may have reached the provider. */
   function markDeliveryJobUnconfirmedFromWorker(job: TJob, error: string): Promise<boolean> {
-    return endDeliveryJobFromWorker(job, error, "unconfirmed");
+    return endDeliveryJobFromWorker(job, error);
   }
 
   function markDeliveryJobDispatchedFromWorker(job: TJob): Promise<boolean> {
@@ -865,6 +899,7 @@ export function createExternalCliDurableDelivery<
 
   return {
     enqueueDeliveryJob,
+    retryDeliveryJob,
     resumePendingDeliveryWorkers,
     claimDeliveryJobForWorker,
     completeDeliveryJobFromWorker,

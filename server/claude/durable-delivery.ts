@@ -47,8 +47,7 @@ const claudeDelivery = createExternalCliDurableDelivery<
   sessionIdField: "claudeSessionId",
   runtimeKey: "claude",
   failureMessage: "Claude delivery failed.",
-  unconfirmedMessage:
-    "Claude was given this message, but the delivery could not be confirmed. Check the session before resending.",
+  unconfirmedMessage: "Couldn't confirm this reached Claude — check the session before retrying",
   noCwdMessage: "Claude session has no working directory.",
   jobsTable: claudeDeliveryJobs,
   sessionIdColumn: claudeDeliveryJobs.claudeSessionId,
@@ -76,6 +75,7 @@ export type EnqueueClaudeDeliveryInput = {
 };
 
 export const enqueueClaudeDeliveryJob = claudeDelivery.enqueueDeliveryJob;
+export const retryClaudeDeliveryJob = claudeDelivery.retryDeliveryJob;
 export const resumeClaudeDeliveryWorkers = claudeDelivery.resumePendingDeliveryWorkers;
 
 export type ClaudeDeliveryQueueService = {

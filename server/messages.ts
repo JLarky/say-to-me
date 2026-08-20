@@ -154,14 +154,6 @@ function summarizeSessionCard(
   }
 
   if (latest.author === "user") {
-    if (latest.opencodeDeliveryStatus === "cli_unconfirmed") {
-      return {
-        summary: "Needs attention: the last message reached the CLI but was not confirmed.",
-        summaryUpdatedAt: latest.createdAt,
-        waitingState: "blocked",
-        ...latestFields,
-      };
-    }
     if (
       latest.opencodeDeliveryStatus === "failed" ||
       latest.opencodeDeliveryStatus === "cli_timed_out"
