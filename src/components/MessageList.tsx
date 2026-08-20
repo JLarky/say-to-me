@@ -23,7 +23,7 @@ export function MessageList({
   onTogglePinned = () => {},
   onPlay,
   onRetryPendingMessage = () => {},
-  onRetryOpenCodeDelivery = () => {},
+  onRetryDelivery = () => {},
   onStop,
   speakingId,
 }: {
@@ -33,7 +33,7 @@ export function MessageList({
   onTogglePinned?: (message: Message) => void;
   onPlay: (message: Message) => void;
   onRetryPendingMessage?: (message: Message) => void;
-  onRetryOpenCodeDelivery?: (message: Message) => void;
+  onRetryDelivery?: (message: Message) => void;
   onStop: (message: Message) => void;
   speakingId: number | null;
 }) {
@@ -49,7 +49,7 @@ export function MessageList({
           onTogglePinned={onTogglePinned}
           onPlay={onPlay}
           onRetryPendingMessage={onRetryPendingMessage}
-          onRetryOpenCodeDelivery={onRetryOpenCodeDelivery}
+          onRetryDelivery={onRetryDelivery}
           onStop={onStop}
           speakingId={speakingId}
         />

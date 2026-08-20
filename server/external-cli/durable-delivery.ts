@@ -10,7 +10,6 @@ import {
   type DeliveryEffectsService,
   type DeliveryMessage,
   type DeliveryQueueService,
-  type DeliveryTerminalOutcome,
   type ExternalCliDeliveryJob,
   type ExternalCliDeliveryJobKind,
   type MessageStoreService,
@@ -41,10 +40,7 @@ import {
 } from "../notifications.ts";
 import { echoReplyDelayMs, workerMode, type ExternalCliWorkerEnvPrefix } from "./worker-env.ts";
 
-export type {
-  DeliveryTerminalOutcome,
-  ExternalCliDeliveryJobKind,
-} from "@say-to-me/external-cli-delivery/workflow";
+export type { ExternalCliDeliveryJobKind } from "@say-to-me/external-cli-delivery/workflow";
 
 export type ExternalCliDeliveryJobRow = {
   id: number;
@@ -61,6 +57,24 @@ export type ExternalCliDeliveryJobRow = {
   promptDispatchedAt: number | null;
   createdAt: string;
   updatedAt: string;
+};
+
+/**
+ * Terminal and unowned, so a human retry may reset the row and clear the
+ * dispatch marker without stranding a worker mid-flight.
+ */
+const RETRYABLE_JOB_STATUSES = ["failed", "cancelled"] as const;
+
+/**
+ * Why a human retry did or did not resend. `in_flight` and `already_delivered`
+ * are refusals: the route turns them into a 409 rather than a silent success,
+ * because the caller asked us to send something we deliberately did not send.
+ */
+export type RetryDeliveryOutcome = "retried" | "already_queued" | "in_flight" | "already_delivered";
+
+export type RetryDeliveryJobResult<TJob> = {
+  outcome: RetryDeliveryOutcome;
+  job: TJob;
 };
 
 const WORKER_POLL_MS = Number(process.env.SAY_TO_ME_EXTERNAL_CLI_DELIVERY_POLL_MS || 250);
@@ -163,7 +177,7 @@ export type ExternalCliDurableDeliveryConfig<
   failureMessage: string;
   /**
    * Reported when a job was handed to the provider but its outcome is unknown.
-   * Must not claim the delivery failed: the agent may be acting on it right now.
+   * Surfaced as `failed` with this explanation so the user can retry after checking.
    */
   unconfirmedMessage: string;
   noCwdMessage: string;
@@ -303,6 +317,90 @@ export function createExternalCliDurableDelivery<
         error,
       );
     });
+    return result;
+  }
+
+  /**
+   * Human override: reset a terminal delivery job and clear the dispatch marker
+   * so it can be sent again. Automatic re-enqueue paths must not clear it.
+   *
+   * Only `failed` and `cancelled` qualify. Both are terminal with no worker
+   * holding the lease, so clearing the marker cannot strand anyone. A `running`
+   * job must be refused: resetting it would break the in-flight worker's
+   * lease CAS (`leaseHeld` matches on status, attemptCount and lockedBy), and a
+   * second worker would then claim the cleared row and prompt the agent again —
+   * the duplicate turn the marker exists to forbid. Two retries racing on a
+   * `failed` job hit the same hazard, which is why the status is re-read and
+   * gated inside the transaction rather than trusted from the caller.
+   */
+  function retryDeliveryJob(messageId: number): RetryDeliveryJobResult<TJob> | null {
+    const context = `retry${config.backendLabel}DeliveryJob`;
+    const result = drizzleDb.transaction((tx) => {
+      const row = tx
+        .select(config.jobSelectColumns)
+        .from(config.jobsTable)
+        .where(eq(config.jobsTable.messageId, messageId))
+        .orderBy(asc(config.jobsTable.id))
+        .limit(1)
+        .get();
+      if (!row) return null;
+      const job = config.validateJob(row, context);
+
+      // A worker is mid-flight, or the prompt already landed: leave both the row
+      // and the marker exactly as they are.
+      if (job.status === "running") return { outcome: "in_flight" as const, job };
+      if (job.status === "succeeded") return { outcome: "already_delivered" as const, job };
+      // Another attempt is already coming. Idempotent: never clear a marker we
+      // cannot prove is unowned.
+      if (job.status === "pending" || job.status === "retrying") {
+        return { outcome: "already_queued" as const, job };
+      }
+
+      const reset = tx
+        .update(config.jobsTable)
+        .set({
+          status: "pending",
+          nextAttemptAt: Date.now(),
+          lockedAt: null,
+          lockedBy: null,
+          lastError: null,
+          promptDispatchedAt: null,
+          updatedAt: nowSql(),
+        })
+        .where(
+          and(
+            eq(config.jobsTable.id, job.id),
+            inArray(config.jobsTable.status, RETRYABLE_JOB_STATUSES),
+          ),
+        )
+        .run();
+      if (reset.changes === 0) return { outcome: "in_flight" as const, job };
+
+      updateOpencodeDelivery(messageId, "queued", null, null);
+      const refreshed = tx
+        .select(config.jobSelectColumns)
+        .from(config.jobsTable)
+        .where(eq(config.jobsTable.id, job.id))
+        .limit(1)
+        .get();
+      if (!refreshed) {
+        throw new Error(`Failed to load ${config.backendLabel} delivery job after retry.`);
+      }
+      return { outcome: "retried" as const, job: config.validateJob(refreshed, context) };
+    });
+
+    if (!result) return null;
+    // A reset job with no worker polling its session sits pending forever, and so
+    // does one that was already queued when the user pressed Retry.
+    if (result.outcome === "retried" || result.outcome === "already_queued") {
+      const sessionId = getSessionId(result.job);
+      void config.ensureBooWorker(sessionId).catch((error) => {
+        console.error(
+          `[${config.backendLabel}-delivery] failed to ensure boo worker for ${sessionId}:`,
+          error,
+        );
+      });
+    }
     return result;
   }
 
@@ -462,7 +560,7 @@ export function createExternalCliDurableDelivery<
         .run();
       if (abandoned.changes === 0) continue;
       const message = getMessage(row.messageId);
-      if (message) afterDeliveryFailure(message, config.unconfirmedMessage, "unconfirmed");
+      if (message) afterDeliveryFailure(message, config.unconfirmedMessage);
     }
   }
 
@@ -686,17 +784,8 @@ export function createExternalCliDurableDelivery<
     }
   }
 
-  function afterDeliveryFailure(
-    message: DbMessage,
-    error = config.failureMessage,
-    outcome: DeliveryTerminalOutcome = "failed",
-  ): void {
-    updateOpencodeDelivery(
-      message.id,
-      outcome === "unconfirmed" ? "cli_unconfirmed" : "failed",
-      error,
-      null,
-    );
+  function afterDeliveryFailure(message: DbMessage, error = config.failureMessage): void {
+    updateOpencodeDelivery(message.id, "failed", error, null);
     if (message.forwardRole) updateForwardStatus(message.id, "failed");
     if (message.forwardRole === "target" && message.forwardSourceMessageId != null) {
       updateForwardTarget(message.forwardSourceMessageId, message.id, "failed");
@@ -763,11 +852,7 @@ export function createExternalCliDurableDelivery<
     return retried;
   }
 
-  async function endDeliveryJobFromWorker(
-    job: TJob,
-    error: string,
-    outcome: DeliveryTerminalOutcome,
-  ): Promise<boolean> {
+  async function endDeliveryJobFromWorker(job: TJob, error: string): Promise<boolean> {
     const message = getMessage(job.messageId);
     const failed = await queueProgram(
       Effect.gen(function* () {
@@ -775,18 +860,24 @@ export function createExternalCliDurableDelivery<
         return yield* queue.fail(toWorkflowJob(job), error);
       }),
     );
-    if (failed && message) afterDeliveryFailure(message, error, outcome);
+    if (failed && message) afterDeliveryFailure(message, error);
     if (message) broadcastQueue(message.sessionId);
     return failed;
   }
 
   function failDeliveryJobFromWorker(job: TJob, error: string): Promise<boolean> {
-    return endDeliveryJobFromWorker(job, error, "failed");
+    return endDeliveryJobFromWorker(job, error);
   }
 
-  /** Terminal, but honest: the prompt reached the provider and the outcome is unknown. */
+  /**
+   * Deliberately identical to `failDeliveryJobFromWorker` now that
+   * `cli_unconfirmed` has collapsed into `failed`: the two differ only in the
+   * error text the caller supplies. Both survive because workers post to
+   * separate internal endpoints (`/fail` and `/unconfirmed`), so merging them
+   * would be a wire change and a worker version bump.
+   */
   function markDeliveryJobUnconfirmedFromWorker(job: TJob, error: string): Promise<boolean> {
-    return endDeliveryJobFromWorker(job, error, "unconfirmed");
+    return endDeliveryJobFromWorker(job, error);
   }
 
   function markDeliveryJobDispatchedFromWorker(job: TJob): Promise<boolean> {
@@ -865,6 +956,7 @@ export function createExternalCliDurableDelivery<
 
   return {
     enqueueDeliveryJob,
+    retryDeliveryJob,
     resumePendingDeliveryWorkers,
     claimDeliveryJobForWorker,
     completeDeliveryJobFromWorker,

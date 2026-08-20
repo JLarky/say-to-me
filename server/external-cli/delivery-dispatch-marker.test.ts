@@ -120,8 +120,10 @@ function describeBackend<TJob extends Lease>(backend: BackendSuite<TJob>): void 
       expect(row.status).toBe("failed");
       expect(row.lastError).toBe(backend.unconfirmedMessage);
       expect(row.promptDispatchedAt).not.toBeNull();
+      // Terminal `failed`, but carrying the unconfirmed explanation rather than
+      // the generic failure text, so the user knows to check before retrying.
       expect(getMessage(messageId)).toMatchObject({
-        opencodeDeliveryStatus: "cli_unconfirmed",
+        opencodeDeliveryStatus: "failed",
         opencodeDeliveryError: backend.unconfirmedMessage,
       });
     });
@@ -142,7 +144,7 @@ function describeBackend<TJob extends Lease>(backend: BackendSuite<TJob>): void 
         attemptCount: job.attemptCount + 1,
         lockedBy: "worker-b",
       });
-      expect(getMessage(messageId)?.opencodeDeliveryStatus).not.toBe("cli_unconfirmed");
+      expect(getMessage(messageId)?.opencodeDeliveryStatus).not.toBe("failed");
     });
 
     it("refuses to revive a dispatched job on re-enqueue, but revives an un-dispatched one", async () => {
@@ -254,8 +256,7 @@ describe("external CLI delivery dispatch marker", () => {
     label: "Cursor",
     prefix: "cur_",
     table: cursorDeliveryJobs,
-    unconfirmedMessage:
-      "Cursor was given this message, but the delivery could not be confirmed. Check the session before resending.",
+    unconfirmedMessage: "Couldn't confirm this reached Cursor — check the session before retrying",
     enqueue: (messageId, sessionId) => {
       cursor.enqueueCursorDeliveryJob({
         messageId,
@@ -276,8 +277,7 @@ describe("external CLI delivery dispatch marker", () => {
     label: "Claude",
     prefix: "cc_",
     table: claudeDeliveryJobs,
-    unconfirmedMessage:
-      "Claude was given this message, but the delivery could not be confirmed. Check the session before resending.",
+    unconfirmedMessage: "Couldn't confirm this reached Claude — check the session before retrying",
     enqueue: (messageId, sessionId) => {
       claude.enqueueClaudeDeliveryJob({
         messageId,
@@ -298,8 +298,7 @@ describe("external CLI delivery dispatch marker", () => {
     label: "Codex",
     prefix: "cx_",
     table: codexDeliveryJobs,
-    unconfirmedMessage:
-      "Codex was given this message, but the delivery could not be confirmed. Check the session before resending.",
+    unconfirmedMessage: "Couldn't confirm this reached Codex — check the session before retrying",
     enqueue: (messageId, sessionId) => {
       codex.enqueueCodexDeliveryJob({
         messageId,
@@ -320,8 +319,7 @@ describe("external CLI delivery dispatch marker", () => {
     label: "Grok",
     prefix: "gr_",
     table: grokDeliveryJobs,
-    unconfirmedMessage:
-      "Grok was given this message, but the delivery could not be confirmed. Check the session before resending.",
+    unconfirmedMessage: "Couldn't confirm this reached Grok — check the session before retrying",
     enqueue: (messageId, sessionId) => {
       grok.enqueueGrokDeliveryJob({
         messageId,

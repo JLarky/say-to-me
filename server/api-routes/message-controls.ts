@@ -16,12 +16,17 @@ import {
   setMessageStatus,
 } from "../messages.ts";
 import type { DbMessage } from "../db/schemas.ts";
+import { enqueueClaudeDeliveryJob, retryClaudeDeliveryJob } from "../claude/durable-delivery.ts";
+import { enqueueCodexDeliveryJob, retryCodexDeliveryJob } from "../codex/durable-delivery.ts";
+import { enqueueCursorDeliveryJob, retryCursorDeliveryJob } from "../cursor/durable-delivery.ts";
+import { enqueueGrokDeliveryJob, retryGrokDeliveryJob } from "../grok/durable-delivery.ts";
+import type { RetryDeliveryOutcome } from "../external-cli/durable-delivery.ts";
 import {
   enqueueOpenCodeDeliveryJob,
   retryOpenCodeDeliveryJob,
   type EnqueueOpenCodeDeliveryInput,
 } from "../opencode/durable-delivery.ts";
-import { validateSessionId } from "../session-id.ts";
+import { detectSessionBackend, validateSessionId } from "../session-id.ts";
 import { publicRouteErrorResponse } from "./route-errors.ts";
 import { openApiDocs } from "./openapi-docs.ts";
 
@@ -110,7 +115,91 @@ function requireMessageId(rawId: string): Effect.Effect<number, MessageControlEr
   });
 }
 
-export function retryOpenCodeDeliveryEffect(
+type DeliveryKind = "forward_target_message" | "direct_user_message";
+
+function deliveryKind(reply: DbMessage): DeliveryKind {
+  return reply.forwardRole === "target" ? "forward_target_message" : "direct_user_message";
+}
+
+/** No queue can carry this message: neither OpenCode nor an external CLI backend. */
+const noDeliveryBackend = {
+  _tag: "MessageControlError" as const,
+  error: "Message is not in a delivery-backed session.",
+  status: 400,
+};
+
+/**
+ * Refusals, not failures. Resetting a job a worker is mid-way through would
+ * break its lease CAS and let a second worker prompt the agent again, so the
+ * retry declines and says so instead of reporting a send that never happened.
+ */
+const deliveryInFlight = {
+  _tag: "MessageControlError" as const,
+  error: "Delivery is already in progress for this message.",
+  status: 409,
+};
+
+const deliveryAlreadySent = {
+  _tag: "MessageControlError" as const,
+  error: "This message was already delivered.",
+  status: 409,
+};
+
+/** The four CLI backends differ only in which session-id field they enqueue. */
+type CliDeliveryRetry = {
+  retry: (messageId: number) => { outcome: RetryDeliveryOutcome } | null;
+  enqueue: (input: {
+    messageId: number;
+    messageSessionId: string;
+    sessionId: string;
+    kind: DeliveryKind;
+  }) => void;
+};
+
+function retryCliDelivery(
+  handler: CliDeliveryRetry,
+  input: { messageId: number; messageSessionId: string; sessionId: string; kind: DeliveryKind },
+): Effect.Effect<void, MessageControlError> {
+  return Effect.gen(function* () {
+    const result = yield* Effect.sync(() => handler.retry(input.messageId));
+    if (!result) {
+      // No job row at all: mirror the OpenCode branch and queue a fresh one.
+      yield* Effect.sync(() => handler.enqueue(input));
+      return;
+    }
+    if (result.outcome === "in_flight") return yield* Effect.fail(deliveryInFlight);
+    if (result.outcome === "already_delivered") return yield* Effect.fail(deliveryAlreadySent);
+  });
+}
+
+const cliDeliveryRetries = {
+  cursor: {
+    retry: retryCursorDeliveryJob,
+    enqueue: ({ messageId, messageSessionId, sessionId, kind }) =>
+      enqueueCursorDeliveryJob({ messageId, messageSessionId, cursorSessionId: sessionId, kind }),
+  },
+  claude: {
+    retry: retryClaudeDeliveryJob,
+    enqueue: ({ messageId, messageSessionId, sessionId, kind }) =>
+      enqueueClaudeDeliveryJob({ messageId, messageSessionId, claudeSessionId: sessionId, kind }),
+  },
+  codex: {
+    retry: retryCodexDeliveryJob,
+    enqueue: ({ messageId, messageSessionId, sessionId, kind }) =>
+      enqueueCodexDeliveryJob({ messageId, messageSessionId, codexSessionId: sessionId, kind }),
+  },
+  grok: {
+    retry: retryGrokDeliveryJob,
+    enqueue: ({ messageId, messageSessionId, sessionId, kind }) =>
+      enqueueGrokDeliveryJob({ messageId, messageSessionId, grokSessionId: sessionId, kind }),
+  },
+} satisfies Record<"cursor" | "claude" | "codex" | "grok", CliDeliveryRetry>;
+
+/**
+ * Retry delivery for OpenCode or an external CLI backend. Explicit human retry
+ * clears the CLI dispatch marker; automatic re-enqueue must not.
+ */
+export function retryDeliveryEffect(
   rawId: string,
 ): Effect.Effect<MessageControlWithMessage, MessageControlError, MessageControlService> {
   return Effect.gen(function* () {
@@ -128,24 +217,42 @@ export function retryOpenCodeDeliveryEffect(
     const parent = reply.parentId === null ? null : yield* service.getMessage(reply.parentId);
     const deliverySessionId = parent?.attachedSessionId || parent?.sessionId;
     const targetSessionId = deliverySessionId || reply.sessionId;
-    if (!targetSessionId || !validateSessionId(targetSessionId)) {
-      return yield* Effect.fail({
-        _tag: "MessageControlError" as const,
-        error: "Message is not in an OpenCode-backed session.",
-        status: 400,
-      });
+    if (!targetSessionId) {
+      return yield* Effect.fail(noDeliveryBackend);
+    }
+    const backend = detectSessionBackend(targetSessionId);
+    const kind = deliveryKind(reply);
+
+    switch (backend) {
+      case "opencode": {
+        const retried = yield* service.retryOpenCodeDeliveryJob(id);
+        if (!retried) {
+          yield* service.enqueueOpenCodeDeliveryJob({
+            messageId: id,
+            messageSessionId: reply.sessionId,
+            opencodeSessionId: targetSessionId,
+            kind,
+            force: true,
+          });
+        }
+        break;
+      }
+      case "cursor":
+      case "claude":
+      case "codex":
+      case "grok": {
+        yield* retryCliDelivery(cliDeliveryRetries[backend], {
+          messageId: id,
+          messageSessionId: reply.sessionId,
+          sessionId: targetSessionId,
+          kind,
+        });
+        break;
+      }
+      default:
+        return yield* Effect.fail(noDeliveryBackend);
     }
 
-    const retried = yield* service.retryOpenCodeDeliveryJob(id);
-    if (!retried) {
-      yield* service.enqueueOpenCodeDeliveryJob({
-        messageId: id,
-        messageSessionId: reply.sessionId,
-        opencodeSessionId: targetSessionId,
-        kind: reply.forwardRole === "target" ? "forward_target_message" : "direct_user_message",
-        force: true,
-      });
-    }
     yield* service.broadcast(reply.sessionId);
     const message = yield* service.getMessage(id);
     return { ok: true, message: deserializeMessage(message!) };
@@ -283,12 +390,24 @@ export function updateMessagePinnedEffect(
 
 export const MessageControlsGroup = HttpApiGroup.make("message-controls")
   .add(
+    HttpApiEndpoint.post("retryDelivery", "/api/messages/:id/retry-delivery")
+      .setPath(MessagePath)
+      .annotateContext(
+        openApiDocs(
+          "Retry delivery",
+          "Forces a re-enqueue of delivery for a failed or stuck message (OpenCode or external CLI).",
+        ),
+      )
+      .addSuccess(MessageControlWithMessage)
+      .addError(MessageControlError, { status: 400 }),
+  )
+  .add(
     HttpApiEndpoint.post("retryOpenCodeDelivery", "/api/messages/:id/retry-opencode")
       .setPath(MessagePath)
       .annotateContext(
         openApiDocs(
-          "Retry OpenCode delivery",
-          "Forces a re-enqueue of OpenCode delivery for a failed or stuck message.",
+          "Retry OpenCode delivery (deprecated)",
+          "Deprecated alias of retry-delivery. Prefer POST /api/messages/:id/retry-delivery.",
         ),
       )
       .addSuccess(MessageControlWithMessage)
@@ -362,8 +481,11 @@ export function buildMessageControlsHandlers<
     "message-controls",
     (handlers) =>
       handlers
+        .handle("retryDelivery", ({ path }) =>
+          retryDeliveryEffect(path.id).pipe(Effect.catchAll(publicRouteErrorResponse)),
+        )
         .handle("retryOpenCodeDelivery", ({ path }) =>
-          retryOpenCodeDeliveryEffect(path.id).pipe(Effect.catchAll(publicRouteErrorResponse)),
+          retryDeliveryEffect(path.id).pipe(Effect.catchAll(publicRouteErrorResponse)),
         )
         .handle("attachMessageSession", ({ path, payload }) =>
           attachMessageSessionEffect(path.id, payload).pipe(

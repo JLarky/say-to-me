@@ -1,14 +1,7 @@
 import type { Message } from "./types.ts";
 import { formatMessageTime } from "./utils.ts";
 
-export const deliveryStatuses = [
-  "queued",
-  "pending",
-  "sent",
-  "failed",
-  "cli_timed_out",
-  "cli_unconfirmed",
-] as const;
+export const deliveryStatuses = ["queued", "pending", "sent", "failed", "cli_timed_out"] as const;
 export type DeliveryStatusValue = (typeof deliveryStatuses)[number];
 export const deliveryStatusSet = new Set<string>(deliveryStatuses);
 
@@ -54,11 +47,19 @@ export function deliveryProviderLabel(message: Message): string {
 }
 
 /**
- * OpenCode Retry / Force send are wired to `/api/messages/:id/retry-opencode`,
- * which only accepts `ses_` sessions. Derive that capability from the session id,
- * never from the display label (a wrong fallthrough used to show a broken Retry).
+ * Retry is available for every delivery-backed provider. Derive capability from
+ * the session id, never from the display label.
  */
-export function canRetryOpenCodeDelivery(message: Message): boolean {
+export function canRetryDelivery(message: Message): boolean {
+  const target = deliveryTargetSessionId(message);
+  return DELIVERY_PROVIDER_PREFIXES.some(({ prefix }) => target.startsWith(prefix));
+}
+
+/**
+ * Force send only applies to OpenCode, which waits for the session to be idle
+ * before delivering. CLI queued jobs do not share that meaning.
+ */
+export function canForceSendDelivery(message: Message): boolean {
   return deliveryTargetSessionId(message).startsWith("ses_");
 }
 
@@ -79,8 +80,6 @@ export function deliveryStatusLabel(
       return `${provider} failed`;
     case "cli_timed_out":
       return `${provider} CLI timed out`;
-    case "cli_unconfirmed":
-      return `Not confirmed by ${provider} — check the session before resending`;
   }
 }
 

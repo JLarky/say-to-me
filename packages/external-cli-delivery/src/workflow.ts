@@ -33,12 +33,6 @@ export type ExternalCliDeliveryJob = {
   updatedAt: string;
 };
 
-/**
- * How a terminal delivery is reported on the message. A dispatched job whose
- * outcome is unknown must not claim "failed to send".
- */
-export type DeliveryTerminalOutcome = "failed" | "unconfirmed";
-
 export type DeliveryOutcome = "sent" | "failed" | "cancelled";
 
 export class ExternalCliDeliveryQueueError extends Data.TaggedError(
@@ -278,15 +272,9 @@ export function makeExternalCliDeliveryWorkflow(
     store: MessageStoreService,
     fx: DeliveryEffectsService,
     error = failureMessage,
-    outcome: DeliveryTerminalOutcome = "failed",
   ): Effect.Effect<void, MessageStoreError | DeliveryEffectsError> {
     return Effect.gen(function* () {
-      yield* store.updateOpencodeDelivery(
-        message.id,
-        outcome === "unconfirmed" ? "cli_unconfirmed" : "failed",
-        error,
-        null,
-      );
+      yield* store.updateOpencodeDelivery(message.id, "failed", error, null);
       if (message.forwardRole) yield* store.updateForwardStatus(message.id, "failed");
       if (message.forwardRole === "target" && message.forwardSourceMessageId != null) {
         yield* store.updateForwardTarget(message.forwardSourceMessageId, message.id, "failed");
@@ -358,19 +346,13 @@ export function makeExternalCliDeliveryWorkflow(
           yield* fx.broadcastQueue(message.sessionId);
           return true;
         }
-        case "failed": {
-          const failed = yield* queue.fail(job, action.error);
-          if (failed) yield* afterDeliveryFailure(message, store, fx, action.error, "failed");
-          else yield* fx.broadcastQueue(message.sessionId);
-          return true;
-        }
+        // Both are terminal `failed` on the message: an unconfirmed dispatch is
+        // reported as a failure the user can retry, with its own explanation.
+        case "failed":
         case "unconfirmed": {
           const recorded = yield* queue.fail(job, action.error);
-          if (recorded) {
-            yield* afterDeliveryFailure(message, store, fx, action.error, "unconfirmed");
-          } else {
-            yield* fx.broadcastQueue(message.sessionId);
-          }
+          if (recorded) yield* afterDeliveryFailure(message, store, fx, action.error);
+          else yield* fx.broadcastQueue(message.sessionId);
           return true;
         }
       }

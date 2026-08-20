@@ -45,7 +45,7 @@ function renderMessages(
           onDelete={noop}
           onInsertSessionMention={options.onInsertSessionMention}
           onPlay={noop}
-          onRetryOpenCodeDelivery={noop}
+          onRetryDelivery={noop}
           onStop={noop}
           speakingId={null}
         />
@@ -659,7 +659,33 @@ describe("MessageList", () => {
     expect(container.textContent).toContain("Cursor failed");
     expect(container.querySelector("details")?.hasAttribute("open")).toBe(true);
     expect(container.textContent).toContain("You've hit your usage limit");
-    expect(container.textContent).not.toContain("Retry");
+    // Retry is available for every delivery-backed provider, not just OpenCode.
+    expect(container.textContent).toContain("Retry");
+  });
+
+  it("shows a dispatched-but-unconfirmed CLI delivery as a retryable failure", () => {
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+
+    renderMessages(root, [
+      message({
+        id: 1,
+        author: "user",
+        sessionId: "cc_9c7c8c5b-5666-42e9-b6a0-99d3a33a4431",
+        status: "received",
+        opencodeDeliveryStatus: "failed",
+        opencodeDeliveryError:
+          "Couldn't confirm this reached Claude — check the session before retrying",
+      }),
+    ]);
+
+    // One actionable state with the uncertainty in the detail text, rather than
+    // a separate status the user could not do anything about.
+    expect(container.textContent).toContain("Claude failed");
+    expect(container.textContent).toContain("check the session before retrying");
+    expect(container.textContent).toContain("Retry");
+    expect(container.textContent).not.toContain("Force send");
   });
 
   it("shows CLI timeout delivery without retry", () => {

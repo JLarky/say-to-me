@@ -43,8 +43,7 @@ const grokDelivery = createExternalCliDurableDelivery<
   sessionIdField: "grokSessionId",
   runtimeKey: "grok",
   failureMessage: "Grok delivery failed.",
-  unconfirmedMessage:
-    "Grok was given this message, but the delivery could not be confirmed. Check the session before resending.",
+  unconfirmedMessage: "Couldn't confirm this reached Grok — check the session before retrying",
   noCwdMessage: "Grok session has no working directory.",
   jobsTable: grokDeliveryJobs,
   sessionIdColumn: grokDeliveryJobs.grokSessionId,
@@ -72,6 +71,7 @@ export type EnqueueGrokDeliveryInput = {
 };
 
 export const enqueueGrokDeliveryJob = grokDelivery.enqueueDeliveryJob;
+export const retryGrokDeliveryJob = grokDelivery.retryDeliveryJob;
 export const resumeGrokDeliveryWorkers = grokDelivery.resumePendingDeliveryWorkers;
 
 export type GrokDeliveryQueueService = {

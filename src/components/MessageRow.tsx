@@ -17,7 +17,8 @@ import { badge, queue } from "../styles/feed.stylex.ts";
 import type { Message, OpenCodeStatus } from "../types.ts";
 import { formatMessageTime, playedStatuses } from "../utils.ts";
 import {
-  canRetryOpenCodeDelivery,
+  canForceSendDelivery,
+  canRetryDelivery,
   cardStatusLabel,
   deliveryProviderLabel,
   deliveryStatusLabel,
@@ -45,19 +46,12 @@ function getDeliveryBadge(status: DeliveryStatusValue) {
     case "queued":
     case "pending":
     case "cli_timed_out":
-    case "cli_unconfirmed":
       return deliveryBadge.warning;
   }
 }
 
-/**
- * An unconfirmed delivery may still be in progress inside the agent, so it reads
- * as a warning rather than an error the way a failed send does.
- */
 function getDeliveryDetailTone(status: DeliveryStatusValue | null) {
-  return status === "cli_timed_out" || status === "cli_unconfirmed"
-    ? delivery.detailWarning
-    : delivery.detailError;
+  return status === "cli_timed_out" ? delivery.detailWarning : delivery.detailError;
 }
 
 const authorBadge = stylex.create({
@@ -532,7 +526,7 @@ export function MessageRow({
   onPlay,
   onTogglePinned,
   onRetryPendingMessage,
-  onRetryOpenCodeDelivery,
+  onRetryDelivery,
   onStop,
   speakingId,
 }: {
@@ -543,7 +537,7 @@ export function MessageRow({
   onPlay: (message: Message) => void;
   onTogglePinned: (message: Message) => void;
   onRetryPendingMessage: (message: Message) => void;
-  onRetryOpenCodeDelivery: (message: Message) => void;
+  onRetryDelivery: (message: Message) => void;
   onStop: (message: Message) => void;
   speakingId: number | null;
 }) {
@@ -916,7 +910,7 @@ export function MessageRow({
         </div>
       ) : null}
       {message.opencodeDeliveryStatus ? (
-        <DeliveryStatus message={message} onRetryOpenCodeDelivery={onRetryOpenCodeDelivery} />
+        <DeliveryStatus message={message} onRetryDelivery={onRetryDelivery} />
       ) : null}
       {message.error ? <p {...stylex.props(delivery.messageError)}>{message.error}</p> : null}
       <div {...stylex.props(messageMeta.actions)}>
@@ -980,18 +974,18 @@ export function MessageRow({
 
 function DeliveryStatus({
   message,
-  onRetryOpenCodeDelivery,
+  onRetryDelivery,
 }: {
   message: Message;
-  onRetryOpenCodeDelivery: (message: Message) => void;
+  onRetryDelivery: (message: Message) => void;
 }) {
   const status = deliveryStatusSet.has(message.opencodeDeliveryStatus || "")
     ? (message.opencodeDeliveryStatus as DeliveryStatusValue)
     : null;
   const provider = deliveryProviderLabel(message);
-  const detailIsVisibleByDefault =
-    status === "failed" || status === "cli_timed_out" || status === "cli_unconfirmed";
-  const canRetryDelivery = canRetryOpenCodeDelivery(message);
+  const detailIsVisibleByDefault = status === "failed" || status === "cli_timed_out";
+  const canRetry = canRetryDelivery(message);
+  const canForceSend = canForceSendDelivery(message);
 
   return (
     <div {...stylex.props(delivery.row)}>
@@ -1006,20 +1000,20 @@ function DeliveryStatus({
           </p>
         </details>
       ) : null}
-      {canRetryDelivery && message.opencodeDeliveryStatus === "queued" ? (
+      {canForceSend && message.opencodeDeliveryStatus === "queued" ? (
         <button
           {...stylex.props(controls.button, controls.secondary)}
           type="button"
-          onClick={() => onRetryOpenCodeDelivery(message)}
+          onClick={() => onRetryDelivery(message)}
         >
           Force send
         </button>
       ) : null}
-      {canRetryDelivery && message.opencodeDeliveryStatus === "failed" ? (
+      {canRetry && message.opencodeDeliveryStatus === "failed" ? (
         <button
           {...stylex.props(controls.button, controls.secondary)}
           type="button"
-          onClick={() => onRetryOpenCodeDelivery(message)}
+          onClick={() => onRetryDelivery(message)}
         >
           Retry
         </button>

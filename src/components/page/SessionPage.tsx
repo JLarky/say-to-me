@@ -544,12 +544,12 @@ export function SessionPage() {
     setMessages((current) => current.filter((item) => item.id !== message.id));
   }
 
-  async function retryOpenCodeDelivery(message: Message) {
-    const response = await fetch(`/api/messages/${message.id}/retry-opencode`, { method: "POST" });
+  async function retryDelivery(message: Message) {
+    const response = await fetch(`/api/messages/${message.id}/retry-delivery`, { method: "POST" });
 
     if (!response.ok) {
       const payload = await safeResponseJson(response, ErrorPayload);
-      setError(payload.error || "Unable to retry OpenCode delivery.");
+      setError(payload.error || "Unable to retry delivery.");
       return;
     }
 
@@ -1041,7 +1041,7 @@ export function SessionPage() {
             onTogglePinned={togglePinned}
             onPlay={playMessage}
             onRetryPendingMessage={retryPendingMessage}
-            onRetryOpenCodeDelivery={retryOpenCodeDelivery}
+            onRetryDelivery={retryDelivery}
             onStop={stopPlayback}
             speakingId={speakingId}
           />

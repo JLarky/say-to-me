@@ -63,8 +63,10 @@ function directJob(
 function inMemoryStore(seed: DeliveryMessage[]): {
   layer: Layer.Layer<MessageStoreService>;
   get: (id: number) => DeliveryMessage | undefined;
+  getError: (id: number) => string | null | undefined;
 } {
   const rows = new Map(seed.map((row) => [row.id, row]));
+  const errors = new Map<number, string | null>();
   const patch = (id: number, fields: Partial<DeliveryMessage>) => {
     const current = rows.get(id);
     if (current) rows.set(id, { ...current, ...fields });
@@ -74,13 +76,17 @@ function inMemoryStore(seed: DeliveryMessage[]): {
     updateOpencodeDelivery: (id, status, error) =>
       Effect.sync(() => {
         patch(id, { opencodeDeliveryStatus: status });
-        void error;
+        errors.set(id, error);
       }),
     markCompletionWorkSeen: () => Effect.void,
     updateForwardStatus: () => Effect.void,
     updateForwardTarget: () => Effect.void,
   };
-  return { layer: Layer.succeed(workflow.MessageStore, service), get: (id) => rows.get(id) };
+  return {
+    layer: Layer.succeed(workflow.MessageStore, service),
+    get: (id) => rows.get(id),
+    getError: (id) => errors.get(id),
+  };
 }
 
 function recordingEffects(): {
@@ -202,7 +208,10 @@ describe("external-cli delivery workflow (in-memory, no DB)", () => {
     expect(promptCount).toBe(1);
     expect(failed).toBe(true);
     expect(retried).toBe(false);
-    expect(store.get(42)?.opencodeDeliveryStatus).toBe("cli_unconfirmed");
+    // Collapsed into `failed` so the user gets one actionable state; the
+    // uncertainty lives in the explanation, not in a separate status.
+    expect(store.get(42)?.opencodeDeliveryStatus).toBe("failed");
+    expect(store.getError(42)).toBe("exited with code 1");
   });
 
   it("retries a spawn failure even though the job is already marked dispatched", async () => {

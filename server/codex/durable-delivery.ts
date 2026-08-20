@@ -48,8 +48,7 @@ const codexDelivery = createExternalCliDurableDelivery<
   sessionIdField: "codexSessionId",
   runtimeKey: "codex",
   failureMessage: "Codex delivery failed.",
-  unconfirmedMessage:
-    "Codex was given this message, but the delivery could not be confirmed. Check the session before resending.",
+  unconfirmedMessage: "Couldn't confirm this reached Codex — check the session before retrying",
   noCwdMessage: "Codex session has no working directory.",
   jobsTable: codexDeliveryJobs,
   sessionIdColumn: codexDeliveryJobs.codexSessionId,
@@ -78,6 +77,7 @@ export type EnqueueCodexDeliveryInput = {
 };
 
 export const enqueueCodexDeliveryJob = codexDelivery.enqueueDeliveryJob;
+export const retryCodexDeliveryJob = codexDelivery.retryDeliveryJob;
 export const resumeCodexDeliveryWorkers = codexDelivery.resumePendingDeliveryWorkers;
 
 export type CodexDeliveryQueueService = {

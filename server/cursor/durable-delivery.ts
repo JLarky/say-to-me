@@ -43,8 +43,7 @@ const cursorDelivery = createExternalCliDurableDelivery<
   sessionIdField: "cursorSessionId",
   runtimeKey: "cursor",
   failureMessage: "Cursor delivery failed.",
-  unconfirmedMessage:
-    "Cursor was given this message, but the delivery could not be confirmed. Check the session before resending.",
+  unconfirmedMessage: "Couldn't confirm this reached Cursor — check the session before retrying",
   noCwdMessage: "Cursor session has no working directory.",
   jobsTable: cursorDeliveryJobs,
   sessionIdColumn: cursorDeliveryJobs.cursorSessionId,
@@ -72,6 +71,7 @@ export type EnqueueCursorDeliveryInput = {
 };
 
 export const enqueueCursorDeliveryJob = cursorDelivery.enqueueDeliveryJob;
+export const retryCursorDeliveryJob = cursorDelivery.retryDeliveryJob;
 export const resumeCursorDeliveryWorkers = cursorDelivery.resumePendingDeliveryWorkers;
 
 export type CursorDeliveryQueueService = {
