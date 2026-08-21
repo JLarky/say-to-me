@@ -13,6 +13,7 @@ export type ApiMessage = {
   opencodeMessageId: string | null;
   clientMessageId: string | null;
   mergedIntoMessageId: number | null;
+  links?: string[] | null;
   forwardRole?: string | null;
   forwardSourceSessionId?: string | null;
   forwardSourceMessageId?: number | null;
