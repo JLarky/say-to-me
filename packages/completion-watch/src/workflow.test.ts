@@ -147,6 +147,8 @@ function silentEffects(): Layer.Layer<CompletionWatchEffectsService> {
     enqueueSourceCompletionNotice: () => Effect.void,
     stopWatch: () => Effect.void,
     getActiveBaseUrl: () => Effect.succeed(undefined),
+    getSessionIdleGate: () => Effect.succeed("continue"),
+    completeSessionIdle: () => Effect.void,
   };
   return Layer.succeed(CompletionWatchEffects, service);
 }
@@ -251,6 +253,8 @@ describe("completion-watch workflow (in-memory, no DB)", () => {
         }),
       stopWatch: () => Effect.void,
       getActiveBaseUrl: () => Effect.succeed(undefined),
+      getSessionIdleGate: () => Effect.succeed("continue"),
+      completeSessionIdle: () => Effect.void,
     } satisfies CompletionWatchEffectsService);
     const fakeOpenCode = Layer.succeed(CompletionWatchOpenCode, {
       getStatus: () => Effect.succeed("idle" as const),

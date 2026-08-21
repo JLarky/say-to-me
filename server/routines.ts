@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNotNull, lte, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, lte, or, sql } from "drizzle-orm";
 import { Clock, Effect, Fiber, Layer } from "effect";
 import { type as arktype } from "arktype";
 import { randomUUID } from "node:crypto";
@@ -11,12 +11,19 @@ import {
   RoutineRepository,
   RoutineRepositoryError,
   RoutineWorkerIdentity,
+  isScheduleRoutine,
+  isSessionIdleRoutine,
   routineWorkerLoop,
   runDueRoutinesUntilIdle,
+  type CreateRoutineInput,
+  type CreateSessionIdleRoutineInput,
   type DeliverPromptAction,
+  type NotifyOwnerAction,
   type Routine,
   type RoutineStatus,
   type ScheduleTrigger,
+  type SessionIdleTrigger,
+  type WatcherCompletedEvent,
 } from "@say-to-me/routines/workflow";
 import { broadcastQueue } from "./broadcast.ts";
 import { drizzleDb } from "./db/index.ts";
@@ -35,10 +42,13 @@ export {
   RoutineRepository,
   RoutineRepositoryError,
   RoutineWorkerIdentity,
+  isScheduleRoutine,
+  isSessionIdleRoutine,
   routineWorkerLoop,
   runDueRoutineOnce,
   runDueRoutinesUntilIdle,
   type CreateRoutineInput,
+  type CreateSessionIdleRoutineInput,
   type Routine,
   type RoutineClockService,
   type RoutineEnv,
@@ -47,6 +57,7 @@ export {
   type RoutineWorkerIdentityService,
   type RepositoryUpdateRoutineInput,
   type UpdateRoutineInput,
+  type WatcherCompletedEvent,
 } from "@say-to-me/routines/workflow";
 
 export type { RoutineStatus };
@@ -90,10 +101,29 @@ const ScheduleTriggerJson = arktype({
   nextFireAt: "number",
 });
 
+const SessionIdleTriggerJson = arktype({
+  kind: "'session_idle'",
+  targetSessionId: "string",
+  sourceMessageId: "number | null",
+  afterWorkSeen: "true",
+});
+
 const DeliverPromptActionJson = arktype({
   kind: "'deliver_prompt'",
   title: "string",
   message: "string",
+});
+
+const NotifyOwnerActionJson = arktype({
+  kind: "'notify_owner'",
+  "result?": {
+    kind: "'watcher_completed'",
+    routineId: "number",
+    sourceMessageId: "number | null",
+    targetSessionId: "string",
+    targetMessageId: "number | null",
+    reason: "'idle' | 'failed'",
+  },
 });
 
 function parseScheduleTrigger(raw: string, context: string): ScheduleTrigger {
@@ -101,6 +131,14 @@ function parseScheduleTrigger(raw: string, context: string): ScheduleTrigger {
     return parseJson(ScheduleTriggerJson, raw);
   } catch (cause) {
     throw new Error(`${context}: expected schedule trigger`, { cause });
+  }
+}
+
+function parseSessionIdleTrigger(raw: string, context: string): SessionIdleTrigger {
+  try {
+    return parseJson(SessionIdleTriggerJson, raw);
+  } catch (cause) {
+    throw new Error(`${context}: expected session_idle trigger`, { cause });
   }
 }
 
@@ -112,25 +150,50 @@ function parseDeliverPromptAction(raw: string, context: string): DeliverPromptAc
   }
 }
 
-function toRoutine(row: DbRoutineRow, context: string): Routine {
-  if (row.triggerKind !== "schedule") {
-    throw new Error(`${context}: Phase 1 only supports schedule routines`);
+function parseNotifyOwnerAction(raw: string, context: string): NotifyOwnerAction {
+  try {
+    return parseJson(NotifyOwnerActionJson, raw);
+  } catch (cause) {
+    throw new Error(`${context}: expected notify_owner action`, { cause });
   }
-  return {
-    id: row.id,
-    ownerSessionId: row.ownerSessionId,
-    status: row.status,
-    title: row.title,
-    trigger: parseScheduleTrigger(row.trigger, context),
-    action: parseDeliverPromptAction(row.action, context),
-    lastFiredAt: row.lastFiredAt,
-    lastMessageId: row.lastMessageId,
-    lockedAt: row.lockedAt,
-    lockedBy: row.lockedBy,
-    lastError: row.lastError,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  };
+}
+
+function toRoutine(row: DbRoutineRow, context: string): Routine {
+  if (row.triggerKind === "schedule") {
+    return {
+      id: row.id,
+      ownerSessionId: row.ownerSessionId,
+      status: row.status,
+      title: row.title,
+      trigger: parseScheduleTrigger(row.trigger, context),
+      action: parseDeliverPromptAction(row.action, context),
+      lastFiredAt: row.lastFiredAt,
+      lastMessageId: row.lastMessageId,
+      lockedAt: row.lockedAt,
+      lockedBy: row.lockedBy,
+      lastError: row.lastError,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
+  if (row.triggerKind === "session_idle") {
+    return {
+      id: row.id,
+      ownerSessionId: row.ownerSessionId,
+      status: row.status,
+      title: row.title,
+      trigger: parseSessionIdleTrigger(row.trigger, context),
+      action: parseNotifyOwnerAction(row.action, context),
+      lastFiredAt: row.lastFiredAt,
+      lastMessageId: row.lastMessageId,
+      lockedAt: row.lockedAt,
+      lockedBy: row.lockedBy,
+      lastError: row.lastError,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
+  throw new Error(`${context}: unsupported trigger_kind ${row.triggerKind}`);
 }
 
 function loadRoutine(id: number): Routine | null {
@@ -161,11 +224,19 @@ function scheduleTriggerJson(trigger: ScheduleTrigger): string {
   return JSON.stringify(trigger);
 }
 
+function sessionIdleTriggerJson(trigger: SessionIdleTrigger): string {
+  return JSON.stringify(trigger);
+}
+
 function deliverPromptActionJson(action: DeliverPromptAction): string {
   return JSON.stringify(action);
 }
 
-function routineNoticeText(routine: Routine): string {
+function notifyOwnerActionJson(action: NotifyOwnerAction): string {
+  return JSON.stringify(action);
+}
+
+function routineNoticeText(routine: { action: DeliverPromptAction }): string {
   return `<say-to-me-system>Timer fired: ${routine.action.title}\n\n${routine.action.message}</say-to-me-system>`;
 }
 
@@ -181,6 +252,156 @@ function tryRoutineMessage<A>(try_: () => A): Effect.Effect<A, RoutineMessageErr
     try: try_,
     catch: (cause) => new RoutineMessageError({ cause }),
   });
+}
+
+function sessionIdleListWhere(sessionId: string) {
+  return or(
+    eq(routines.ownerSessionId, sessionId),
+    and(
+      eq(routines.triggerKind, "session_idle"),
+      sql`json_extract(${routines.trigger}, '$.targetSessionId') = ${sessionId}`,
+    ),
+  );
+}
+
+export function createSessionIdleRoutine(input: CreateSessionIdleRoutineInput): Routine {
+  ensureSession(input.ownerSessionId);
+  ensureSession(input.trigger.targetSessionId);
+  const trigger: SessionIdleTrigger = {
+    kind: "session_idle",
+    targetSessionId: input.trigger.targetSessionId,
+    sourceMessageId: input.trigger.sourceMessageId,
+    afterWorkSeen: true,
+  };
+  const title =
+    input.title ??
+    (input.trigger.sourceMessageId != null
+      ? `Wait for ${input.trigger.targetSessionId}`
+      : `Wait for ${input.trigger.targetSessionId}`);
+  return toRoutine(
+    validateRoutineRow(
+      drizzleDb
+        .insert(routines)
+        .values({
+          ownerSessionId: input.ownerSessionId,
+          title,
+          triggerKind: "session_idle",
+          trigger: sessionIdleTriggerJson(trigger),
+          action: notifyOwnerActionJson({ kind: "notify_owner" }),
+          nextFireAt: null,
+        })
+        .returning(routineSelectColumns)
+        .get(),
+      "createSessionIdleRoutine",
+    ),
+    "createSessionIdleRoutine",
+  );
+}
+
+export function findActiveSessionIdleRoutineBySourceMessageId(
+  sourceMessageId: number,
+): Routine | null {
+  const row = drizzleDb
+    .select(routineSelectColumns)
+    .from(routines)
+    .where(
+      and(
+        eq(routines.triggerKind, "session_idle"),
+        inArray(routines.status, ["active", "paused", "firing"]),
+        sql`json_extract(${routines.trigger}, '$.sourceMessageId') = ${sourceMessageId}`,
+      ),
+    )
+    .orderBy(asc(routines.id))
+    .limit(1)
+    .get();
+  return row
+    ? toRoutine(
+        validateRoutineRow(row, "findActiveSessionIdleRoutine"),
+        "findActiveSessionIdleRoutine",
+      )
+    : null;
+}
+
+export function findSessionIdleRoutineBySourceMessageId(sourceMessageId: number): Routine | null {
+  const row = drizzleDb
+    .select(routineSelectColumns)
+    .from(routines)
+    .where(
+      and(
+        eq(routines.triggerKind, "session_idle"),
+        sql`json_extract(${routines.trigger}, '$.sourceMessageId') = ${sourceMessageId}`,
+      ),
+    )
+    .orderBy(asc(routines.id))
+    .limit(1)
+    .get();
+  return row
+    ? toRoutine(validateRoutineRow(row, "findSessionIdleRoutine"), "findSessionIdleRoutine")
+    : null;
+}
+
+export function listRoutineEventsByLastMessageIds(
+  messageIds: number[],
+): Map<number, WatcherCompletedEvent> {
+  const events = new Map<number, WatcherCompletedEvent>();
+  if (messageIds.length === 0) return events;
+  const rows = drizzleDb
+    .select(routineSelectColumns)
+    .from(routines)
+    .where(
+      and(eq(routines.triggerKind, "session_idle"), inArray(routines.lastMessageId, messageIds)),
+    )
+    .all();
+  for (const row of rows) {
+    const routine = toRoutine(validateRoutineRow(row, "listRoutineEvents"), "listRoutineEvents");
+    if (routine.lastMessageId != null && isSessionIdleRoutine(routine) && routine.action.result) {
+      events.set(routine.lastMessageId, routine.action.result);
+    }
+  }
+  return events;
+}
+
+export function completeSessionIdleRoutine(input: {
+  routineId: number;
+  messageId: number;
+  targetSessionId: string;
+  targetMessageId: number | null;
+  sourceMessageId: number | null;
+  reason: "idle" | "failed";
+  firedAt?: number;
+}): Routine | null {
+  const current = loadRoutine(input.routineId);
+  if (!current || !isSessionIdleRoutine(current)) return null;
+  if (current.status === "fired" || current.status === "failed" || current.status === "cancelled") {
+    return current;
+  }
+  const result: WatcherCompletedEvent = {
+    kind: "watcher_completed",
+    routineId: current.id,
+    sourceMessageId: input.sourceMessageId ?? current.trigger.sourceMessageId,
+    targetSessionId: input.targetSessionId,
+    targetMessageId: input.targetMessageId,
+    reason: input.reason,
+  };
+  const firedAt = input.firedAt ?? Date.now();
+  const status = input.reason === "failed" ? "failed" : "fired";
+  drizzleDb
+    .update(routines)
+    .set({
+      status,
+      action: notifyOwnerActionJson({ kind: "notify_owner", result }),
+      lastFiredAt: firedAt,
+      lastMessageId: input.messageId,
+      lockedAt: null,
+      lockedBy: null,
+      lastError: input.reason === "failed" ? "Target delivery failed before work." : null,
+      updatedAt: nowSql(),
+    })
+    .where(
+      and(eq(routines.id, current.id), inArray(routines.status, ["active", "paused", "firing"])),
+    )
+    .run();
+  return loadRoutine(current.id);
 }
 
 export const RoutineRepositoryLive = Layer.succeed(RoutineRepository, {
@@ -215,13 +436,11 @@ export const RoutineRepositoryLive = Layer.succeed(RoutineRepository, {
     }),
   list: (sessionId) =>
     tryRoutineRepository(() => {
-      // Phase 1: schedule routines are visible only on ownerSessionId.
-      // Phase 2 will also match session_idle targetSessionId.
       const rows = sessionId
         ? drizzleDb
             .select(routineSelectColumns)
             .from(routines)
-            .where(eq(routines.ownerSessionId, sessionId))
+            .where(sessionIdleListWhere(sessionId))
             .orderBy(asc(routines.nextFireAt), asc(routines.id))
             .all()
         : drizzleDb
@@ -235,6 +454,7 @@ export const RoutineRepositoryLive = Layer.succeed(RoutineRepository, {
     tryRoutineRepository(() => {
       const current = loadRoutine(id);
       if (!current || !editableRoutineStatus(current.status)) return null;
+      if (!isScheduleRoutine(current)) return null;
       if (input.ownerSessionId) ensureSession(input.ownerSessionId);
 
       const nextTrigger: ScheduleTrigger = {
@@ -326,6 +546,7 @@ export const RoutineRepositoryLive = Layer.succeed(RoutineRepository, {
     }),
   complete: (routine, messageId, firedAt) =>
     tryRoutineRepository(() => {
+      if (!isScheduleRoutine(routine)) return false;
       const intervalMs = routine.trigger.intervalMs;
       const nextFireAt = intervalMs ? firedAt + intervalMs : routine.trigger.nextFireAt;
       const nextTrigger: ScheduleTrigger = {
@@ -351,6 +572,20 @@ export const RoutineRepositoryLive = Layer.succeed(RoutineRepository, {
     }),
   fail: (routine, error, now) =>
     tryRoutineRepository(() => {
+      if (!isScheduleRoutine(routine)) {
+        const result = drizzleDb
+          .update(routines)
+          .set({
+            status: "failed",
+            lockedAt: null,
+            lockedBy: null,
+            lastError: error,
+            updatedAt: nowSql(),
+          })
+          .where(eq(routines.id, routine.id))
+          .run();
+        return result.changes > 0;
+      }
       const nextFireAt = now + ROUTINE_RETRY_MS;
       const nextTrigger: ScheduleTrigger = {
         ...routine.trigger,
@@ -373,6 +608,8 @@ export const RoutineRepositoryLive = Layer.succeed(RoutineRepository, {
     }),
   pause: (id) =>
     tryRoutineRepository(() => {
+      const current = loadRoutine(id);
+      if (!current || !isScheduleRoutine(current)) return null;
       const result = drizzleDb
         .update(routines)
         .set({ status: "paused", lockedAt: null, lockedBy: null, updatedAt: nowSql() })
@@ -384,7 +621,7 @@ export const RoutineRepositoryLive = Layer.succeed(RoutineRepository, {
   resume: (id, now) =>
     tryRoutineRepository(() => {
       const routine = loadRoutine(id);
-      if (!routine || routine.status !== "paused") return null;
+      if (!routine || !isScheduleRoutine(routine) || routine.status !== "paused") return null;
       const nextFireAt = Math.max(routine.trigger.nextFireAt, now);
       const nextTrigger: ScheduleTrigger = { ...routine.trigger, nextFireAt };
       const result = drizzleDb
@@ -415,7 +652,7 @@ export const RoutineRepositoryLive = Layer.succeed(RoutineRepository, {
   trigger: (id, now) =>
     tryRoutineRepository(() => {
       const routine = loadRoutine(id);
-      if (!routine || routine.status !== "active") return null;
+      if (!routine || !isScheduleRoutine(routine) || routine.status !== "active") return null;
       const nextTrigger: ScheduleTrigger = { ...routine.trigger, nextFireAt: now };
       const result = drizzleDb
         .update(routines)
@@ -437,6 +674,13 @@ export const RoutineRepositoryLive = Layer.succeed(RoutineRepository, {
 export const RoutineMessageLive = Layer.succeed(RoutineMessage, {
   fire: (routine) =>
     Effect.gen(function* () {
+      if (!isScheduleRoutine(routine)) {
+        return yield* Effect.fail(
+          new RoutineMessageError({
+            cause: new Error("Only schedule routines can be fired by the worker."),
+          }),
+        );
+      }
       const clientMessageId = `routine-${routine.id}-${routine.trigger.nextFireAt}`;
       const message = yield* tryRoutineMessage(
         () =>

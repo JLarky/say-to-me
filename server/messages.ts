@@ -14,7 +14,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { maxTotalMessages } from "./config.ts";
-import { messages as messagesTable } from "./db/drizzle-schema.ts";
+import { messages as messagesTable, routines as routinesTable } from "./db/drizzle-schema.ts";
 import { drizzleDb, drizzleSqlite } from "./db/index.ts";
 import { DbCount, DbMessage, validateDb } from "./db/schemas.ts";
 import { claimQueuedAgentSlot } from "./messages-queue-cap-claim.ts";
@@ -24,7 +24,12 @@ import {
   serializeAttachment,
 } from "./images.ts";
 import { extractSessionMentions } from "../src/session-mentions.ts";
-import { JsonStringArray, JsonUnknownArray, safeJsonParse } from "@say-to-me/runtime-validation";
+import {
+  JsonStringArray,
+  JsonUnknownArray,
+  parseJson,
+  safeJsonParse,
+} from "@say-to-me/runtime-validation";
 import type { OpenCodeStatus } from "../src/types.ts";
 import { getCachedOpenCodeStatus } from "./opencode/cache.ts";
 import { inspectOpenCodeActivityRuntime } from "./opencode/activity-routes.ts";
@@ -693,6 +698,22 @@ export function setCompletionWatchStatus(messageId: number, status: string, next
     .run();
 }
 
+/** Target message(s) still watching for idle after a relay from this source message. */
+export function listWatchingMessagesBySourceMessageId(sourceMessageId: number): DbMessage[] {
+  return drizzleDb
+    .select(messageSelectColumns)
+    .from(messagesTable)
+    .where(
+      and(
+        eq(messagesTable.completionSourceMessageId, sourceMessageId),
+        inArray(messagesTable.completionWatchStatus, ["watching", "source_failed"]),
+      ),
+    )
+    .orderBy(asc(messagesTable.id))
+    .all()
+    .map((row) => validateDb(DbMessage, row, "watchingMessagesBySource"));
+}
+
 export function updateForwardTarget(
   sourceMessageId: number,
   targetMessageId: number,
@@ -748,11 +769,27 @@ export function deserializeMessage(
   message: DbMessage,
   attachments = listAttachmentsForMessage(message.id),
   sessionIndex?: Map<string, MessageSessionReference>,
+  routineEvent?: {
+    kind: "watcher_completed";
+    routineId: number;
+    sourceMessageId: number | null;
+    targetSessionId: string;
+    targetMessageId: number | null;
+    reason: "idle" | "failed";
+  } | null,
 ): Omit<DbMessage, "links" | "sessionRefs"> & {
   links: string[] | null;
   attachments: ReturnType<typeof serializeAttachment>[];
   sessions: MessageSessionReference[];
   extraMarkdownHtml?: string;
+  routineEvent?: {
+    kind: "watcher_completed";
+    routineId: number;
+    sourceMessageId: number | null;
+    targetSessionId: string;
+    targetMessageId: number | null;
+    reason: "idle" | "failed";
+  };
 } {
   const { sessionRefs: _sessionRefs, ...rest } = message;
   return {
@@ -761,20 +798,89 @@ export function deserializeMessage(
     attachments,
     sessions: resolveMessageSessions(message, sessionIndex),
     ...extraMarkdownHtmlField(message.extraMarkdown),
+    ...(routineEvent ? { routineEvent } : {}),
   };
+}
+
+function routineEventsByLastMessageIds(messageIds: number[]): Map<
+  number,
+  {
+    kind: "watcher_completed";
+    routineId: number;
+    sourceMessageId: number | null;
+    targetSessionId: string;
+    targetMessageId: number | null;
+    reason: "idle" | "failed";
+  }
+> {
+  const events = new Map<
+    number,
+    {
+      kind: "watcher_completed";
+      routineId: number;
+      sourceMessageId: number | null;
+      targetSessionId: string;
+      targetMessageId: number | null;
+      reason: "idle" | "failed";
+    }
+  >();
+  if (messageIds.length === 0) return events;
+  const rows = drizzleDb
+    .select({
+      id: routinesTable.id,
+      lastMessageId: routinesTable.lastMessageId,
+      action: routinesTable.action,
+    })
+    .from(routinesTable)
+    .where(
+      and(
+        eq(routinesTable.triggerKind, "session_idle"),
+        inArray(routinesTable.lastMessageId, messageIds),
+      ),
+    )
+    .all();
+  const NotifyOwnerActionResult = arktype({
+    kind: "'notify_owner'",
+    "result?": {
+      kind: "'watcher_completed'",
+      routineId: "number",
+      sourceMessageId: "number | null",
+      targetSessionId: "string",
+      targetMessageId: "number | null",
+      reason: "'idle' | 'failed'",
+    },
+  });
+  for (const row of rows) {
+    if (row.lastMessageId == null) continue;
+    try {
+      const action = parseJson(NotifyOwnerActionResult, row.action);
+      if (action.result) events.set(row.lastMessageId, action.result);
+    } catch {
+      // Ignore malformed action JSON; message still serializes without routineEvent.
+    }
+  }
+  return events;
 }
 
 export function listMessages(sessionId = "default"): ReturnType<typeof deserializeMessage>[] {
   const attachments = attachmentsByMessageId(sessionId);
   const sessionIndex = buildSessionReferenceIndex();
-  return drizzleDb
+  const rows = drizzleDb
     .select(messageSelectColumns)
     .from(messagesTable)
     .where(eq(messagesTable.sessionId, sessionId))
     .orderBy(asc(messagesTable.id))
     .all()
-    .map((row) => validateDb(DbMessage, row, "allMessages"))
-    .map((message) => deserializeMessage(message, attachments.get(message.id) || [], sessionIndex));
+    .map((row) => validateDb(DbMessage, row, "allMessages"));
+  const events = routineEventsByLastMessageIds(rows.map((row) => row.id));
+  return rows.map((message) =>
+    deserializeMessage(
+      message,
+      attachments.get(message.id) || [],
+      sessionIndex,
+      events.get(message.id) ?? null,
+    ),
+  );
 }
 
 export function listSessionsReferencingSession(sessionId: string): string[] {

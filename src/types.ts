@@ -191,6 +191,14 @@ export const Message = type({
   "completionSourceMessageId?": "number | null",
   "completionTargetNotificationMessageId?": "number | null",
   "completionSourceNotificationMessageId?": "number | null",
+  "routineEvent?": {
+    kind: "'watcher_completed'",
+    routineId: "number",
+    sourceMessageId: "number | null",
+    targetSessionId: "string",
+    targetMessageId: "number | null",
+    reason: "'idle' | 'failed'",
+  },
   "paseoAuthor?": "string | null",
   "paseoAuthorName?": "string | null",
   "attachments?": MessageAttachment.array(),
@@ -425,17 +433,32 @@ export const Routine = type({
   ownerSessionId: "string",
   status: "'active' | 'paused' | 'firing' | 'fired' | 'cancelled' | 'failed'",
   title: "string | null",
-  trigger: {
+  trigger: type({
     kind: "'schedule'",
     dueAt: "number",
     intervalMs: "number | null",
     nextFireAt: "number",
-  },
-  action: {
+  }).or({
+    kind: "'session_idle'",
+    targetSessionId: "string",
+    sourceMessageId: "number | null",
+    afterWorkSeen: "true",
+  }),
+  action: type({
     kind: "'deliver_prompt'",
     title: "string",
     message: "string",
-  },
+  }).or({
+    kind: "'notify_owner'",
+    "result?": {
+      kind: "'watcher_completed'",
+      routineId: "number",
+      sourceMessageId: "number | null",
+      targetSessionId: "string",
+      targetMessageId: "number | null",
+      reason: "'idle' | 'failed'",
+    },
+  }),
   lastFiredAt: "number | null",
   lastMessageId: "number | null",
   lockedAt: "number | null",

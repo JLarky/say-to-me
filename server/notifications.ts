@@ -282,6 +282,22 @@ export async function checkForwardCompletionNotification(
 
   if (status !== "idle" || !watch.seenWorking) return false;
 
+  const {
+    completeSessionIdleRoutine,
+    findActiveSessionIdleRoutineBySourceMessageId,
+    findSessionIdleRoutineBySourceMessageId,
+    isSessionIdleRoutine,
+  } = await import("./routines.ts");
+  const idleRoutine =
+    findActiveSessionIdleRoutineBySourceMessageId(sourceMessageId) ??
+    findSessionIdleRoutineBySourceMessageId(sourceMessageId);
+  if (idleRoutine && isSessionIdleRoutine(idleRoutine) && idleRoutine.status === "cancelled") {
+    stopForwardCompletionNotificationWatch(sourceMessageId);
+    setCompletionWatchStatus(watch.targetMessageId, "cancelled");
+    stopCompletionWatch(watch.targetMessageId);
+    return false;
+  }
+
   const targetNotification = ensureTargetIdleNotification(
     watch.targetSessionId,
     `target-idle-${watch.sourceMessageId}`,
@@ -343,6 +359,16 @@ export async function checkForwardCompletionNotification(
   updateForwardTarget(sourceNotification.id, targetNotification.id, "notified");
   stopCompletionWatch(watch.targetMessageId);
   setCompletionWatchStatus(watch.targetMessageId, "completed");
+  if (idleRoutine && isSessionIdleRoutine(idleRoutine)) {
+    completeSessionIdleRoutine({
+      routineId: idleRoutine.id,
+      messageId: sourceNotification.id,
+      targetSessionId: watch.targetSessionId,
+      targetMessageId: watch.targetMessageId,
+      sourceMessageId: watch.sourceMessageId,
+      reason: "idle",
+    });
+  }
   stopForwardCompletionNotificationWatch(sourceMessageId);
   broadcastQueue(watch.sourceSessionId);
   broadcastQueue(watch.targetSessionId);

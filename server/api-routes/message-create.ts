@@ -29,6 +29,7 @@ import { ensureSession, getSession } from "../sessions.ts";
 import { replyBodyKeys, sayBodyKeys } from "../validation.ts";
 import { maxMessageLength, maxUserMessageLength, minMessageLength } from "../config.ts";
 import { broadcastQueue } from "../broadcast.ts";
+import { createSessionIdleRoutine, findSessionIdleRoutineBySourceMessageId } from "../routines.ts";
 import { publicRouteErrorResponse } from "./route-errors.ts";
 import { openApiDocs } from "./openapi-docs.ts";
 
@@ -87,6 +88,11 @@ export type MessageCreateService = {
   prunePlayedHistory: (sessionId: string) => Effect.Effect<void>;
   broadcast: (sessionId: string) => Effect.Effect<void>;
   getMessage: (id: number) => Effect.Effect<ReturnType<typeof getMessage>>;
+  createSessionIdleRoutine: (input: {
+    ownerSessionId: string;
+    targetSessionId: string;
+    sourceMessageId: number;
+  }) => Effect.Effect<void>;
 };
 
 export const MessageCreate = Context.GenericTag<MessageCreateService>("say-to-me/MessageCreate");
@@ -137,6 +143,21 @@ export const MessageCreateLive = Layer.succeed(MessageCreate, {
   prunePlayedHistory: (sessionId) => Effect.sync(() => prunePlayedHistory(sessionId)),
   broadcast: (sessionId) => Effect.sync(() => broadcastQueue(sessionId)),
   getMessage: (id) => Effect.sync(() => getMessage(id)),
+  createSessionIdleRoutine: (input) =>
+    Effect.sync(() => {
+      if (findSessionIdleRoutineBySourceMessageId(input.sourceMessageId)) return;
+      createSessionIdleRoutine({
+        ownerSessionId: input.ownerSessionId,
+        title: `Wait for ${input.targetSessionId}`,
+        trigger: {
+          kind: "session_idle",
+          targetSessionId: input.targetSessionId,
+          sourceMessageId: input.sourceMessageId,
+          afterWorkSeen: true,
+        },
+        action: { kind: "notify_owner" },
+      });
+    }),
 } satisfies MessageCreateService);
 
 function routeError(error: string, status = 400): MessageCreateError {
@@ -277,6 +298,13 @@ export function createSessionMessageEffect(
       yield* service.updateForwardTarget(sourceMessage.id, targetMessage.id, "pending");
       yield* service.updateForwardTarget(sourceMessage.id, targetMessage.id, "queued");
       yield* service.updateForwardStatus(targetMessage.id, "queued");
+      if (notifyOnCompletion) {
+        yield* service.createSessionIdleRoutine({
+          ownerSessionId: sessionId,
+          targetSessionId,
+          sourceMessageId: sourceMessage.id,
+        });
+      }
       const targetBackend = detectSessionBackend(targetSessionId);
       if (targetBackend === "opencode") {
         yield* service.updateOpencodeDelivery(targetMessage.id, "queued", null, null);

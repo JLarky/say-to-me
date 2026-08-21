@@ -3,6 +3,11 @@ export type RoutineLabelInput = {
   nextFireAt: number;
   intervalMs?: number | null;
   lastError?: string | null;
+  triggerKind?: "schedule" | "session_idle";
+  /** Viewing session for idle waits — drives owner vs target copy. */
+  viewerSessionId?: string | null;
+  ownerSessionId?: string | null;
+  targetSessionId?: string | null;
 };
 
 export function formatRoutineTime(timestamp: number): string {
@@ -27,7 +32,10 @@ export function formatRemaining(ms: number): string {
   return remainingHours ? `${days}d ${remainingHours}h` : `${days}d`;
 }
 
-export function repeatLabel(routine: Pick<RoutineLabelInput, "intervalMs">): string {
+export function repeatLabel(
+  routine: Pick<RoutineLabelInput, "intervalMs" | "triggerKind">,
+): string {
+  if (routine.triggerKind === "session_idle") return "Wait until idle";
   if (!routine.intervalMs) return "One-shot";
   const minutes = Math.round(routine.intervalMs / 60_000);
   if (minutes < 60) return `Every ${minutes}m`;
@@ -42,36 +50,74 @@ export function routineStatusLabel(
   return routine.status;
 }
 
-export function routineSortTime(routine: Pick<RoutineLabelInput, "status" | "nextFireAt">): number {
+export function routineSortTime(
+  routine: Pick<RoutineLabelInput, "status" | "nextFireAt" | "triggerKind">,
+): number {
+  if (routine.triggerKind === "session_idle") {
+    return routine.status === "active" || routine.status === "firing" ? 0 : Number.MAX_SAFE_INTEGER;
+  }
   if (routine.status === "active" || routine.status === "firing") return routine.nextFireAt;
   return Number.MAX_SAFE_INTEGER;
 }
 
 export function isExpiredPausedRoutine(
-  routine: Pick<RoutineLabelInput, "status" | "nextFireAt">,
+  routine: Pick<RoutineLabelInput, "status" | "nextFireAt" | "triggerKind">,
   now: number,
 ): boolean {
+  if (routine.triggerKind === "session_idle") return false;
   return routine.status === "paused" && routine.nextFireAt <= now;
 }
 
-export function routineNeedsClock(routine: Pick<RoutineLabelInput, "status">): boolean {
+export function routineNeedsClock(
+  routine: Pick<RoutineLabelInput, "status" | "triggerKind">,
+): boolean {
+  if (routine.triggerKind === "session_idle") return false;
   return routine.status === "active" || routine.status === "paused" || routine.status === "firing";
 }
 
-export function canEditRoutine(routine: Pick<RoutineLabelInput, "status">): boolean {
+export function canEditRoutine(
+  routine: Pick<RoutineLabelInput, "status" | "triggerKind">,
+): boolean {
+  if (routine.triggerKind === "session_idle") return false;
   return (
     routine.status === "active" || routine.status === "paused" || routine.status === "cancelled"
   );
 }
 
-export function canStopRoutine(routine: Pick<RoutineLabelInput, "status">): boolean {
+export function canStopRoutine(
+  routine: Pick<RoutineLabelInput, "status" | "triggerKind">,
+): boolean {
   return routine.status === "active" || routine.status === "paused" || routine.status === "firing";
 }
 
+export function sessionIdlePartyLabel(
+  routine: Pick<RoutineLabelInput, "viewerSessionId" | "ownerSessionId" | "targetSessionId">,
+): string {
+  const viewer = routine.viewerSessionId;
+  if (viewer && routine.targetSessionId && viewer === routine.targetSessionId) {
+    return `${routine.ownerSessionId ?? "Another session"} is waiting for this session to be idle`;
+  }
+  return `Waiting for ${routine.targetSessionId ?? "target"} to be idle`;
+}
+
 export function routineCountdownLabel(
-  routine: Pick<RoutineLabelInput, "status" | "nextFireAt">,
+  routine: Pick<
+    RoutineLabelInput,
+    | "status"
+    | "nextFireAt"
+    | "triggerKind"
+    | "viewerSessionId"
+    | "ownerSessionId"
+    | "targetSessionId"
+  >,
   now = Date.now(),
 ): string {
+  if (routine.triggerKind === "session_idle") {
+    if (routine.status === "cancelled") return "cancelled";
+    if (routine.status === "fired") return "notified";
+    if (routine.status === "failed") return "failed";
+    return sessionIdlePartyLabel(routine);
+  }
   if (isExpiredPausedRoutine(routine, now)) return "stopped";
   if (routine.status === "paused")
     return `paused until resumed, next fire ${formatRoutineTime(routine.nextFireAt)}`;
@@ -84,8 +130,22 @@ export function routineCountdownLabel(
 }
 
 export function routineScheduleLabel(
-  routine: Pick<RoutineLabelInput, "status" | "nextFireAt">,
+  routine: Pick<
+    RoutineLabelInput,
+    | "status"
+    | "nextFireAt"
+    | "triggerKind"
+    | "viewerSessionId"
+    | "ownerSessionId"
+    | "targetSessionId"
+  >,
 ): string {
+  if (routine.triggerKind === "session_idle") {
+    if (routine.status === "cancelled") return "Cancelled wait.";
+    if (routine.status === "fired") return "Idle notification sent.";
+    if (routine.status === "failed") return "Wait ended: target delivery failed.";
+    return sessionIdlePartyLabel(routine);
+  }
   if (routine.status === "cancelled") return "Cancelled. Edit to schedule again.";
   if (routine.status === "fired") return "Fired";
   return `Next fire ${formatRoutineTime(routine.nextFireAt)}`;
