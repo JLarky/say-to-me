@@ -186,6 +186,7 @@ export function createSessionMessageEffect(
         clientMessageId,
         extraMarkdown,
         leadingRelay,
+        links,
         notifyOnCompletion,
         sessionId,
         targetSessionId,
@@ -195,6 +196,7 @@ export function createSessionMessageEffect(
       yield* service.ensureSession(sessionId);
       yield* service.ensureSession(targetSessionId);
       const forwardedText = redactInlineAudioAttachmentPaths(text);
+      const linksJson = links ? JSON.stringify(links) : null;
 
       if (clientMessageId) {
         const existingSource = yield* service.getMessageByClientId(
@@ -238,6 +240,7 @@ export function createSessionMessageEffect(
         text: `<say-to-me-system>${targetSessionId} received message: ${forwardedText.replace(/[<>]/g, "").trim()}. You will be notified once the session is idle.</say-to-me-system>`,
         author: "user",
         status: "received",
+        links: linksJson,
         sessionRefs: JSON.stringify([
           {
             id: targetSessionId,
@@ -257,6 +260,7 @@ export function createSessionMessageEffect(
         text: forwardedText,
         author: "user",
         status: "received",
+        links: linksJson,
         sessionRefs: JSON.stringify([{ id: sessionId }]),
         clientMessageId: null,
         forwardRole: "target",

@@ -161,6 +161,7 @@ export async function deliverQueuedAsNewMessage(
           text,
           author: "user",
           status: "received",
+          links: forwarded.links,
           sessionRefs: forwarded.sessionRefs,
           clientMessageId: null,
           forwardRole: forwarded.forwardRole,

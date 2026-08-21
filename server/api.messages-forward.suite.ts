@@ -201,6 +201,77 @@ describe("say API: message forwarding basics", () => {
     }
   });
 
+  it("preserves links on both source and target when forwarding", async () => {
+    const previousOpenCodeUrl = process.env.SAY_TO_ME_OPENCODE_URL;
+    const sourceSessionId = "ses_f1a2b3c4d5e6ForwardLinkSrc";
+    const targetSessionId = "ses_a9b8c7d6e5f4ForwardLinkTgt";
+    const links = ["https://github.com/JLarky/say-to-me/pull/18"];
+    const openCode = await mockOpenCode((req, res) => {
+      const respond = (payload: unknown) => {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(payload));
+      };
+      if (req.url?.startsWith("/session/status")) {
+        return respond({
+          [sourceSessionId]: { type: "idle" },
+          [targetSessionId]: { type: "idle" },
+        });
+      }
+      if (req.method === "POST" && req.url?.startsWith(`/session/${targetSessionId}/message`)) {
+        return respond({ info: { id: "msg_forwarded_links" }, parts: [] });
+      }
+      if (req.url?.startsWith(`/session/${sourceSessionId}`)) {
+        return respond({ id: sourceSessionId, directory: "/tmp/forward-links-source" });
+      }
+      if (req.url?.startsWith(`/session/${targetSessionId}`)) {
+        return respond({ id: targetSessionId, directory: "/tmp/forward-links-target" });
+      }
+      res.writeHead(404).end();
+    });
+    process.env.SAY_TO_ME_OPENCODE_URL = openCode.url;
+
+    try {
+      const response = await fetch(`${origin}/api/sessions/${sourceSessionId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          author: "user",
+          targetSessionId,
+          text: "Please review pull request 18 with an Effect focus.",
+          links,
+          notifyOnCompletion: false,
+        }),
+      });
+      const payload = await response.json();
+
+      expect(response.status).toBe(201);
+      expect(payload.message).toMatchObject({
+        sessionId: sourceSessionId,
+        forwardRole: "source",
+        links,
+      });
+      expect(payload.targetMessage).toMatchObject({
+        sessionId: targetSessionId,
+        forwardRole: "target",
+        text: "Please review pull request 18 with an Effect focus.",
+        links,
+      });
+
+      const sourceMessages = await fetchSessionMessages(origin, sourceSessionId);
+      const targetMessages = await fetchSessionMessages(origin, targetSessionId);
+      expect(sourceMessages.find((message) => message.id === payload.message.id)?.links).toEqual(
+        links,
+      );
+      expect(
+        targetMessages.find((message) => message.id === payload.targetMessage.id)?.links,
+      ).toEqual(links);
+    } finally {
+      process.env.SAY_TO_ME_OPENCODE_URL = previousOpenCodeUrl;
+      openCode.server.close();
+      server.close();
+    }
+  });
+
   it("forwards a leading raw session id shorthand with the target prompt stripped", async () => {
     const previousOpenCodeUrl = process.env.SAY_TO_ME_OPENCODE_URL;
     const sourceSessionId = "ses_792ad01e97a5v6UeRxKf79xhmB";

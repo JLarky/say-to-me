@@ -51,6 +51,7 @@ export type ForwardMessageCommand = {
   clientMessageId: string | null;
   extraMarkdown: string | null;
   leadingRelay: { session: { alias: string | null; id: string }; text: string } | null;
+  links: string[] | null;
   notifyOnCompletion: boolean;
   sessionId: string;
   targetSessionId: string;
@@ -272,6 +273,7 @@ export function buildSessionMessageCommand({
         clientMessageId,
         extraMarkdown,
         leadingRelay,
+        links,
         notifyOnCompletion,
         sessionId,
         targetSessionId,

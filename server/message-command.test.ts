@@ -119,6 +119,21 @@ describe("buildSessionMessageCommand", () => {
     ).resolves.toMatchObject({ notifyOnCompletion: true, type: "direct" });
   });
 
+  it("carries links on forward commands", async () => {
+    await expect(
+      build({
+        author: "user",
+        targetSessionId,
+        text: "review this",
+        links: ["https://example.test/pr/1"],
+      }),
+    ).resolves.toMatchObject({
+      links: ["https://example.test/pr/1"],
+      targetSessionId,
+      type: "forward",
+    });
+  });
+
   it("extracts leading relay targets for user messages", async () => {
     await expect(
       build({ author: "user", text: `say-to-me(${targetSessionId}, Pairing buddy) please check` }),

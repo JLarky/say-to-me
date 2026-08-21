@@ -483,6 +483,7 @@ export function insertForwardMessageRow({
   text,
   author,
   status,
+  links = null,
   sessionRefs,
   clientMessageId,
   forwardRole,
@@ -499,6 +500,7 @@ export function insertForwardMessageRow({
   text: string;
   author: "agent" | "user";
   status: string;
+  links?: string | null;
   sessionRefs: string | null;
   clientMessageId: string | null;
   forwardRole: string;
@@ -520,6 +522,7 @@ export function insertForwardMessageRow({
         text,
         author,
         status,
+        links,
         sessionRefs,
         clientMessageId,
         forwardRole,
