@@ -638,9 +638,18 @@ export function listQueuedSourceCompletionNotifications(
 }
 
 export function listActiveCompletionWatches(sessionId?: string): DbMessage[] {
+  // Resume watches even when Cursor/CLI confirmation failed after work was observed.
+  // Never used to re-enqueue delivery — callers only start pollers.
+  const deliveryAllowsWatch = or(
+    eq(messagesTable.opencodeDeliveryStatus, "sent"),
+    and(
+      eq(messagesTable.completionWatchWorkSeen, 1),
+      inArray(messagesTable.opencodeDeliveryStatus, ["failed", "pending", "queued"]),
+    ),
+  );
   const conditions = [
     eq(messagesTable.author, "user" as const),
-    eq(messagesTable.opencodeDeliveryStatus, "sent"),
+    deliveryAllowsWatch,
     inArray(messagesTable.completionWatchStatus, ["watching", "source_failed"]),
   ];
   if (sessionId) conditions.push(eq(messagesTable.sessionId, sessionId));

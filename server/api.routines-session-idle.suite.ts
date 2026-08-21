@@ -8,7 +8,13 @@ import {
 } from "./api.harness.ts";
 import type { Routine } from "../src/types.ts";
 import { completeSessionIdleRoutine, findSessionIdleRoutineBySourceMessageId } from "./routines.ts";
-import { listMessages, markCompletionWorkSeen, setCompletionWatchStatus } from "./messages.ts";
+import {
+  listMessages,
+  markCompletionWorkSeen,
+  setCompletionWatchStatus,
+  updateOpencodeDelivery,
+  listActiveCompletionWatches,
+} from "./messages.ts";
 import { drizzleDb } from "./db/index.ts";
 import { routines } from "./db/drizzle-schema.ts";
 import { eq } from "drizzle-orm";
@@ -328,6 +334,88 @@ describe("say API: session_idle routines (phase 2)", () => {
 
       const routine = findSessionIdleRoutineBySourceMessageId(forward.message.id);
       expect(routine?.status).toBe("fired");
+      expect(
+        listMessages(sourceSessionId).some((message) => message.text === "Session is now idle."),
+      ).toBe(true);
+    } finally {
+      process.env.SAY_TO_ME_OPENCODE_URL = previousOpenCodeUrl;
+      openCode.server.close();
+      await closeTestServer(server);
+    }
+  });
+
+  it("resumeCompletionWatches recovers watches after failed delivery confirmation", async () => {
+    const app = createApiMiddleware();
+    const { origin, server } = await listen(app);
+    const previousOpenCodeUrl = process.env.SAY_TO_ME_OPENCODE_URL;
+    const sourceSessionId = "ses_aa1aa1aa1aa1OwnerAaWait011";
+    const targetSessionId = "ses_bb1bb1bb1bb1TargetBbWait11";
+    let targetStatus: "busy" | "idle" = "busy";
+    const openCode = await mockOpenCode((req, res) => {
+      const respond = (payload: unknown) => {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(payload));
+      };
+      if (req.url?.startsWith("/session/status")) {
+        return respond({
+          [sourceSessionId]: { type: "idle" },
+          [targetSessionId]: { type: targetStatus },
+        });
+      }
+      if (req.method === "POST" && req.url?.startsWith(`/session/${targetSessionId}/message`)) {
+        return respond({ info: { id: "msg_failed_confirm_target" }, parts: [] });
+      }
+      if (req.method === "POST" && req.url?.startsWith(`/session/${sourceSessionId}/message`)) {
+        return respond({ info: { id: "msg_failed_confirm_source" }, parts: [] });
+      }
+      if (req.url?.startsWith(`/session/${sourceSessionId}`)) {
+        return respond({ id: sourceSessionId, directory: "/tmp/failed-confirm-source" });
+      }
+      if (req.url?.startsWith(`/session/${targetSessionId}`)) {
+        return respond({ id: targetSessionId, directory: "/tmp/failed-confirm-target" });
+      }
+      res.writeHead(404).end();
+    });
+    process.env.SAY_TO_ME_OPENCODE_URL = openCode.url;
+
+    try {
+      await createTestSession(sourceSessionId);
+      await createTestSession(targetSessionId);
+      const forward = await json<{ message: { id: number }; targetMessage: { id: number } }>(
+        await fetch(`${origin}/api/sessions/${sourceSessionId}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            author: "user",
+            text: "confirm failed but work seen",
+            targetSessionId,
+            notifyOnCompletion: true,
+          }),
+        }),
+      );
+      expect(findSessionIdleRoutineBySourceMessageId(forward.message.id)?.status).toBe("active");
+
+      // Simulate Cursor confirmation failure after claim already marked work seen.
+      markCompletionWorkSeen(forward.targetMessage.id);
+      updateOpencodeDelivery(
+        forward.targetMessage.id,
+        "failed",
+        "Couldn't confirm this reached Cursor — check the session before retrying",
+        null,
+      );
+      stopAllCompletionWatches();
+      expect(
+        listActiveCompletionWatches(targetSessionId).some(
+          (message) => message.id === forward.targetMessage.id,
+        ),
+      ).toBe(true);
+
+      resumeCompletionWatches(targetSessionId);
+      targetStatus = "idle";
+      opencodeStatusCache.clear();
+      await runCompletionWatchTick(forward.targetMessage.id);
+
+      expect(findSessionIdleRoutineBySourceMessageId(forward.message.id)?.status).toBe("fired");
       expect(
         listMessages(sourceSessionId).some((message) => message.text === "Session is now idle."),
       ).toBe(true);
