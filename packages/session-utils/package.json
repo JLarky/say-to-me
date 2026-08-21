@@ -20,9 +20,9 @@
       "import": "./src/session-list-sections.ts",
       "default": "./src/session-list-sections.ts"
     },
-    "./jarvis-timer-labels": {
-      "import": "./src/jarvis-timer-labels.ts",
-      "default": "./src/jarvis-timer-labels.ts"
+    "./routine-labels": {
+      "import": "./src/routine-labels.ts",
+      "default": "./src/routine-labels.ts"
     },
     "./waiting-state-classify": {
       "import": "./src/waiting-state-classify.ts",

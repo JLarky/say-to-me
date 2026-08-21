@@ -72,15 +72,15 @@ importers:
       '@say-to-me/external-cli-delivery':
         specifier: 0.1.0
         version: link:packages/external-cli-delivery
-      '@say-to-me/jarvis-timers':
-        specifier: 0.1.0
-        version: link:packages/jarvis-timers
       '@say-to-me/opencode-delivery':
         specifier: 0.1.0
         version: link:packages/opencode-delivery
       '@say-to-me/provider-models':
         specifier: 0.1.0
         version: link:packages/provider-models
+      '@say-to-me/routines':
+        specifier: 0.1.0
+        version: link:packages/routines
       '@say-to-me/runtime-validation':
         specifier: 0.1.0
         version: link:packages/runtime-validation
@@ -230,12 +230,6 @@ importers:
         specifier: ^3.21.0
         version: 3.22.1
 
-  packages/jarvis-timers:
-    dependencies:
-      effect:
-        specifier: ^3.21.0
-        version: 3.22.1
-
   packages/opencode-delivery:
     dependencies:
       effect:
@@ -250,6 +244,12 @@ importers:
       arktype:
         specifier: ^2.2.0
         version: 2.2.3
+      effect:
+        specifier: ^3.21.0
+        version: 3.22.1
+
+  packages/routines:
+    dependencies:
       effect:
         specifier: ^3.21.0
         version: 3.22.1

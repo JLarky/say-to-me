@@ -552,17 +552,22 @@ export const grokDeliveryJobs = sqliteTable(
   ],
 );
 
-export const jarvisTimers = sqliteTable(
-  "jarvis_timers",
+/**
+ * Durable automation rules (schedule today; session_idle in Phase 2).
+ * `trigger` / `action` are JSON; `trigger_kind` + `next_fire_at` support worker indexes.
+ */
+export const routines = sqliteTable(
+  "routines",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    sessionId: text("session_id").notNull(),
-    title: text("title").notNull(),
-    message: text("message").notNull(),
+    ownerSessionId: text("owner_session_id").notNull(),
     status: text("status").notNull().default("active"),
-    dueAt: integer("due_at").notNull(),
-    intervalMs: integer("interval_ms"),
-    nextFireAt: integer("next_fire_at").notNull(),
+    title: text("title"),
+    triggerKind: text("trigger_kind").notNull(),
+    trigger: text("trigger").notNull(),
+    action: text("action").notNull(),
+    /** Denormalized schedule scan key; null for non-schedule triggers. */
+    nextFireAt: integer("next_fire_at"),
     lastFiredAt: integer("last_fired_at"),
     lastMessageId: integer("last_message_id").references(() => messages.id, {
       onDelete: "set null",
@@ -578,8 +583,9 @@ export const jarvisTimers = sqliteTable(
       .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
-    index("jarvis_timers_session_status_idx").on(table.sessionId, table.status, table.nextFireAt),
-    index("jarvis_timers_due_idx").on(table.status, table.nextFireAt),
+    index("routines_owner_status_idx").on(table.ownerSessionId, table.status, table.nextFireAt),
+    index("routines_due_idx").on(table.status, table.nextFireAt),
+    index("routines_trigger_kind_idx").on(table.triggerKind, table.status),
   ],
 );
 

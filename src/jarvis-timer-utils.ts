@@ -1,18 +1,19 @@
-import { ErrorPayload, type JarvisTimer, type Session } from "./types.ts";
+import { ErrorPayload, type Routine, type Session } from "./types.ts";
 
 export {
-  canEditTimer,
-  canStopTimer,
+  canEditRoutine as canEditTimer,
+  canStopRoutine as canStopTimer,
   formatRemaining,
-  formatTimerTime,
-  isExpiredPausedTimer,
+  formatRoutineTime as formatTimerTime,
+  isExpiredPausedRoutine as isExpiredPausedTimer,
   repeatLabel,
-  timerCountdownLabel,
-  timerNeedsClock,
-  timerScheduleLabel,
-  timerSortTime,
-  timerStatusLabel,
-} from "@say-to-me/session-utils/jarvis-timer-labels";
+  routineCountdownLabel as timerCountdownLabel,
+  routineNeedsClock as timerNeedsClock,
+  routineScheduleLabel as timerScheduleLabel,
+  routineSortTime as timerSortTime,
+  routineStatusLabel as timerStatusLabel,
+  type RoutineLabelInput,
+} from "@say-to-me/session-utils/routine-labels";
 
 export type TimerDraft = {
   sessionId: string;
@@ -22,12 +23,21 @@ export type TimerDraft = {
   repeatMinutes: string;
 };
 
+export function routineLabelInput(routine: Routine) {
+  return {
+    status: routine.status,
+    nextFireAt: routine.trigger.nextFireAt,
+    intervalMs: routine.trigger.intervalMs,
+    lastError: routine.lastError,
+  };
+}
+
 export function emptyTimerDraft(sessions: Session[]): TimerDraft {
   return {
     sessionId: sessions[0]?.id ?? "default",
     title: "Check in",
     message:
-      "User has set a wake up timer for this session. If you know what action is expected from you act on that. If you are unsure you might ask user for clarification. Use `say-to-me usage timers` to learn more how to control timers including Pausing a timer which you think was sent to you by accident.",
+      "User has set a wake up routine for this session. If you know what action is expected from you act on that. If you are unsure you might ask user for clarification. Use `say-to-me usage routines` to learn more how to control routines including Pausing a routine which you think was sent to you by accident.",
     nextFireAt: localDateTime(Date.now() + 15 * 60 * 1000),
     repeatMinutes: "",
   };
@@ -57,12 +67,17 @@ export function localDateTime(timestamp: number): string {
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
 
-export function draftFromTimer(timer: JarvisTimer): TimerDraft {
+export function draftFromRoutine(routine: Routine): TimerDraft {
   return {
-    sessionId: timer.sessionId,
-    title: timer.title,
-    message: timer.message,
-    nextFireAt: localDateTime(timer.nextFireAt),
-    repeatMinutes: timer.intervalMs ? String(Math.round(timer.intervalMs / 60_000)) : "",
+    sessionId: routine.ownerSessionId,
+    title: routine.title ?? routine.action.title,
+    message: routine.action.message,
+    nextFireAt: localDateTime(routine.trigger.nextFireAt),
+    repeatMinutes: routine.trigger.intervalMs
+      ? String(Math.round(routine.trigger.intervalMs / 60_000))
+      : "",
   };
 }
+
+/** @deprecated Use draftFromRoutine */
+export const draftFromTimer = draftFromRoutine;

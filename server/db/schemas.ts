@@ -259,15 +259,15 @@ export const DbGrokDeliveryJob = arktype({
 });
 export type DbGrokDeliveryJob = typeof DbGrokDeliveryJob.infer;
 
-export const DbJarvisTimer = arktype({
+export const DbRoutine = arktype({
   id: "number",
-  sessionId: "string",
-  title: "string",
-  message: "string",
-  status: "'active' | 'paused' | 'firing' | 'completed' | 'cancelled'",
-  dueAt: "number",
-  intervalMs: "number | null",
-  nextFireAt: "number",
+  ownerSessionId: "string",
+  status: "'active' | 'paused' | 'firing' | 'fired' | 'cancelled' | 'failed'",
+  title: "string | null",
+  triggerKind: "string",
+  trigger: "string",
+  action: "string",
+  nextFireAt: "number | null",
   lastFiredAt: "number | null",
   lastMessageId: "number | null",
   lockedAt: "number | null",
@@ -276,7 +276,7 @@ export const DbJarvisTimer = arktype({
   createdAt: "string",
   updatedAt: "string",
 });
-export type DbJarvisTimer = typeof DbJarvisTimer.infer;
+export type DbRoutine = typeof DbRoutine.infer;
 
 export const DbJarvisCreateOperation = arktype({
   id: "string",

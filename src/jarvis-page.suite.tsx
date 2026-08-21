@@ -40,9 +40,9 @@ describe("JarvisPage guidance", () => {
           }),
         );
       }
-      if (url === "/api/jarvis-timers") {
+      if (url === "/api/routines") {
         return Promise.resolve(
-          new Response(JSON.stringify({ timers: [] }), {
+          new Response(JSON.stringify({ routines: [] }), {
             headers: { "Content-Type": "application/json" },
           }),
         );

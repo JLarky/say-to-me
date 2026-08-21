@@ -17,7 +17,7 @@ export function SessionTimersPage() {
   const { sessions } = useSessions({ includeCachedStatus: true, live: true });
   const [error, setError] = useState("");
   const session = sessions.find((item) => item.id === sessionId) ?? initialSession;
-  const headingLabel = session ? sessionListLabel(session) : sessionId || "Timers";
+  const headingLabel = session ? sessionListLabel(session) : sessionId || "Routines";
   const opencodeTitle = session?.opencodeTitle ?? null;
   const identity = projectIdentity({
     id: session?.id ?? sessionId ?? "default",
@@ -25,14 +25,14 @@ export function SessionTimersPage() {
   });
 
   useEffect(() => {
-    document.title = `Timers — ${headingLabel} — Say To Me`;
+    document.title = `Routines — ${headingLabel} — Say To Me`;
   }, [headingLabel]);
 
   return (
     <PageShell
       identity={identity}
       currentSessionId={sessionId}
-      eyebrow="Timers"
+      eyebrow="Routines"
       backTo={sessionId ? `/ses/${sessionId}` : "/"}
       backLabel="Back to session"
       hero={
@@ -51,12 +51,12 @@ export function SessionTimersPage() {
       {sessionId ? (
         <JarvisTimersPanel
           createHref={`/jarvis/timers/new?sessionId=${encodeURIComponent(sessionId)}`}
-          emptyText="No timers target this session."
+          emptyText="No routines target this session."
           sessionId={sessionId}
           sessions={sessions}
           setError={setError}
           summary="Scheduled prompts for this session."
-          title="Saved timers"
+          title="Saved routines"
         />
       ) : (
         <section {...stylex.props(card.base)}>
