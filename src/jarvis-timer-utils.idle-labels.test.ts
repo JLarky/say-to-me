@@ -58,4 +58,13 @@ describe("routineLabelInput idle display names", () => {
     const labels = routineLabelInput(idleRoutine(), targetId, namedSessions());
     expect(sessionIdleRoutineTitle(labels)).toBe("will notify e2e source when idle");
   });
+
+  it("target view keeps notify wording even when the stored title is custom", () => {
+    const routine = {
+      ...idleRoutine(),
+      title: "Ping me when B finishes",
+    };
+    const labels = routineLabelInput(routine, targetId, namedSessions());
+    expect(sessionIdleRoutineTitle(labels)).toBe("will notify e2e source when idle");
+  });
 });

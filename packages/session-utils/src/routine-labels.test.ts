@@ -70,17 +70,30 @@ describe("routine labels", () => {
     expect(sessionIdleRoutineTitle(onTarget)).toBe("will notify e2e source when idle");
   });
 
-  it("preserves custom idle titles and falls back when no human label exists", () => {
+  it("preserves custom idle titles for owners and always notifies on the target view", () => {
     const owner = "cur_00000000-0000-4000-8000-0000000000aa";
     const target = "cur_00000000-0000-4000-8000-0000000000cc";
     expect(
       sessionIdleRoutineTitle({
         title: "Ping me when B finishes",
+        ownerSessionId: owner,
+        ownerDisplayName: "e2e source",
         targetSessionId: target,
         targetDisplayName: "e2e target",
-        viewerSessionId: "owner",
+        viewerSessionId: owner,
       }),
     ).toBe("Ping me when B finishes");
+
+    expect(
+      sessionIdleRoutineTitle({
+        title: "Ping me when B finishes",
+        ownerSessionId: owner,
+        ownerDisplayName: "e2e source",
+        targetSessionId: target,
+        targetDisplayName: "e2e target",
+        viewerSessionId: target,
+      }),
+    ).toBe("will notify e2e source when idle");
 
     expect(
       sessionIdlePartyLabel({

@@ -152,6 +152,12 @@ export function sessionIdleRoutineTitle(
     | "targetDisplayName"
   >,
 ): string {
+  const viewer = routine.viewerSessionId;
+  // Target perspective is always notify-oriented, even if the stored title is a
+  // custom owner-facing wait request.
+  if (viewer && routine.targetSessionId && viewer === routine.targetSessionId) {
+    return sessionIdlePartyLabel(routine);
+  }
   if (!isGeneratedSessionIdleTitle(routine.title, routine.targetSessionId)) {
     return routine.title!.trim();
   }
