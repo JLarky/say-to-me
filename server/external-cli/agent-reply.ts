@@ -1,15 +1,16 @@
 import { insertMessageRow } from "../messages.ts";
+import { TARGET_IDLE_NOTICE_TEXT } from "@say-to-me/session-utils/idle-notices";
 
 /** Voice reply + idle notification ding used by external CLI agent backends. */
 export function insertExternalAgentReply(sessionId: string, text: string): void {
   insertMessageRow({
     sessionId,
-    text: `<say-to-me-system>${sessionId} is idle now</say-to-me-system>`,
+    text: TARGET_IDLE_NOTICE_TEXT,
     extraMarkdown: text,
     author: "agent",
     status: "queued",
     links: null,
-    sessionRefs: null,
+    sessionRefs: JSON.stringify([{ id: sessionId }]),
     clientMessageId: null,
   });
 }

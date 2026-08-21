@@ -168,8 +168,8 @@ function isWorking(status: OpenCodeSessionStatus): boolean {
   return status === "pending";
 }
 
-function targetNoticeText(targetSessionId: string): string {
-  return `<say-to-me-system>${targetSessionId} is idle now</say-to-me-system>`;
+function targetNoticeText(_targetSessionId: string): string {
+  return "Session is now idle.";
 }
 
 function systemTextFragment(text: string): string {
@@ -183,24 +183,26 @@ function sourceCompletionEntry(watched: WatchedMessage): string {
 }
 
 function sourceNoticeText(
-  watched: WatchedMessage,
-  entries = [sourceCompletionEntry(watched)],
+  _watched: WatchedMessage,
+  entries = [sourceCompletionEntry(_watched)],
 ): string {
-  const target = watched.forwardTargetSessionId || watched.sessionId;
-  const label = entries.length === 1 ? "forwarded message" : "forwarded messages";
-  return `<say-to-me-system>${target} is idle now after ${label}: ${entries.join("; ")}</say-to-me-system>`;
+  return entries.length > 1 ? "Sessions are now idle." : "Session is now idle.";
 }
 
 function sourceNoticeEntries(text: string): string[] {
-  const match = text.match(
+  const legacy = text.match(
     /^<say-to-me-system>.*? is idle now after forwarded messages?: ([\s\S]*?)<\/say-to-me-system>$/,
   );
-  return match?.[1]
-    ? match[1]
-        .split(";")
-        .map((entry) => entry.trim())
-        .filter(Boolean)
-    : [];
+  if (legacy?.[1]) {
+    return legacy[1]
+      .split(";")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+  // Speakable notices do not embed entry lists; synthesize counts for coalescing.
+  if (text.trim() === "Sessions are now idle.") return ["prior-a", "prior-b"];
+  if (text.trim() === "Session is now idle.") return ["prior"];
+  return [];
 }
 
 function appendSourceNoticeEntry(

@@ -551,7 +551,8 @@ export function MessageRow({
   const idleSession = idleSessionId
     ? message.sessions?.find((session) => session.id === idleSessionId)
     : undefined;
-  const isIdleNotification = idleSessionId != null;
+  const isIdleNotification =
+    idleSessionId != null || message.routineEvent?.kind === "watcher_completed";
   const isPlayable = isAgent || isIdleNotification;
   const paseoAgentNames = useMemo(() => buildPaseoAgentNameMap(messages), [messages]);
   const bodyParts = useMemo(
@@ -638,11 +639,80 @@ export function MessageRow({
       </div>
       {isIdleNotification ? (
         <>
-          <p {...stylex.props(thread.idleNotificationText)}>{idleSessionName} is now idle</p>
-          {idleForwardSourceIds.length > 0 ? (
+          <p {...stylex.props(thread.idleNotificationText)}>
+            {message.routineEvent?.reason === "failed"
+              ? "Your relay could not be delivered."
+              : `${idleSessionName ?? "Session"} is now idle`}
+          </p>
+          {idleForwardSourceIds.length > 0 ||
+          message.routineEvent?.sourceMessageId != null ||
+          message.routineEvent?.targetMessageId != null ? (
             <p {...stylex.props(thread.idleNotificationMeta)}>
-              Forwarded from {idleForwardSourceIds.map((id) => `#${id}`).join(", ")}
+              {idleForwardSourceIds.length > 0 ? (
+                <>
+                  Forwarded from{" "}
+                  {idleForwardSourceIds.map((id, index) => (
+                    <span key={`fwd-${id}`}>
+                      {index > 0 ? ", " : null}
+                      <a href={`#message-${id}`} {...stylex.props(messageMeta.link)}>
+                        #{id}
+                      </a>
+                    </span>
+                  ))}
+                </>
+              ) : null}
+              {message.routineEvent?.sourceMessageId != null &&
+              !idleForwardSourceIds.includes(message.routineEvent.sourceMessageId) ? (
+                <>
+                  {idleForwardSourceIds.length > 0 ? " · " : null}
+                  <a
+                    href={`#message-${message.routineEvent.sourceMessageId}`}
+                    {...stylex.props(messageMeta.link)}
+                  >
+                    relay #{message.routineEvent.sourceMessageId}
+                  </a>
+                </>
+              ) : null}
+              {message.routineEvent?.targetMessageId != null ? (
+                <>
+                  {idleForwardSourceIds.length > 0 ||
+                  (message.routineEvent.sourceMessageId != null &&
+                    !idleForwardSourceIds.includes(message.routineEvent.sourceMessageId))
+                    ? " · "
+                    : null}
+                  <a
+                    href={`#message-${message.routineEvent.targetMessageId}`}
+                    {...stylex.props(messageMeta.link)}
+                  >
+                    target #{message.routineEvent.targetMessageId}
+                  </a>
+                </>
+              ) : null}
             </p>
+          ) : null}
+          {message.sessions && message.sessions.length > 0 ? (
+            <div {...stylex.props(messageMeta.sessionCards)}>
+              {message.sessions.map((session, index) => {
+                const headline = sessionListLabel({
+                  id: session.id,
+                  alias: session.alias,
+                  opencodeTitle: session.title,
+                });
+                return (
+                  <div key={`${session.id}-${index}`} {...stylex.props(messageMeta.sessionCard)}>
+                    <div {...stylex.props(messageMeta.sessionCardTitle)}>{headline}</div>
+                    <div {...stylex.props(messageMeta.sessionCardActions)}>
+                      <Link
+                        to={`/ses/${session.id}`}
+                        {...stylex.props(controls.compactSecondaryLink)}
+                      >
+                        Open
+                      </Link>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           ) : null}
         </>
       ) : systemText ? (

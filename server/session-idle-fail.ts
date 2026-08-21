@@ -32,7 +32,7 @@ export function failSessionIdleForWatchedMessage(messageId: number): void {
     findSessionIdleRoutineBySourceMessageId(sourceMessageId);
   if (!routine) return;
 
-  const noticeText = `<say-to-me-system>${message.sessionId} is idle now</say-to-me-system>`;
+  const noticeText = "Your relay could not be delivered.";
   const notification = insertForwardMessageRow({
     sessionId: sourceSessionId,
     text: noticeText,

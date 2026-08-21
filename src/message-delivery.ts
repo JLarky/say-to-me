@@ -98,8 +98,17 @@ export function formatElapsedDuration(from?: string | null, to?: string | null):
 }
 
 export function idleNotificationSessionId(message: Message): string | null {
-  const match = message.text.match(/^<say-to-me-system>([^<]+) is idle now<\/say-to-me-system>$/);
-  return match?.[1] ?? null;
+  if (message.routineEvent?.kind === "watcher_completed") {
+    return message.routineEvent.targetSessionId;
+  }
+  const legacy = message.text.match(/^<say-to-me-system>([^<]+) is idle now/);
+  if (legacy?.[1]) return legacy[1];
+  if (!/\bis now idle\b/i.test(message.text) && !/\bcould not be delivered\b/i.test(message.text)) {
+    return null;
+  }
+  const sessions = message.sessions ?? [];
+  const other = sessions.find((session) => session.id !== message.sessionId);
+  return other?.id ?? sessions[0]?.id ?? message.forwardTargetSessionId ?? null;
 }
 
 export function forwardDetail(message: Message, notificationMessage?: Message): string {

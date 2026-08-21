@@ -134,7 +134,7 @@ describe("say API: session_idle routines (phase 2)", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           author: "user",
-          text: `<say-to-me-system>${targetSessionId} is idle now</say-to-me-system>`,
+          text: "Session is now idle.",
         }),
       });
       expect(notice.status).toBe(201);

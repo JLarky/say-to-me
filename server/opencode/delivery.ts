@@ -13,6 +13,7 @@ import {
   updateForwardTarget,
   updateOpencodeDelivery,
 } from "../messages.ts";
+import { isIdleNoticeText } from "@say-to-me/session-utils/idle-notices";
 import { validateSessionId } from "../session-id.ts";
 import { requireSession } from "../sessions.ts";
 import {
@@ -110,10 +111,7 @@ export async function deliverReplyToOpencode(
 const inFlightDeliveries = new Set<number>();
 
 function isForwardIdleNotification(reply: DbMessage): boolean {
-  return (
-    reply.forwardRole === "target" &&
-    /^<say-to-me-system>[^<]+ is idle now<\/say-to-me-system>$/.test(reply.text.trim())
-  );
+  return reply.forwardRole === "target" && isIdleNoticeText(reply.text);
 }
 
 export type QueuedDeliveryResult = {

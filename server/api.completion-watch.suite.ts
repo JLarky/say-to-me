@@ -55,7 +55,10 @@ describe.sequential("say API: OpenCode completion watches", () => {
   }
 
   function systemMessages(items: ApiMessage[]): ApiMessage[] {
-    return items.filter((message) => message.text.startsWith("<say-to-me-system>"));
+    return items.filter(
+      (message) =>
+        message.text.startsWith("<say-to-me-system>") || message.text === "Session is now idle.",
+    );
   }
 
   async function waitForMessageStatus(
@@ -180,7 +183,7 @@ describe.sequential("say API: OpenCode completion watches", () => {
       const sourceItems = await messages(sourceSessionId);
       const watched = targetItems.find((message) => message.id === created.targetMessage.id)!;
       const targetNotice = systemMessages(targetItems)[0];
-      const sourceNotice = sourceItems.find((message) => message.text.includes("idle now after"))!;
+      const sourceNotice = sourceItems.find((message) => message.text.includes("is now idle"))!;
       expect(watched).toMatchObject({ completionWatchStatus: "completed" });
       expect(systemMessages(targetItems)).toHaveLength(1);
       expect(targetNotice).toMatchObject({
@@ -198,7 +201,7 @@ describe.sequential("say API: OpenCode completion watches", () => {
       await runCompletionWatchTick(created.targetMessage.id);
       expect(systemMessages(await messages(targetSessionId))).toHaveLength(1);
       expect(
-        (await messages(sourceSessionId)).filter((m) => m.text.includes("idle now after")),
+        (await messages(sourceSessionId)).filter((m) => m.text.includes("is now idle")),
       ).toHaveLength(1);
       expect(
         openCode.requests.filter(
@@ -295,9 +298,10 @@ describe.sequential("say API: OpenCode completion watches", () => {
       opencodeStatusCache.clear();
       openCode.setTargetStatus("idle");
       await completeTargetWork(sessionId, created.message.id, openCode);
-      expect(
-        (await messages(sessionId)).filter((m) => m.text.includes("idle now after")),
-      ).toHaveLength(0);
+      const items = await messages(sessionId);
+      // Direct prompts get a target idle marker, not a source "after relay" notice.
+      expect(systemMessages(items)).toHaveLength(1);
+      expect(items.filter((m) => m.forwardRole === "source")).toHaveLength(0);
     } finally {
       await closeServer(openCode.server);
     }

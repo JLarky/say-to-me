@@ -79,15 +79,8 @@ export const NotificationWatchScheduler = Context.GenericTag<NotificationWatchSc
 const forwardCompletionWatches = new Map<number, ForwardCompletionWatch>();
 const forwardCompletionTimers = new Map<number, ReturnType<typeof setInterval>>();
 
-function systemTextFragment(text: string): string {
-  return text.replace(/[<>]/g, "").trim();
-}
-
-function sourceIdleNotificationText(targetSessionId: string, targetMessageId: number): string {
-  const targetMessage = getMessage(targetMessageId);
-  const prompt = targetMessage?.text ? systemTextFragment(targetMessage.text) : "";
-  const context = prompt ? ` after message: ${prompt}` : "";
-  return `<say-to-me-system>${targetSessionId} is idle now${context}</say-to-me-system>`;
+function sourceIdleNotificationText(_targetSessionId: string, _targetMessageId: number): string {
+  return "Session is now idle.";
 }
 
 export function hasForwardCompletionNotificationWatch(sourceMessageId: number): boolean {
@@ -108,7 +101,7 @@ function ensureTargetIdleNotification(sessionId: string, clientMessageId: string
   if (existing) return existing;
   return insertMessageRow({
     sessionId,
-    text: `<say-to-me-system>${sessionId} is idle now</say-to-me-system>`,
+    text: "Session is now idle.",
     extraMarkdown: null,
     author: "user",
     status: "received",

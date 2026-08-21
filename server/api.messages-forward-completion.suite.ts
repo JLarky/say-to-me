@@ -208,7 +208,7 @@ describe("say API: message forward completion", () => {
             author: "user",
             clientMessageId: `target-idle-${payload.message.id}`,
             opencodeDeliveryStatus: "ui_only",
-            text: `<say-to-me-system>${sessionId} is idle now</say-to-me-system>`,
+            text: "Session is now idle.",
           }),
         ]),
       );
@@ -231,7 +231,7 @@ describe("say API: message forward completion", () => {
         body: JSON.stringify({
           author: "user",
           forceOpencode: true,
-          text: `<say-to-me-system>${sessionId} is idle now</say-to-me-system>`,
+          text: "Session is now idle.",
         }),
       });
       expect(idleResponse.status).toBe(201);
@@ -254,7 +254,7 @@ describe("say API: message forward completion", () => {
         expect.arrayContaining([
           expect.objectContaining({
             id: sessionId,
-            summary: `Idle notification: <say-to-me-system>${sessionId} is idle now</say-to-me-system>`,
+            summary: "Idle notification: Session is now idle.",
             waitingState: "can_continue",
           }),
         ]),
@@ -338,7 +338,7 @@ describe("say API: message forward completion", () => {
           expect.objectContaining({
             clientMessageId: `target-idle-${delivered.id}`,
             opencodeDeliveryStatus: "ui_only",
-            text: `<say-to-me-system>${targetSessionId} is idle now</say-to-me-system>`,
+            text: "Session is now idle.",
           }),
         ]),
       );
@@ -422,7 +422,7 @@ describe("say API: message forward completion", () => {
         ).id,
         "sent",
       );
-      expect(firstNotice.text).toContain("first task");
+      expect(firstNotice.text).toBe("Session is now idle.");
 
       const second = await fetch(`${origin}/api/sessions/${sourceSessionId}/messages`, {
         method: "POST",
@@ -462,7 +462,7 @@ describe("say API: message forward completion", () => {
       expect(deliveredSecondNotice).toMatchObject({
         forwardRole: "target",
         opencodeDeliveryStatus: "sent",
-        text: `<say-to-me-system>${targetSessionId} is idle now after message: second task</say-to-me-system>`,
+        text: "Session is now idle.",
       });
       expect(sourceQueue.messages).toEqual(
         expect.arrayContaining([
@@ -578,13 +578,13 @@ describe("say API: message forward completion", () => {
         "sent",
       );
       expect(targetNotice).toMatchObject({
-        text: `<say-to-me-system>${targetSessionId} is idle now</say-to-me-system>`,
+        text: "Session is now idle.",
       });
       expect(deliveredSourceNotice).toMatchObject({
         forwardRole: "target",
         forwardSourceMessageId: targetNotice.id,
         opencodeMessageId: "msg_queued_idle_notice",
-        text: `<say-to-me-system>${targetSessionId} is idle now after message: please do this</say-to-me-system>`,
+        text: "Session is now idle.",
       });
       expect(sourceQueue.messages).toEqual(
         expect.arrayContaining([
@@ -688,7 +688,7 @@ describe("say API: message forward completion", () => {
       );
       expect(deliveredSourceNotice).toMatchObject({
         opencodeMessageId: "msg_flush_idle_notice",
-        text: `<say-to-me-system>${targetSessionId} is idle now after message: please do this</say-to-me-system>`,
+        text: "Session is now idle.",
       });
     } finally {
       process.env.SAY_TO_ME_OPENCODE_URL = previousOpenCodeUrl;

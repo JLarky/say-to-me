@@ -173,7 +173,7 @@ describe("completion-watch workflow (in-memory, no DB)", () => {
         yield* runCompletionWatchTickEffect(10);
         expect(store.rows.get(10)).toMatchObject({ completionWatchStatus: "watching" });
         expect(
-          [...store.rows.values()].filter((row) => row.text.startsWith("<say-to-me-system>")),
+          [...store.rows.values()].filter((row) => row.text === "Session is now idle."),
         ).toHaveLength(0);
 
         store.rows.set(10, { ...store.rows.get(10)!, completionWatchWorkSeen: 1 });
@@ -193,7 +193,7 @@ describe("completion-watch workflow (in-memory, no DB)", () => {
       completionWatchStatus: "completed",
     });
     expect(
-      [...store.rows.values()].filter((row) => row.text.startsWith("<say-to-me-system>")),
+      [...store.rows.values()].filter((row) => row.text === "Session is now idle."),
     ).toHaveLength(1);
   });
 
@@ -271,7 +271,7 @@ describe("completion-watch workflow (in-memory, no DB)", () => {
 
     expect(store.rows.get(20)).toMatchObject({ completionWatchStatus: "completed" });
     const notice = [...store.rows.values()].find(
-      (row) => row.sessionId === sourceSessionId && row.text.includes("is idle now after"),
+      (row) => row.sessionId === sourceSessionId && row.text.includes("is now idle"),
     );
     expect(notice).toMatchObject({ opencodeDeliveryStatus: "queued" });
     expect(enqueued).toEqual([]);

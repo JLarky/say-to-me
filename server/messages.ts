@@ -13,6 +13,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import { isIdleNoticeText } from "@say-to-me/session-utils/idle-notices";
 import { maxTotalMessages } from "./config.ts";
 import { messages as messagesTable, routines as routinesTable } from "./db/drizzle-schema.ts";
 import { drizzleDb, drizzleSqlite } from "./db/index.ts";
@@ -120,7 +121,7 @@ function latestLine(text: string): string {
 }
 
 function isIdleSystemMessage(text: string): boolean {
-  return /^<say-to-me-system>[^<]+ is idle now<\/say-to-me-system>$/.test(text.trim());
+  return isIdleNoticeText(text);
 }
 
 function isSayToMeSystemMessage(text: string): boolean {

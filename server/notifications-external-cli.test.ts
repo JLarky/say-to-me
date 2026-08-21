@@ -144,7 +144,7 @@ describe("external CLI forward completion notifications", () => {
       author: "user",
       forwardRole: "target",
       opencodeDeliveryStatus: "queued",
-      text: expect.stringContaining(`${targetSessionId} is idle now`),
+      text: "Session is now idle.",
     });
   });
 
@@ -251,7 +251,7 @@ describe("external CLI forward completion notifications", () => {
     expect(secondNotice!.id).not.toBe(firstNotice!.id);
     expect(secondNotice).toMatchObject({
       opencodeDeliveryStatus: "queued",
-      text: expect.stringContaining("second task"),
+      text: "Session is now idle.",
     });
   });
 });
