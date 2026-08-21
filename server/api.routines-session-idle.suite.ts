@@ -542,4 +542,87 @@ describe("say API: session_idle routines (phase 2)", () => {
       await closeTestServer(server);
     }
   });
+
+  it("hard-deletes fired session_idle waits without 409 so target UI can clear them", async () => {
+    const app = createApiMiddleware();
+    const { origin, server } = await listen(app);
+    try {
+      const sourceSessionId = "ses_c9c9c9c9c9c9OwnerA9Wait010";
+      const targetSessionId = "ses_d9d9d9d9d9d9TargetB9Wait10";
+      await createTestSession(sourceSessionId);
+      await createTestSession(targetSessionId);
+
+      const forward = await json<{ message: { id: number }; targetMessage: { id: number } }>(
+        await fetch(`${origin}/api/sessions/${sourceSessionId}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            author: "user",
+            text: "clear fired wait",
+            targetSessionId,
+            notifyOnCompletion: true,
+          }),
+        }),
+      );
+      const routine = findSessionIdleRoutineBySourceMessageId(forward.message.id)!;
+      expect(routine.status).toBe("active");
+
+      const completed = completeSessionIdleRoutine({
+        routineId: routine.id,
+        messageId: forward.message.id,
+        sourceMessageId: forward.message.id,
+        targetSessionId,
+        targetMessageId: forward.targetMessage.id,
+        reason: "idle",
+      });
+      expect(completed?.status).toBe("fired");
+
+      const deleted = await fetch(`${origin}/api/routines/${routine.id}`, { method: "DELETE" });
+      expect(deleted.status).toBe(200);
+      expect(await deleted.json()).toEqual({ ok: true });
+
+      expect(findSessionIdleRoutineBySourceMessageId(forward.message.id)).toBeNull();
+      const listed = await json<{ routines: Routine[] }>(
+        await fetch(`${origin}/api/routines?sessionId=${encodeURIComponent(targetSessionId)}`),
+      );
+      expect(listed.routines.some((row) => row.id === routine.id)).toBe(false);
+    } finally {
+      await closeTestServer(server);
+    }
+  });
+
+  it("hard-deletes already-cancelled session_idle waits from the target list", async () => {
+    const app = createApiMiddleware();
+    const { origin, server } = await listen(app);
+    try {
+      const sourceSessionId = "ses_e9e9e9e9e9e9OwnerA9Wait011";
+      const targetSessionId = "ses_f9f9f9f9f9f9TargetB9Wait11";
+      await createTestSession(sourceSessionId);
+      await createTestSession(targetSessionId);
+
+      const forward = await json<{ message: { id: number }; targetMessage: { id: number } }>(
+        await fetch(`${origin}/api/sessions/${sourceSessionId}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            author: "user",
+            text: "clear cancelled wait",
+            targetSessionId,
+            notifyOnCompletion: true,
+          }),
+        }),
+      );
+      const routine = findSessionIdleRoutineBySourceMessageId(forward.message.id)!;
+
+      const cancel = await fetch(`${origin}/api/routines/${routine.id}`, { method: "DELETE" });
+      expect(cancel.status).toBe(200);
+      expect(findSessionIdleRoutineBySourceMessageId(forward.message.id)?.status).toBe("cancelled");
+
+      const purge = await fetch(`${origin}/api/routines/${routine.id}`, { method: "DELETE" });
+      expect(purge.status).toBe(200);
+      expect(findSessionIdleRoutineBySourceMessageId(forward.message.id)).toBeNull();
+    } finally {
+      await closeTestServer(server);
+    }
+  });
 });
