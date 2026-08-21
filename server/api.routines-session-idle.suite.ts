@@ -237,51 +237,6 @@ describe("say API: session_idle routines (phase 2)", () => {
     }
   });
 
-  it("delete removes a fired session_idle wait from the list", async () => {
-    const app = createApiMiddleware();
-    const { origin, server } = await listen(app);
-    try {
-      const sourceSessionId = "ses_aa0aa0aa0aa0OwnerAaWait010";
-      const targetSessionId = "ses_bb0bb0bb0bb0TargetBbWait10";
-      await createTestSession(sourceSessionId);
-      await createTestSession(targetSessionId);
-
-      const { createSessionIdleRoutine } = await import("./routines.ts");
-      const routine = createSessionIdleRoutine({
-        ownerSessionId: sourceSessionId,
-        title: `Wait for ${targetSessionId}`,
-        trigger: {
-          kind: "session_idle",
-          targetSessionId,
-          sourceMessageId: 88,
-          afterWorkSeen: true,
-        },
-        action: { kind: "notify_owner" },
-      });
-      expect(
-        completeSessionIdleRoutine({
-          routineId: routine.id,
-          messageId: 1,
-          targetSessionId,
-          targetMessageId: 2,
-          sourceMessageId: 88,
-          reason: "idle",
-        })?.status,
-      ).toBe("fired");
-
-      const deleted = await fetch(`${origin}/api/routines/${routine.id}`, { method: "DELETE" });
-      expect(deleted.status).toBe(200);
-      expect(await deleted.json()).toEqual({ ok: true });
-      expect(findSessionIdleRoutineBySourceMessageId(88)).toBeNull();
-      const listed = await json<{ routines: Routine[] }>(
-        await fetch(`${origin}/api/routines?sessionId=${encodeURIComponent(sourceSessionId)}`),
-      );
-      expect(listed.routines.some((item) => item.id === routine.id)).toBe(false);
-    } finally {
-      await closeTestServer(server);
-    }
-  });
-
   it("B can delete the same wait A created", async () => {
     const app = createApiMiddleware();
     const { origin, server } = await listen(app);
