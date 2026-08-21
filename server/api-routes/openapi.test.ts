@@ -135,4 +135,47 @@ describe("live OpenAPI publication", () => {
       expect(JSON.stringify(publicError)).not.toContain('"_tag"');
     }
   });
+
+  it("documents routines public {error} shapes for 400, 404, 409, and 500", () => {
+    const spec = buildSayToMeOpenApiSpec();
+    const operations = [
+      spec.paths["/api/routines"]?.get,
+      spec.paths["/api/routines"]?.post,
+      spec.paths["/api/routines/{id}"]?.patch,
+      spec.paths["/api/routines/{id}"]?.delete,
+      spec.paths["/api/routines/{id}/actions"]?.post,
+    ];
+
+    for (const operation of operations) {
+      expect(operation?.operationId).toMatch(/^routines\./);
+      const responses = operation?.responses ?? {};
+      expect(Object.keys(responses)).toEqual(expect.arrayContaining(["400", "404", "409", "500"]));
+
+      for (const status of ["400", "404", "409", "500"] as const) {
+        const errorSchema = responses[status]?.content?.["application/json"]?.schema as {
+          anyOf?: unknown[];
+          type?: string;
+          required?: string[];
+          properties?: Record<string, unknown>;
+        };
+        const publicError =
+          errorSchema?.anyOf?.find(
+            (
+              candidate,
+            ): candidate is { required?: string[]; properties?: Record<string, unknown> } =>
+              Boolean(
+                candidate &&
+                typeof candidate === "object" &&
+                Array.isArray((candidate as { required?: string[] }).required) &&
+                (candidate as { required?: string[] }).required?.includes("error") &&
+                !(candidate as { required?: string[] }).required?.includes("_tag"),
+              ),
+          ) ?? errorSchema;
+        expect(publicError?.required).toEqual(["error"]);
+        expect(publicError?.properties).toEqual({ error: { type: "string" } });
+        expect(JSON.stringify(publicError)).not.toContain('"_tag"');
+        expect(JSON.stringify(publicError)).not.toContain('"status"');
+      }
+    }
+  });
 });

@@ -352,6 +352,11 @@ const RoutineDeleted = Schema.Struct({
   ok: Schema.Boolean,
 });
 
+/** Public error body — matches `routineErrorResponse` (`{ error }` only). */
+const PublicRoutineError = Schema.Struct({
+  error: Schema.String,
+});
+
 export const RoutinesGroup = HttpApiGroup.make("routines")
   .add(
     HttpApiEndpoint.get("listRoutines", "/api/routines")
@@ -359,7 +364,11 @@ export const RoutinesGroup = HttpApiGroup.make("routines")
       .annotateContext(
         openApiDocs("List routines", "Lists routines, optionally filtered by session id."),
       )
-      .addSuccess(RoutineListed),
+      .addSuccess(RoutineListed)
+      .addError(PublicRoutineError, { status: 400 })
+      .addError(PublicRoutineError, { status: 404 })
+      .addError(PublicRoutineError, { status: 409 })
+      .addError(PublicRoutineError, { status: 500 }),
   )
   .add(
     HttpApiEndpoint.post("createRoutine", "/api/routines")
@@ -367,20 +376,32 @@ export const RoutinesGroup = HttpApiGroup.make("routines")
       .annotateContext(
         openApiDocs("Create routine", "Creates a new schedule routine from the request body."),
       )
-      .addSuccess(RoutineMutated, { status: 201 }),
+      .addSuccess(RoutineMutated, { status: 201 })
+      .addError(PublicRoutineError, { status: 400 })
+      .addError(PublicRoutineError, { status: 404 })
+      .addError(PublicRoutineError, { status: 409 })
+      .addError(PublicRoutineError, { status: 500 }),
   )
   .add(
     HttpApiEndpoint.patch("updateRoutine", "/api/routines/:id")
       .setPath(RoutineIdPath)
       .setPayload(RoutineBody)
       .annotateContext(openApiDocs("Update routine", "Updates fields on an existing routine."))
-      .addSuccess(RoutineMutated),
+      .addSuccess(RoutineMutated)
+      .addError(PublicRoutineError, { status: 400 })
+      .addError(PublicRoutineError, { status: 404 })
+      .addError(PublicRoutineError, { status: 409 })
+      .addError(PublicRoutineError, { status: 500 }),
   )
   .add(
     HttpApiEndpoint.del("deleteRoutine", "/api/routines/:id")
       .setPath(RoutineIdPath)
       .annotateContext(openApiDocs("Delete routine", "Deletes a routine by id."))
-      .addSuccess(RoutineDeleted),
+      .addSuccess(RoutineDeleted)
+      .addError(PublicRoutineError, { status: 400 })
+      .addError(PublicRoutineError, { status: 404 })
+      .addError(PublicRoutineError, { status: 409 })
+      .addError(PublicRoutineError, { status: 500 }),
   )
   .add(
     HttpApiEndpoint.post("runRoutineAction", "/api/routines/:id/actions")
@@ -392,7 +413,11 @@ export const RoutinesGroup = HttpApiGroup.make("routines")
           "Applies an action such as pause, resume, cancel, or trigger to a routine.",
         ),
       )
-      .addSuccess(RoutineMutated),
+      .addSuccess(RoutineMutated)
+      .addError(PublicRoutineError, { status: 400 })
+      .addError(PublicRoutineError, { status: 404 })
+      .addError(PublicRoutineError, { status: 409 })
+      .addError(PublicRoutineError, { status: 500 }),
   );
 
 export const RoutinesApi = HttpApi.make("routines").add(RoutinesGroup);
