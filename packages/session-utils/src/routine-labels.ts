@@ -8,6 +8,12 @@ export type RoutineLabelInput = {
   viewerSessionId?: string | null;
   ownerSessionId?: string | null;
   targetSessionId?: string | null;
+  /** Human label for the owner session (alias / title); falls back to id. */
+  ownerDisplayName?: string | null;
+  /** Human label for the watched session (alias / title); falls back to id. */
+  targetDisplayName?: string | null;
+  /** Stored routine title; auto `Wait for <id>` is treated as unlabeled. */
+  title?: string | null;
 };
 
 export function formatRoutineTime(timestamp: number): string {
@@ -90,14 +96,66 @@ export function canStopRoutine(
   return routine.status === "active" || routine.status === "paused" || routine.status === "firing";
 }
 
+function partyName(
+  sessionId: string | null | undefined,
+  displayName: string | null | undefined,
+  fallback: string,
+): string {
+  const human = displayName?.trim();
+  if (human) return human;
+  const id = sessionId?.trim();
+  if (id) return id;
+  return fallback;
+}
+
+/**
+ * Auto titles written at relay create time — not human context. Custom titles
+ * (any other string) are preserved as the routine's primary label.
+ */
+export function isGeneratedSessionIdleTitle(
+  title: string | null | undefined,
+  targetSessionId: string | null | undefined,
+): boolean {
+  if (title == null || title.trim() === "") return true;
+  if (targetSessionId != null && title === `Wait for ${targetSessionId}`) return true;
+  return false;
+}
+
 export function sessionIdlePartyLabel(
-  routine: Pick<RoutineLabelInput, "viewerSessionId" | "ownerSessionId" | "targetSessionId">,
+  routine: Pick<
+    RoutineLabelInput,
+    | "viewerSessionId"
+    | "ownerSessionId"
+    | "targetSessionId"
+    | "ownerDisplayName"
+    | "targetDisplayName"
+  >,
 ): string {
   const viewer = routine.viewerSessionId;
   if (viewer && routine.targetSessionId && viewer === routine.targetSessionId) {
-    return `${routine.ownerSessionId ?? "Another session"} is waiting for this session to be idle`;
+    const owner = partyName(routine.ownerSessionId, routine.ownerDisplayName, "Another session");
+    return `${owner} is waiting for this session to go idle`;
   }
-  return `Waiting for ${routine.targetSessionId ?? "target"} to be idle`;
+  const target = partyName(routine.targetSessionId, routine.targetDisplayName, "target");
+  return `waiting for ${target} to go idle`;
+}
+
+/** Primary list/card title for a session_idle routine. */
+export function sessionIdleRoutineTitle(
+  routine: Pick<
+    RoutineLabelInput,
+    | "title"
+    | "viewerSessionId"
+    | "ownerSessionId"
+    | "targetSessionId"
+    | "ownerDisplayName"
+    | "targetDisplayName"
+  >,
+): string {
+  if (!isGeneratedSessionIdleTitle(routine.title, routine.targetSessionId)) {
+    return routine.title!.trim();
+  }
+  return sessionIdlePartyLabel(routine);
 }
 
 export function routineCountdownLabel(
@@ -109,6 +167,9 @@ export function routineCountdownLabel(
     | "viewerSessionId"
     | "ownerSessionId"
     | "targetSessionId"
+    | "ownerDisplayName"
+    | "targetDisplayName"
+    | "title"
   >,
   now = Date.now(),
 ): string {
@@ -116,7 +177,8 @@ export function routineCountdownLabel(
     if (routine.status === "cancelled") return "cancelled";
     if (routine.status === "fired") return "notified";
     if (routine.status === "failed") return "failed";
-    return sessionIdlePartyLabel(routine);
+    // Party context lives in the title; avoid duplicating raw/human wait copy.
+    return "";
   }
   if (isExpiredPausedRoutine(routine, now)) return "stopped";
   if (routine.status === "paused")
@@ -138,13 +200,16 @@ export function routineScheduleLabel(
     | "viewerSessionId"
     | "ownerSessionId"
     | "targetSessionId"
+    | "ownerDisplayName"
+    | "targetDisplayName"
+    | "title"
   >,
 ): string {
   if (routine.triggerKind === "session_idle") {
     if (routine.status === "cancelled") return "Cancelled wait.";
     if (routine.status === "fired") return "Idle notification sent.";
     if (routine.status === "failed") return "Wait ended: target delivery failed.";
-    return sessionIdlePartyLabel(routine);
+    return "Active wait.";
   }
   if (routine.status === "cancelled") return "Cancelled. Edit to schedule again.";
   if (routine.status === "fired") return "Fired";

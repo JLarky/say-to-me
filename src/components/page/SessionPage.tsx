@@ -134,6 +134,7 @@ export function SessionPage() {
     liveStatus,
     messages,
     session,
+    sessions,
     setMessages,
     setSession,
     setSessions,
@@ -978,6 +979,7 @@ export function SessionPage() {
             <SessionTimerSummary
               createHref={`/jarvis/timers/new?sessionId=${encodeURIComponent(sessionId)}`}
               sessionId={sessionId}
+              sessions={sessions}
               setError={setError}
               timersHref={`/ses/${sessionId}/timers`}
             />

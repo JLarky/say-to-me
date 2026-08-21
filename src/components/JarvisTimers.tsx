@@ -26,6 +26,7 @@ import {
   timerStatusLabel,
   type TimerDraft,
 } from "../jarvis-timer-utils.ts";
+import { sessionIdleRoutineTitle } from "@say-to-me/session-utils/routine-labels";
 
 export {
   emptyTimerDraft,
@@ -284,17 +285,19 @@ function useTimerNow(enabled: boolean): number {
 export function SessionTimerSummary({
   createHref,
   sessionId,
+  sessions = [],
   setError,
   timersHref,
 }: {
   createHref: string;
   sessionId: string | undefined;
+  sessions?: Session[];
   setError: (error: string) => void;
   timersHref: string;
 }) {
   const [routines, setRoutines] = useState<Routine[]>([]);
   const now = useTimerNow(
-    routines.some((routine) => timerNeedsClock(routineLabelInput(routine, sessionId))),
+    routines.some((routine) => timerNeedsClock(routineLabelInput(routine, sessionId, sessions))),
   );
 
   useEffect(() => {
@@ -348,13 +351,13 @@ export function SessionTimerSummary({
               badge.base,
               styles.timerBadge,
               routine.status === "active" && badge.pending,
-              isExpiredPausedTimer(routineLabelInput(routine, sessionId), now) && badge.pending,
+              isExpiredPausedTimer(routineLabelInput(routine, sessionId, sessions), now) &&
+                badge.pending,
               styles.compactTimerLink,
             )}
             to={timersHref}
           >
-            {routineDisplayTitle(routine)}{" "}
-            {timerCountdownLabel(routineLabelInput(routine, sessionId), now)}
+            {routineCompactLabel(routine, sessionId, sessions, now)}
           </Link>
         ))
       ) : (
@@ -379,7 +382,9 @@ export function JarvisTimersOverview({
   setError: (error: string) => void;
 }) {
   const [routines, setRoutines] = useState<Routine[]>([]);
-  const now = useTimerNow(routines.some((routine) => timerNeedsClock(routineLabelInput(routine))));
+  const now = useTimerNow(
+    routines.some((routine) => timerNeedsClock(routineLabelInput(routine, undefined, sessions))),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -413,13 +418,15 @@ export function JarvisTimersOverview({
       session: sessionsById.get(sessionId),
       sessionId,
       routines: sessionRoutines.sort(
-        (a, b) => timerSortTime(routineLabelInput(a)) - timerSortTime(routineLabelInput(b)),
+        (a, b) =>
+          timerSortTime(routineLabelInput(a, sessionId, sessions)) -
+          timerSortTime(routineLabelInput(b, sessionId, sessions)),
       ),
     }))
     .sort(
       (a, b) =>
-        timerSortTime(routineLabelInput(a.routines[0]!)) -
-        timerSortTime(routineLabelInput(b.routines[0]!)),
+        timerSortTime(routineLabelInput(a.routines[0]!, a.sessionId, sessions)) -
+        timerSortTime(routineLabelInput(b.routines[0]!, b.sessionId, sessions)),
     );
 
   return (
@@ -465,13 +472,14 @@ export function JarvisTimersOverview({
                             badge.base,
                             styles.timerBadge,
                             routine.status === "active" && badge.pending,
-                            isExpiredPausedTimer(routineLabelInput(routine, sessionId), now) &&
-                              badge.pending,
+                            isExpiredPausedTimer(
+                              routineLabelInput(routine, sessionId, sessions),
+                              now,
+                            ) && badge.pending,
                             routine.status === "cancelled" && badge.failed,
                           )}
                         >
-                          {routineDisplayTitle(routine)}{" "}
-                          {timerCountdownLabel(routineLabelInput(routine, sessionId), now)}
+                          {routineCompactLabel(routine, sessionId, sessions, now)}
                         </span>
                       ))}
                     </div>
@@ -588,7 +596,7 @@ export function JarvisTimersPanel({
   const [editDraft, setEditDraft] = useState<TimerDraft | null>(null);
   const [routineBusy, setRoutineBusy] = useState(false);
   const now = useTimerNow(
-    routines.some((routine) => timerNeedsClock(routineLabelInput(routine, sessionId))),
+    routines.some((routine) => timerNeedsClock(routineLabelInput(routine, sessionId, sessions))),
   );
 
   async function refreshRoutines() {
@@ -748,11 +756,28 @@ export function JarvisTimersPanel({
   );
 }
 
-function routineDisplayTitle(routine: Routine): string {
+function routineDisplayTitle(
+  routine: Routine,
+  viewerSessionId?: string,
+  sessions: Session[] = [],
+): string {
+  if (routine.trigger.kind === "session_idle") {
+    return sessionIdleRoutineTitle(routineLabelInput(routine, viewerSessionId, sessions));
+  }
   if (routine.title) return routine.title;
   if (routine.action.kind === "deliver_prompt") return routine.action.title;
-  if (routine.trigger.kind === "session_idle") return `Wait for ${routine.trigger.targetSessionId}`;
   return "Routine";
+}
+
+function routineCompactLabel(
+  routine: Routine,
+  viewerSessionId: string | undefined,
+  sessions: Session[],
+  now: number,
+): string {
+  const title = routineDisplayTitle(routine, viewerSessionId, sessions);
+  const countdown = timerCountdownLabel(routineLabelInput(routine, viewerSessionId, sessions), now);
+  return countdown ? `${title} ${countdown}` : title;
 }
 
 function JarvisTimerRow({
@@ -784,14 +809,14 @@ function JarvisTimerRow({
   now: number;
   viewerSessionId?: string;
 }) {
-  const labels = routineLabelInput(routine, viewerSessionId);
+  const labels = routineLabelInput(routine, viewerSessionId, sessions);
   const isIdleWait = routine.trigger.kind === "session_idle";
   const linkSessionId =
     routine.trigger.kind === "session_idle"
       ? routine.trigger.targetSessionId
       : routine.ownerSessionId;
   const target = sessions.find((session) => session.id === linkSessionId);
-  const displayTitle = routineDisplayTitle(routine);
+  const displayTitle = routineDisplayTitle(routine, viewerSessionId, sessions);
   return (
     <li {...stylex.props(styles.timerItem)}>
       <div {...stylex.props(styles.timerCard)}>

@@ -23,7 +23,18 @@ export type TimerDraft = {
   repeatMinutes: string;
 };
 
-export function routineLabelInput(routine: Routine, viewerSessionId?: string | null) {
+export function routineLabelInput(
+  routine: Routine,
+  viewerSessionId?: string | null,
+  sessions: Session[] = [],
+) {
+  const sessionName = (sessionId: string | null | undefined) => {
+    if (!sessionId) return null;
+    const session = sessions.find((item) => item.id === sessionId);
+    if (!session) return null;
+    return session.alias?.trim() || session.opencodeTitle?.trim() || null;
+  };
+
   if (routine.trigger.kind === "session_idle") {
     return {
       status: routine.status,
@@ -34,6 +45,9 @@ export function routineLabelInput(routine: Routine, viewerSessionId?: string | n
       viewerSessionId: viewerSessionId ?? null,
       ownerSessionId: routine.ownerSessionId,
       targetSessionId: routine.trigger.targetSessionId,
+      ownerDisplayName: sessionName(routine.ownerSessionId),
+      targetDisplayName: sessionName(routine.trigger.targetSessionId),
+      title: routine.title,
     };
   }
   return {
@@ -45,6 +59,9 @@ export function routineLabelInput(routine: Routine, viewerSessionId?: string | n
     viewerSessionId: viewerSessionId ?? null,
     ownerSessionId: routine.ownerSessionId,
     targetSessionId: null,
+    ownerDisplayName: sessionName(routine.ownerSessionId),
+    targetDisplayName: null,
+    title: routine.title,
   };
 }
 
