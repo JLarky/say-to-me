@@ -100,17 +100,9 @@ type RoutineAction =
     }
   | {
       kind: "notify_owner";
-      /**
-       * Structured result written onto the notification message (and/or returned on
-       * the routine row). Callers must not need to regex `text`.
-       */
-      event: {
-        kind: "watcher_completed";
-        sourceMessageId: number;
-        targetSessionId: string;
-        targetMessageId: number | null;
-        reason: "session_idle" | "cancelled" | "failed" | "timed_out" | "superseded";
-      };
+      // Create bodies omit the result; the worker fills a structured completion:
+      // { kind: "watcher_completed", routineId, sourceMessageId | null,
+      //   targetSessionId, targetMessageId | null, reason }
     };
 
 type Routine = {
