@@ -65,15 +65,13 @@ describe("routine labels", () => {
     expect(routineCountdownLabel(idle)).toBe("");
     expect(routineScheduleLabel(idle)).toBe("Active wait.");
 
-    expect(
-      sessionIdlePartyLabel({
-        ...idle,
-        viewerSessionId: target,
-      }),
-    ).toBe("e2e source is waiting for this session to go idle");
+    const onTarget = { ...idle, viewerSessionId: target };
+    expect(sessionIdlePartyLabel(onTarget)).toBe("will notify e2e source when idle");
+    expect(sessionIdleRoutineTitle(onTarget)).toBe("will notify e2e source when idle");
   });
 
   it("preserves custom idle titles and falls back when no human label exists", () => {
+    const owner = "cur_00000000-0000-4000-8000-0000000000aa";
     const target = "cur_00000000-0000-4000-8000-0000000000cc";
     expect(
       sessionIdleRoutineTitle({
@@ -88,9 +86,28 @@ describe("routine labels", () => {
       sessionIdlePartyLabel({
         targetSessionId: target,
         targetDisplayName: null,
-        viewerSessionId: "owner",
+        viewerSessionId: owner,
+        ownerSessionId: owner,
       }),
     ).toBe(`waiting for ${target} to go idle`);
+
+    expect(
+      sessionIdlePartyLabel({
+        ownerSessionId: owner,
+        ownerDisplayName: null,
+        targetSessionId: target,
+        viewerSessionId: target,
+      }),
+    ).toBe(`will notify ${owner} when idle`);
+
+    expect(
+      sessionIdlePartyLabel({
+        ownerSessionId: null,
+        ownerDisplayName: null,
+        targetSessionId: target,
+        viewerSessionId: target,
+      }),
+    ).toBe("will notify another session when idle");
 
     expect(isGeneratedSessionIdleTitle(null, target)).toBe(true);
     expect(isGeneratedSessionIdleTitle("", target)).toBe(true);

@@ -133,8 +133,8 @@ export function sessionIdlePartyLabel(
 ): string {
   const viewer = routine.viewerSessionId;
   if (viewer && routine.targetSessionId && viewer === routine.targetSessionId) {
-    const owner = partyName(routine.ownerSessionId, routine.ownerDisplayName, "Another session");
-    return `${owner} is waiting for this session to go idle`;
+    const owner = partyName(routine.ownerSessionId, routine.ownerDisplayName, "another session");
+    return `will notify ${owner} when idle`;
   }
   const target = partyName(routine.targetSessionId, routine.targetDisplayName, "target");
   return `waiting for ${target} to go idle`;
