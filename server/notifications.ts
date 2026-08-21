@@ -279,16 +279,18 @@ export async function checkForwardCompletionNotification(
     completeSessionIdleRoutine,
     findActiveSessionIdleRoutineBySourceMessageId,
     findSessionIdleRoutineBySourceMessageId,
-    isSessionIdleRoutine,
   } = await import("./routines.ts");
-  const idleRoutine =
-    findActiveSessionIdleRoutineBySourceMessageId(sourceMessageId) ??
-    findSessionIdleRoutineBySourceMessageId(sourceMessageId);
-  if (idleRoutine && isSessionIdleRoutine(idleRoutine) && idleRoutine.status === "cancelled") {
-    stopForwardCompletionNotificationWatch(sourceMessageId);
-    setCompletionWatchStatus(watch.targetMessageId, "cancelled");
-    stopCompletionWatch(watch.targetMessageId);
-    return false;
+  const idleRoutine = findActiveSessionIdleRoutineBySourceMessageId(sourceMessageId);
+  if (!idleRoutine) {
+    const existing = findSessionIdleRoutineBySourceMessageId(sourceMessageId);
+    if (existing?.status === "cancelled") {
+      // Cancel wait — never notify.
+      stopForwardCompletionNotificationWatch(sourceMessageId);
+      setCompletionWatchStatus(watch.targetMessageId, "cancelled");
+      stopCompletionWatch(watch.targetMessageId);
+      return false;
+    }
+    // fired/failed/legacy: fall through so existing notice coalescing stays idempotent.
   }
 
   const targetNotification = ensureTargetIdleNotification(
@@ -352,7 +354,7 @@ export async function checkForwardCompletionNotification(
   updateForwardTarget(sourceNotification.id, targetNotification.id, "notified");
   stopCompletionWatch(watch.targetMessageId);
   setCompletionWatchStatus(watch.targetMessageId, "completed");
-  if (idleRoutine && isSessionIdleRoutine(idleRoutine)) {
+  if (idleRoutine) {
     completeSessionIdleRoutine({
       routineId: idleRoutine.id,
       messageId: sourceNotification.id,

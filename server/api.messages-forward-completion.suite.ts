@@ -804,13 +804,15 @@ describe("say API: message forward completion", () => {
         forwardStatus: "queued",
         opencodeDeliveryStatus: "queued",
       });
-      const targetMessage = await waitForMessageStatus(
-        origin,
-        targetSessionId,
-        payload.targetMessage.id,
-        "queued",
-      );
-      expect(targetMessage.opencodeDeliveryError).toContain("OpenCode returned HTTP 500");
+      let targetMessage: ApiMessage | undefined;
+      await waitFor(async () => {
+        targetMessage = (await fetchSessionMessages(origin, targetSessionId)).find(
+          (message) => message.id === payload.targetMessage.id,
+        );
+        return Boolean(targetMessage?.opencodeDeliveryError);
+      });
+      expect(targetMessage?.opencodeDeliveryStatus).toBe("queued");
+      expect(targetMessage?.opencodeDeliveryError).toContain("OpenCode returned HTTP 500");
     } finally {
       process.env.SAY_TO_ME_OPENCODE_URL = previousOpenCodeUrl;
       openCode.server.close();

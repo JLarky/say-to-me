@@ -308,8 +308,10 @@ create body need not pre-seed `reason`.)
    (`systemEvent` vs `routineEvent`) is an implementation detail; the contract is
    “machine field, not prose.”
 
-Keep sentinel `text` for humans and old clients through Phase 2; regex helpers in
-`src/message-delivery.ts` remain fallback-only.
+Keep short speakable `text` for humans and TTS (for example `Session is now idle.`);
+machine correlation lives on `routineEvent` / routine action result plus `sessionRefs`.
+Legacy `<say-to-me-system>… is idle now</say-to-me-system>` tags remain recognized as
+fallback-only in detectors.
 
 ## Failure cases
 

@@ -1,16 +1,28 @@
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
-import { closeTestServer, createApiMiddleware, createTestSession, listen } from "./api.harness.ts";
+import {
+  closeTestServer,
+  createApiMiddleware,
+  createTestSession,
+  listen,
+  mockOpenCode,
+} from "./api.harness.ts";
 import type { Routine } from "../src/types.ts";
 import { completeSessionIdleRoutine, findSessionIdleRoutineBySourceMessageId } from "./routines.ts";
-import { listMessages } from "./messages.ts";
+import { listMessages, markCompletionWorkSeen, setCompletionWatchStatus } from "./messages.ts";
 import { drizzleDb } from "./db/index.ts";
 import { routines } from "./db/drizzle-schema.ts";
 import { eq } from "drizzle-orm";
 import {
+  resumeCompletionWatches,
+  runCompletionWatchTick,
   setCompletionWatchAutoPollingForTest,
   stopAllCompletionWatches,
 } from "./opencode/completion-watch.ts";
-import { clearForwardCompletionNotificationWatches } from "./notifications.ts";
+import {
+  checkForwardCompletionNotification,
+  clearForwardCompletionNotificationWatches,
+  startForwardCompletionNotificationWatch,
+} from "./notifications.ts";
 import { opencodeStatusCache } from "./opencode/cache.ts";
 
 async function json<T>(response: Response): Promise<T> {
@@ -168,7 +180,7 @@ describe("say API: session_idle routines (phase 2)", () => {
     }
   });
 
-  it("delete cancels the wait so the routine is gone", async () => {
+  it("delete cancels the wait so later idle does not notify", async () => {
     const app = createApiMiddleware();
     const { origin, server } = await listen(app);
     try {
@@ -187,13 +199,141 @@ describe("say API: session_idle routines (phase 2)", () => {
           notifyOnCompletion: true,
         }),
       });
-      const body = await json<{ message: { id: number } }>(forward);
+      const body = await json<{ message: { id: number }; targetMessage: { id: number } }>(forward);
       const routine = findSessionIdleRoutineBySourceMessageId(body.message.id)!;
 
       const deleted = await fetch(`${origin}/api/routines/${routine.id}`, { method: "DELETE" });
       expect(deleted.status).toBe(200);
-      expect(findSessionIdleRoutineBySourceMessageId(body.message.id)).toBeNull();
+      expect(findSessionIdleRoutineBySourceMessageId(body.message.id)).toMatchObject({
+        status: "cancelled",
+      });
+
+      startForwardCompletionNotificationWatch({
+        sourceMessageId: body.message.id,
+        sourceSessionId,
+        targetMessageId: body.targetMessage.id,
+        targetSessionId,
+        seenWorking: true,
+        autoPoll: false,
+      });
+      expect(await checkForwardCompletionNotification(body.message.id)).toBe(false);
+
+      const before = listMessages(sourceSessionId).filter(
+        (message) => message.text === "Session is now idle.",
+      ).length;
+      setCompletionWatchStatus(body.targetMessage.id, "watching");
+      await runCompletionWatchTick(body.targetMessage.id);
+      expect(
+        listMessages(sourceSessionId).filter((message) => message.text === "Session is now idle."),
+      ).toHaveLength(before);
     } finally {
+      await closeTestServer(server);
+    }
+  });
+
+  it("B can delete the same wait A created", async () => {
+    const app = createApiMiddleware();
+    const { origin, server } = await listen(app);
+    try {
+      const sourceSessionId = "ses_a7a7a7a7a7a7OwnerA7Wait007";
+      const targetSessionId = "ses_b7b7b7b7b7b7TargetB7Wait07";
+      await createTestSession(sourceSessionId);
+      await createTestSession(targetSessionId);
+
+      const forward = await json<{ message: { id: number } }>(
+        await fetch(`${origin}/api/sessions/${sourceSessionId}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            author: "user",
+            text: "visible on B",
+            targetSessionId,
+            notifyOnCompletion: true,
+          }),
+        }),
+      );
+      const routine = findSessionIdleRoutineBySourceMessageId(forward.message.id)!;
+      const forB = await json<{ routines: Routine[] }>(
+        await fetch(`${origin}/api/routines?sessionId=${encodeURIComponent(targetSessionId)}`),
+      );
+      expect(forB.routines.some((item) => item.id === routine.id)).toBe(true);
+
+      const deleted = await fetch(`${origin}/api/routines/${routine.id}`, { method: "DELETE" });
+      expect(deleted.status).toBe(200);
+      expect(findSessionIdleRoutineBySourceMessageId(forward.message.id)).toMatchObject({
+        status: "cancelled",
+      });
+    } finally {
+      await closeTestServer(server);
+    }
+  });
+
+  it("resume after stop still completes an active session_idle wait", async () => {
+    const app = createApiMiddleware();
+    const { origin, server } = await listen(app);
+    const previousOpenCodeUrl = process.env.SAY_TO_ME_OPENCODE_URL;
+    const sourceSessionId = "ses_a8a8a8a8a8a8OwnerA8Wait008";
+    const targetSessionId = "ses_b8b8b8b8b8b8TargetB8Wait08";
+    let targetStatus: "idle" | "busy" = "busy";
+    const openCode = await mockOpenCode((req, res) => {
+      const respond = (payload: unknown) => {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(payload));
+      };
+      if (req.url?.startsWith("/session/status")) {
+        return respond({
+          [sourceSessionId]: { type: "idle" },
+          [targetSessionId]: { type: targetStatus },
+        });
+      }
+      if (req.method === "POST" && req.url?.startsWith(`/session/${targetSessionId}/message`)) {
+        return respond({ info: { id: "msg_resume_target" }, parts: [] });
+      }
+      if (req.method === "POST" && req.url?.startsWith(`/session/${sourceSessionId}/message`)) {
+        return respond({ info: { id: "msg_resume_source" }, parts: [] });
+      }
+      if (req.url?.startsWith(`/session/${sourceSessionId}`)) {
+        return respond({ id: sourceSessionId, directory: "/tmp/resume-idle-source" });
+      }
+      if (req.url?.startsWith(`/session/${targetSessionId}`)) {
+        return respond({ id: targetSessionId, directory: "/tmp/resume-idle-target" });
+      }
+      res.writeHead(404).end();
+    });
+    process.env.SAY_TO_ME_OPENCODE_URL = openCode.url;
+
+    try {
+      await createTestSession(sourceSessionId);
+      await createTestSession(targetSessionId);
+      const forward = await json<{ message: { id: number }; targetMessage: { id: number } }>(
+        await fetch(`${origin}/api/sessions/${sourceSessionId}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            author: "user",
+            text: "resume me",
+            targetSessionId,
+            notifyOnCompletion: true,
+          }),
+        }),
+      );
+      expect(findSessionIdleRoutineBySourceMessageId(forward.message.id)?.status).toBe("active");
+
+      stopAllCompletionWatches();
+      resumeCompletionWatches(targetSessionId);
+      markCompletionWorkSeen(forward.targetMessage.id);
+      targetStatus = "idle";
+      opencodeStatusCache.clear();
+      await runCompletionWatchTick(forward.targetMessage.id);
+
+      const routine = findSessionIdleRoutineBySourceMessageId(forward.message.id);
+      expect(routine?.status).toBe("fired");
+      expect(
+        listMessages(sourceSessionId).some((message) => message.text === "Session is now idle."),
+      ).toBe(true);
+    } finally {
+      process.env.SAY_TO_ME_OPENCODE_URL = previousOpenCodeUrl;
+      openCode.server.close();
       await closeTestServer(server);
     }
   });

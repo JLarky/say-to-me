@@ -37,7 +37,6 @@ import {
   completeSessionIdleRoutine,
   findActiveSessionIdleRoutineBySourceMessageId,
   findSessionIdleRoutineBySourceMessageId,
-  isSessionIdleRoutine,
 } from "../routines.ts";
 
 export {
@@ -131,17 +130,10 @@ export const CompletionWatchEffectsLive = Layer.succeed(CompletionWatchEffects, 
   getSessionIdleGate: (sourceMessageId) =>
     tryWatchEffects(() => {
       if (sourceMessageId == null) return "continue";
+      if (findActiveSessionIdleRoutineBySourceMessageId(sourceMessageId)) return "continue";
       const routine = findSessionIdleRoutineBySourceMessageId(sourceMessageId);
-      if (!routine) return "continue";
-      if (!isSessionIdleRoutine(routine)) return "continue";
-      if (
-        routine.status === "cancelled" ||
-        routine.status === "fired" ||
-        routine.status === "failed"
-      ) {
-        return "stop";
-      }
-      return "continue";
+      // Cancelled / fired / failed waits must not notify again. No row = legacy path.
+      return routine ? "stop" : "continue";
     }),
   completeSessionIdle: (input) =>
     tryWatchEffects(() => {
