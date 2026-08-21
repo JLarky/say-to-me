@@ -8,8 +8,8 @@ import { buildHealthHandlers, HealthGroup, HealthLive } from "./health.ts";
 import { buildJarvisSessionsHandlers, JarvisSessionsGroup } from "./jarvis-sessions.ts";
 import { buildJarvisStatusHandlers, JarvisStatusGroup } from "./jarvis-status.ts";
 import { JarvisStatusOpenCodeLive } from "../jarvis-status.ts";
-import { buildJarvisTimersHandlers, JarvisTimersGroup } from "./jarvis-timers.ts";
-import { JarvisTimerLive } from "../timers.ts";
+import { buildRoutinesHandlers, RoutinesGroup } from "./routines.ts";
+import { RoutineLive } from "../routines.ts";
 import {
   buildMessageControlsHandlers,
   MessageControlLive,
@@ -127,7 +127,7 @@ export const SayToMeApi = HttpApi.make("say-to-me")
   .add(MessageCreateGroup)
   .add(WaitingStateGroup)
   .add(JarvisSessionsGroup)
-  .add(JarvisTimersGroup)
+  .add(RoutinesGroup)
   .add(OpenCodeSessionsGroup)
   .add(OpenCodeWorkspacesGroup)
   .add(OpenCodeStopGroup)
@@ -175,7 +175,7 @@ const SayToMeHandlers = Layer.mergeAll(
   buildMessageCreateHandlers(SayToMeApi),
   buildWaitingStateHandlers(SayToMeApi),
   buildJarvisSessionsHandlers(SayToMeApi),
-  buildJarvisTimersHandlers(SayToMeApi),
+  buildRoutinesHandlers(SayToMeApi),
   buildOpenCodeSessionsHandlers(SayToMeApi),
   buildOpenCodeWorkspacesHandlers(SayToMeApi),
   buildOpenCodeStopHandlers(SayToMeApi),
@@ -215,7 +215,7 @@ const SayToMeLive = Layer.mergeAll(
   SessionMutationsLive,
   JarvisStatusOpenCodeLive,
   MessageCreateLive,
-  JarvisTimerLive,
+  RoutineLive,
   OpenCodeSessionsLive,
   OpenCodeWorkspaceLive,
   StopOpenCodeLive,

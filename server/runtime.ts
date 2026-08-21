@@ -14,7 +14,7 @@ import {
   OpenCodeDeliveryRuntime,
   type OpenCodeDeliveryRuntimeService,
 } from "./opencode/durable-delivery.ts";
-import { startJarvisTimerWorker, stopJarvisTimerWorker } from "./timers.ts";
+import { startRoutineWorker, stopRoutineWorker } from "./routines.ts";
 import { resumeT3DeliveryWorkers, stopT3DeliveryWorker } from "./t3/durable-delivery.ts";
 import { resumePaseoDeliveryWorkers, stopPaseoDeliveryWorker } from "./paseo/durable-delivery.ts";
 import { resumePaseoChatListeners, stopAllPaseoChatListeners } from "./paseo/chat-listener.ts";
@@ -36,7 +36,7 @@ export function startServerRuntimeEffect(
   return Effect.gen(function* () {
     yield* deliveryRuntime.start;
     yield* Effect.sync(() => {
-      startJarvisTimerWorker();
+      startRoutineWorker();
       resumeCompletionWatches();
       resumeNotificationWatches();
       resumeClaudeDeliveryWorkers();
@@ -59,7 +59,7 @@ export function stopServerRuntimeEffect(
       stopAllPaseoChatListeners();
       clearForwardCompletionNotificationWatches();
     });
-    yield* Effect.promise(() => stopJarvisTimerWorker());
+    yield* Effect.promise(() => stopRoutineWorker());
     yield* Effect.promise(() => stopT3DeliveryWorker());
     yield* Effect.promise(() => stopPaseoDeliveryWorker());
     yield* deliveryRuntime.stop;

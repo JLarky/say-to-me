@@ -7,7 +7,7 @@ const testDbDir = mkdtempSync(path.join(tmpdir(), "say-to-me-space-activity-"));
 process.env.SAY_TO_ME_DB = path.join(testDbDir, "queue.sqlite");
 
 const { drizzleDb, drizzleSqlite } = await import("./db/index.ts");
-const { jarvisTimers, messages, sessions, spaceSessions, spaces } =
+const { messages, routines, sessions, spaceSessions, spaces } =
   await import("./db/drizzle-schema.ts");
 const { buildSpaceActivity, parseCreatedAtMs } = await import("./space-activity.ts");
 const { recordNotification } = await import("./notification-history.ts");
@@ -87,15 +87,26 @@ describe("space activity feed", () => {
       body: "Fixture notification for activity feed",
       url: `/ses/${sessionId}`,
     });
+    const routineDueAt = Date.parse("2026-07-18T12:00:00Z");
     drizzleDb
-      .insert(jarvisTimers)
+      .insert(routines)
       .values({
-        sessionId,
+        ownerSessionId: sessionId,
         title: "Check roster",
-        message: "Revisit the roster UI",
         status: "active",
-        dueAt: Date.parse("2026-07-18T12:00:00Z"),
-        nextFireAt: Date.parse("2026-07-18T12:00:00Z"),
+        triggerKind: "schedule",
+        trigger: JSON.stringify({
+          kind: "schedule",
+          dueAt: routineDueAt,
+          intervalMs: null,
+          nextFireAt: routineDueAt,
+        }),
+        action: JSON.stringify({
+          kind: "deliver_prompt",
+          title: "Check roster",
+          message: "Revisit the roster UI",
+        }),
+        nextFireAt: routineDueAt,
         lastFiredAt: Date.parse("2026-07-17T12:00:00Z"),
         createdAt: "2026-07-16 12:00:00",
         updatedAt: "2026-07-17 12:00:00",
@@ -110,7 +121,7 @@ describe("space activity feed", () => {
     expect(payload?.retention.scopeNote).toContain("currently attached");
     expect(payload?.retention.maxRangeHours).toBe(720);
     expect(payload?.retention.appliedRangeHours).toBe(168);
-    expect(payload?.timerFreshnessNote).toContain("jarvis_timers");
+    expect(payload?.timerFreshnessNote).toContain("routines");
 
     const types = new Set(payload?.events.map((event) => event.type));
     expect(types.has("message")).toBe(true);

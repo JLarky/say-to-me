@@ -3,7 +3,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router";
 import * as stylex from "@stylexjs/stylex";
 
-import { ErrorPayload, JarvisTimersPayload, type JarvisTimer, type Session } from "../types.ts";
+import { ErrorPayload, RoutinesPayload, type Routine, type Session } from "../types.ts";
 import { card, misc } from "../styles/chrome.stylex.ts";
 import { controls } from "../styles/controls.stylex.ts";
 import { badge, messageMeta, queue, thread } from "../styles/feed.stylex.ts";
@@ -11,13 +11,14 @@ import { session as sessionStyles } from "../styles/session.stylex.ts";
 import {
   canEditTimer,
   canStopTimer,
-  draftFromTimer,
+  draftFromRoutine,
   dueAtFromDraft,
   errorMessage,
   formatTimerTime,
   intervalFromDraft,
   isExpiredPausedTimer,
   repeatLabel,
+  routineLabelInput,
   timerCountdownLabel,
   timerNeedsClock,
   timerScheduleLabel,
@@ -291,23 +292,23 @@ export function SessionTimerSummary({
   setError: (error: string) => void;
   timersHref: string;
 }) {
-  const [timers, setTimers] = useState<JarvisTimer[]>([]);
-  const now = useTimerNow(timers.some(timerNeedsClock));
+  const [routines, setRoutines] = useState<Routine[]>([]);
+  const now = useTimerNow(routines.some((routine) => timerNeedsClock(routineLabelInput(routine))));
 
   useEffect(() => {
     if (!sessionId) return;
     let cancelled = false;
-    async function refreshTimers() {
-      const response = await fetch(
-        `/api/jarvis-timers?sessionId=${encodeURIComponent(sessionId!)}`,
-      );
-      const payload = await safeResponseJson(response, JarvisTimersPayload);
-      if (!response.ok) throw new Error(errorMessage(payload, "Unable to load timers."));
-      if (!cancelled) setTimers(payload.timers);
+    async function refreshRoutines() {
+      const response = await fetch(`/api/routines?sessionId=${encodeURIComponent(sessionId!)}`);
+      const payload = await safeResponseJson(response, RoutinesPayload);
+      if (!response.ok) throw new Error(errorMessage(payload, "Unable to load routines."));
+      if (!cancelled) setRoutines(payload.routines);
     }
-    void refreshTimers().catch((err) => setError(errorMessage(err, "Unable to load timers.")));
+    void refreshRoutines().catch((err) => setError(errorMessage(err, "Unable to load routines.")));
     const interval = window.setInterval(() => {
-      void refreshTimers().catch((err) => setError(errorMessage(err, "Unable to load timers.")));
+      void refreshRoutines().catch((err) =>
+        setError(errorMessage(err, "Unable to load routines.")),
+      );
     }, 5_000);
     return () => {
       cancelled = true;
@@ -317,36 +318,37 @@ export function SessionTimerSummary({
 
   if (!sessionId) return null;
 
-  const visibleTimers = timers
+  const visibleRoutines = routines
     .filter(
-      (timer) =>
-        timer.status === "active" || timer.status === "firing" || timer.status === "paused",
+      (routine) =>
+        routine.status === "active" || routine.status === "firing" || routine.status === "paused",
     )
-    .sort((a, b) => a.nextFireAt - b.nextFireAt);
+    .sort((a, b) => a.trigger.nextFireAt - b.trigger.nextFireAt);
 
   return (
     <div {...stylex.props(styles.compactTimerInfo)}>
-      {timers.length === 0 ? (
+      {routines.length === 0 ? (
         <Link
           {...stylex.props(badge.base, styles.timerBadge, styles.compactTimerLink)}
           to={createHref}
         >
-          + Timer
+          + Routine
         </Link>
-      ) : visibleTimers.length ? (
-        visibleTimers.map((timer) => (
+      ) : visibleRoutines.length ? (
+        visibleRoutines.map((routine) => (
           <Link
-            key={timer.id}
+            key={routine.id}
             {...stylex.props(
               badge.base,
               styles.timerBadge,
-              timer.status === "active" && badge.pending,
-              isExpiredPausedTimer(timer, now) && badge.pending,
+              routine.status === "active" && badge.pending,
+              isExpiredPausedTimer(routineLabelInput(routine), now) && badge.pending,
               styles.compactTimerLink,
             )}
             to={timersHref}
           >
-            {timer.title} {timerCountdownLabel(timer, now)}
+            {routine.title ?? routine.action.title}{" "}
+            {timerCountdownLabel(routineLabelInput(routine), now)}
           </Link>
         ))
       ) : (
@@ -354,7 +356,7 @@ export function SessionTimerSummary({
           {...stylex.props(badge.base, styles.timerBadge, styles.compactTimerLink)}
           to={timersHref}
         >
-          No active timers
+          No active routines
         </Link>
       )}
     </div>
@@ -370,20 +372,22 @@ export function JarvisTimersOverview({
   sessions: Session[];
   setError: (error: string) => void;
 }) {
-  const [timers, setTimers] = useState<JarvisTimer[]>([]);
-  const now = useTimerNow(timers.some(timerNeedsClock));
+  const [routines, setRoutines] = useState<Routine[]>([]);
+  const now = useTimerNow(routines.some((routine) => timerNeedsClock(routineLabelInput(routine))));
 
   useEffect(() => {
     let cancelled = false;
-    async function refreshTimers() {
-      const response = await fetch("/api/jarvis-timers");
-      const payload = await safeResponseJson(response, JarvisTimersPayload);
-      if (!response.ok) throw new Error(errorMessage(payload, "Unable to load timers."));
-      if (!cancelled) setTimers(payload.timers);
+    async function refreshRoutines() {
+      const response = await fetch("/api/routines");
+      const payload = await safeResponseJson(response, RoutinesPayload);
+      if (!response.ok) throw new Error(errorMessage(payload, "Unable to load routines."));
+      if (!cancelled) setRoutines(payload.routines);
     }
-    void refreshTimers().catch((err) => setError(errorMessage(err, "Unable to load timers.")));
+    void refreshRoutines().catch((err) => setError(errorMessage(err, "Unable to load routines.")));
     const interval = window.setInterval(() => {
-      void refreshTimers().catch((err) => setError(errorMessage(err, "Unable to load timers.")));
+      void refreshRoutines().catch((err) =>
+        setError(errorMessage(err, "Unable to load routines.")),
+      );
     }, 5_000);
     return () => {
       cancelled = true;
@@ -392,37 +396,43 @@ export function JarvisTimersOverview({
   }, [setError]);
 
   const sessionsById = new Map(sessions.map((session) => [session.id, session]));
-  const timersBySession = new Map<string, JarvisTimer[]>();
-  for (const timer of timers) {
-    const group = timersBySession.get(timer.sessionId) ?? [];
-    group.push(timer);
-    timersBySession.set(timer.sessionId, group);
+  const routinesBySession = new Map<string, Routine[]>();
+  for (const routine of routines) {
+    const group = routinesBySession.get(routine.ownerSessionId) ?? [];
+    group.push(routine);
+    routinesBySession.set(routine.ownerSessionId, group);
   }
-  const sessionGroups = [...timersBySession.entries()]
-    .map(([sessionId, sessionTimers]) => ({
+  const sessionGroups = [...routinesBySession.entries()]
+    .map(([sessionId, sessionRoutines]) => ({
       session: sessionsById.get(sessionId),
       sessionId,
-      timers: sessionTimers.sort((a, b) => timerSortTime(a) - timerSortTime(b)),
+      routines: sessionRoutines.sort(
+        (a, b) => timerSortTime(routineLabelInput(a)) - timerSortTime(routineLabelInput(b)),
+      ),
     }))
-    .sort((a, b) => timerSortTime(a.timers[0]!) - timerSortTime(b.timers[0]!));
+    .sort(
+      (a, b) =>
+        timerSortTime(routineLabelInput(a.routines[0]!)) -
+        timerSortTime(routineLabelInput(b.routines[0]!)),
+    );
 
   return (
     <section {...stylex.props(card.base, queue.panel)}>
       <div {...stylex.props(queue.heading)}>
         <div>
-          <h2 {...stylex.props(queue.headingH2)}>Timers</h2>
+          <h2 {...stylex.props(queue.headingH2)}>Routines</h2>
           <p {...stylex.props(styles.summary)}>Scheduled prompts grouped by session.</p>
         </div>
-        <span {...stylex.props(queue.headingCount)}>{timers.length}</span>
+        <span {...stylex.props(queue.headingCount)}>{routines.length}</span>
       </div>
       <div {...stylex.props(styles.timerHeaderActions)}>
         <Link {...stylex.props(controls.button)} to={createHref}>
-          Create timer
+          Create routine
         </Link>
       </div>
       {sessionGroups.length ? (
         <ol {...stylex.props(thread.list, styles.sectionStack)}>
-          {sessionGroups.map(({ session, sessionId, timers: sessionTimers }) => {
+          {sessionGroups.map(({ session, sessionId, routines: sessionRoutines }) => {
             const title = session?.alias || session?.opencodeTitle || sessionId;
             return (
               <li key={sessionId} {...stylex.props(thread.item)}>
@@ -437,23 +447,24 @@ export function JarvisTimersOverview({
                       </div>
                       <span {...stylex.props(queue.badges)}>
                         <span {...stylex.props(badge.base, styles.timerBadge)}>
-                          {sessionTimers.length} timers
+                          {sessionRoutines.length} routines
                         </span>
                       </span>
                     </div>
                     <div {...stylex.props(styles.compactTimerInfo)}>
-                      {sessionTimers.map((timer) => (
+                      {sessionRoutines.map((routine) => (
                         <span
-                          key={timer.id}
+                          key={routine.id}
                           {...stylex.props(
                             badge.base,
                             styles.timerBadge,
-                            timer.status === "active" && badge.pending,
-                            isExpiredPausedTimer(timer, now) && badge.pending,
-                            timer.status === "cancelled" && badge.failed,
+                            routine.status === "active" && badge.pending,
+                            isExpiredPausedTimer(routineLabelInput(routine), now) && badge.pending,
+                            routine.status === "cancelled" && badge.failed,
                           )}
                         >
-                          {timer.title} {timerCountdownLabel(timer, now)}
+                          {routine.title ?? routine.action.title}{" "}
+                          {timerCountdownLabel(routineLabelInput(routine), now)}
                         </span>
                       ))}
                     </div>
@@ -464,7 +475,7 @@ export function JarvisTimersOverview({
           })}
         </ol>
       ) : (
-        <p {...stylex.props(misc.empty)}>No timers scheduled.</p>
+        <p {...stylex.props(misc.empty)}>No routines scheduled.</p>
       )}
     </section>
   );
@@ -508,7 +519,7 @@ export function TimerDraftFields({
           value={draft.title}
           onChange={(event) => onChange({ ...draft, title: event.target.value })}
         />
-        <span {...stylex.props(styles.timerFieldHelp)}>Short label shown in timer lists.</span>
+        <span {...stylex.props(styles.timerFieldHelp)}>Short label shown in routine lists.</span>
       </label>
       <label {...stylex.props(styles.timerField)}>
         Next fire time
@@ -530,10 +541,10 @@ export function TimerDraftFields({
           value={draft.repeatMinutes}
           onChange={(event) => onChange({ ...draft, repeatMinutes: event.target.value })}
         />
-        <span {...stylex.props(styles.timerFieldHelp)}>Leave blank for a one-shot timer.</span>
+        <span {...stylex.props(styles.timerFieldHelp)}>Leave blank for a one-shot routine.</span>
       </label>
       <label {...stylex.props(styles.timerField, styles.timerWide)}>
-        Message sent when timer fires
+        Message sent when routine fires
         <textarea
           {...stylex.props(controls.textInput, styles.timerFieldControl, styles.timerTextarea)}
           rows={5}
@@ -541,7 +552,7 @@ export function TimerDraftFields({
           onChange={(event) => onChange({ ...draft, message: event.target.value })}
         />
         <span {...stylex.props(styles.timerFieldHelp)}>
-          This text is delivered as a user message when the timer fires.
+          This text is delivered as a user message when the routine fires.
         </span>
       </label>
     </div>
@@ -550,12 +561,12 @@ export function TimerDraftFields({
 
 export function JarvisTimersPanel({
   createHref = "/jarvis/timers/new",
-  emptyText = "No timers scheduled.",
+  emptyText = "No routines scheduled.",
   sessionId,
   sessions,
   setError,
   summary = "Scheduled prompts that will be sent to their target sessions.",
-  title = "Timers",
+  title = "Routines",
 }: {
   createHref?: string;
   emptyText?: string;
@@ -565,107 +576,114 @@ export function JarvisTimersPanel({
   summary?: string;
   title?: string;
 }) {
-  const [timers, setTimers] = useState<JarvisTimer[]>([]);
-  const [editingTimerId, setEditingTimerId] = useState<number | null>(null);
+  const [routines, setRoutines] = useState<Routine[]>([]);
+  const [editingRoutineId, setEditingRoutineId] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState<TimerDraft | null>(null);
-  const [timerBusy, setTimerBusy] = useState(false);
-  const now = useTimerNow(timers.some(timerNeedsClock));
+  const [routineBusy, setRoutineBusy] = useState(false);
+  const now = useTimerNow(routines.some((routine) => timerNeedsClock(routineLabelInput(routine))));
 
-  async function refreshTimers() {
+  async function refreshRoutines() {
     const response = await fetch(
-      sessionId
-        ? `/api/jarvis-timers?sessionId=${encodeURIComponent(sessionId)}`
-        : "/api/jarvis-timers",
+      sessionId ? `/api/routines?sessionId=${encodeURIComponent(sessionId)}` : "/api/routines",
     );
-    const payload = await safeResponseJson(response, JarvisTimersPayload);
-    if (!response.ok) throw new Error(errorMessage(payload, "Unable to load timers."));
-    setTimers(payload.timers);
+    const payload = await safeResponseJson(response, RoutinesPayload);
+    if (!response.ok) throw new Error(errorMessage(payload, "Unable to load routines."));
+    setRoutines(payload.routines);
   }
 
   useEffect(() => {
-    void refreshTimers().catch((err) => setError(errorMessage(err, "Unable to load timers.")));
+    void refreshRoutines().catch((err) => setError(errorMessage(err, "Unable to load routines.")));
     const interval = window.setInterval(() => {
-      void refreshTimers().catch((err) => setError(errorMessage(err, "Unable to load timers.")));
+      void refreshRoutines().catch((err) =>
+        setError(errorMessage(err, "Unable to load routines.")),
+      );
     }, 5_000);
     return () => window.clearInterval(interval);
   }, [sessionId, setError]);
 
-  async function saveEditedTimer(event: FormEvent) {
+  async function saveEditedRoutine(event: FormEvent) {
     event.preventDefault();
-    if (!editingTimerId || !editDraft) return;
+    if (!editingRoutineId || !editDraft) return;
     const dueAt = dueAtFromDraft(editDraft);
     if (!Number.isFinite(dueAt)) {
       setError("Choose a valid next fire time.");
       return;
     }
-    setTimerBusy(true);
+    setRoutineBusy(true);
     setError("");
     try {
-      const response = await fetch(`/api/jarvis-timers/${editingTimerId}`, {
+      const response = await fetch(`/api/routines/${editingRoutineId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sessionId: editDraft.sessionId,
+          ownerSessionId: editDraft.sessionId,
           title: editDraft.title,
-          message: editDraft.message,
-          dueAt,
-          intervalMs: intervalFromDraft(editDraft),
+          trigger: {
+            kind: "schedule",
+            dueAt,
+            intervalMs: intervalFromDraft(editDraft),
+          },
+          action: {
+            kind: "deliver_prompt",
+            title: editDraft.title,
+            message: editDraft.message,
+          },
         }),
       });
       const payload = await safeResponseJson(response, ErrorPayload);
-      if (!response.ok) throw new Error(errorMessage(payload, "Unable to save timer."));
-      setEditingTimerId(null);
+      if (!response.ok) throw new Error(errorMessage(payload, "Unable to save routine."));
+      setEditingRoutineId(null);
       setEditDraft(null);
-      await refreshTimers();
+      await refreshRoutines();
     } catch (err) {
-      setError(errorMessage(err, "Unable to save timer."));
+      setError(errorMessage(err, "Unable to save routine."));
     } finally {
-      setTimerBusy(false);
+      setRoutineBusy(false);
     }
   }
 
-  async function runTimerAction(
-    timer: JarvisTimer,
+  async function runRoutineAction(
+    routine: Routine,
     action: "trigger" | "pause" | "resume" | "cancel",
   ) {
-    if (action === "resume" && timer.nextFireAt <= Date.now()) {
-      setError("This timer is in the past. Edit it before resuming.");
+    if (action === "resume" && routine.trigger.nextFireAt <= Date.now()) {
+      setError("This routine is in the past. Edit it before resuming.");
       return;
     }
-    setTimerBusy(true);
+    setRoutineBusy(true);
     setError("");
     try {
-      const response = await fetch(`/api/jarvis-timers/${timer.id}/actions`, {
+      const response = await fetch(`/api/routines/${routine.id}/actions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),
       });
       const payload = await safeResponseJson(response, ErrorPayload);
-      if (!response.ok) throw new Error(errorMessage(payload, "Unable to update timer."));
-      await refreshTimers();
+      if (!response.ok) throw new Error(errorMessage(payload, "Unable to update routine."));
+      await refreshRoutines();
     } catch (err) {
-      setError(errorMessage(err, "Unable to update timer."));
+      setError(errorMessage(err, "Unable to update routine."));
     } finally {
-      setTimerBusy(false);
+      setRoutineBusy(false);
     }
   }
 
-  async function deleteTimer(timer: JarvisTimer) {
-    setTimerBusy(true);
+  async function deleteRoutine(routine: Routine) {
+    setRoutineBusy(true);
     setError("");
     try {
-      const response = await fetch(`/api/jarvis-timers/${timer.id}`, { method: "DELETE" });
+      const response = await fetch(`/api/routines/${routine.id}`, { method: "DELETE" });
       const payload = await safeResponseJson(response, ErrorPayload);
-      if (!response.ok) throw new Error(errorMessage(payload, "Unable to delete timer."));
-      if (editingTimerId === timer.id) {
-        setEditingTimerId(null);
+      if (!response.ok) throw new Error(errorMessage(payload, "Unable to delete routine."));
+      if (editingRoutineId === routine.id) {
+        setEditingRoutineId(null);
         setEditDraft(null);
       }
-      await refreshTimers();
+      await refreshRoutines();
     } catch (err) {
-      setError(errorMessage(err, "Unable to delete timer."));
+      setError(errorMessage(err, "Unable to delete routine."));
     } finally {
-      setTimerBusy(false);
+      setRoutineBusy(false);
     }
   }
 
@@ -676,35 +694,35 @@ export function JarvisTimersPanel({
           <h2 {...stylex.props(queue.headingH2)}>{title}</h2>
           <p {...stylex.props(styles.summary)}>{summary}</p>
         </div>
-        <span {...stylex.props(queue.headingCount)}>{timers.length}</span>
+        <span {...stylex.props(queue.headingCount)}>{routines.length}</span>
       </div>
       <div {...stylex.props(styles.timerHeaderActions)}>
         <Link {...stylex.props(controls.button)} to={createHref}>
-          Create timer
+          Create routine
         </Link>
       </div>
-      {timers.length ? (
+      {routines.length ? (
         <ol {...stylex.props(styles.timerList)}>
-          {timers.map((timer) => (
+          {routines.map((routine) => (
             <JarvisTimerRow
-              key={timer.id}
-              editDraft={editingTimerId === timer.id ? editDraft : null}
-              editing={editingTimerId === timer.id}
+              key={routine.id}
+              editDraft={editingRoutineId === routine.id ? editDraft : null}
+              editing={editingRoutineId === routine.id}
               onCancelEdit={() => {
-                setEditingTimerId(null);
+                setEditingRoutineId(null);
                 setEditDraft(null);
               }}
               onEdit={() => {
-                setEditingTimerId(timer.id);
-                setEditDraft(draftFromTimer(timer));
+                setEditingRoutineId(routine.id);
+                setEditDraft(draftFromRoutine(routine));
               }}
               onEditDraft={setEditDraft}
-              onDelete={deleteTimer}
-              onRunAction={runTimerAction}
-              onSaveEdit={saveEditedTimer}
+              onDelete={deleteRoutine}
+              onRunAction={runRoutineAction}
+              onSaveEdit={saveEditedRoutine}
               sessions={sessions}
-              timer={timer}
-              timerBusy={timerBusy}
+              routine={routine}
+              routineBusy={routineBusy}
               now={now}
             />
           ))}
@@ -726,8 +744,8 @@ function JarvisTimerRow({
   onRunAction,
   onSaveEdit,
   sessions,
-  timer,
-  timerBusy,
+  routine,
+  routineBusy,
   now,
 }: {
   editDraft: TimerDraft | null;
@@ -735,59 +753,61 @@ function JarvisTimerRow({
   onCancelEdit: () => void;
   onEdit: () => void;
   onEditDraft: (draft: TimerDraft) => void;
-  onDelete: (timer: JarvisTimer) => void;
-  onRunAction: (timer: JarvisTimer, action: "trigger" | "pause" | "resume" | "cancel") => void;
+  onDelete: (routine: Routine) => void;
+  onRunAction: (routine: Routine, action: "trigger" | "pause" | "resume" | "cancel") => void;
   onSaveEdit: (event: FormEvent) => void;
   sessions: Session[];
-  timer: JarvisTimer;
-  timerBusy: boolean;
+  routine: Routine;
+  routineBusy: boolean;
   now: number;
 }) {
-  const target = sessions.find((session) => session.id === timer.sessionId);
+  const labels = routineLabelInput(routine);
+  const target = sessions.find((session) => session.id === routine.ownerSessionId);
+  const displayTitle = routine.title ?? routine.action.title;
   return (
     <li {...stylex.props(styles.timerItem)}>
       <div {...stylex.props(styles.timerCard)}>
         <div {...stylex.props(styles.timerCardHeader)}>
           <div>
-            <div {...stylex.props(styles.timerTitle)}>{timer.title}</div>
-            <div {...stylex.props(styles.timerSchedule)}>{timerScheduleLabel(timer)}</div>
+            <div {...stylex.props(styles.timerTitle)}>{displayTitle}</div>
+            <div {...stylex.props(styles.timerSchedule)}>{timerScheduleLabel(labels)}</div>
           </div>
           <span
             {...stylex.props(
               badge.base,
               styles.timerBadge,
-              timer.status === "active" && badge.pending,
+              routine.status === "active" && badge.pending,
             )}
           >
-            {timerStatusLabel(timer)}
+            {timerStatusLabel(labels)}
           </span>
         </div>
         <div {...stylex.props(styles.meta)}>
-          <Link {...stylex.props(styles.timerTargetLink)} to={`/ses/${timer.sessionId}`}>
+          <Link {...stylex.props(styles.timerTargetLink)} to={`/ses/${routine.ownerSessionId}`}>
             <span {...stylex.props(styles.timerTargetLabel)}>Target session</span>
             <span {...stylex.props(styles.timerTargetValue)}>
-              {target?.alias || target?.opencodeTitle || timer.sessionId}
+              {target?.alias || target?.opencodeTitle || routine.ownerSessionId}
             </span>
           </Link>
           <span
             {...stylex.props(
               badge.base,
               styles.timerBadge,
-              timer.status === "active" && badge.pending,
-              isExpiredPausedTimer(timer, now) && badge.pending,
+              routine.status === "active" && badge.pending,
+              isExpiredPausedTimer(labels, now) && badge.pending,
             )}
           >
-            {timerCountdownLabel(timer, now)}
+            {timerCountdownLabel(labels, now)}
           </span>
-          <span {...stylex.props(badge.base, styles.timerBadge)}>{repeatLabel(timer)}</span>
-          {timer.lastFiredAt ? (
+          <span {...stylex.props(badge.base, styles.timerBadge)}>{repeatLabel(labels)}</span>
+          {routine.lastFiredAt ? (
             <span {...stylex.props(badge.base, styles.timerBadge)}>
-              Last fired {formatTimerTime(timer.lastFiredAt)}
+              Last fired {formatTimerTime(routine.lastFiredAt)}
             </span>
           ) : null}
-          {timer.lastError ? (
+          {routine.lastError ? (
             <span {...stylex.props(badge.base, styles.timerBadge, badge.failed)}>
-              {timer.lastError}
+              {routine.lastError}
             </span>
           ) : null}
         </div>
@@ -795,8 +815,8 @@ function JarvisTimerRow({
           <form {...stylex.props(styles.timerGrid)} onSubmit={onSaveEdit}>
             <TimerDraftFields draft={editDraft} onChange={onEditDraft} sessions={sessions} />
             <div {...stylex.props(styles.timerActions)}>
-              <button {...stylex.props(controls.button)} type="submit" disabled={timerBusy}>
-                Save Timer
+              <button {...stylex.props(controls.button)} type="submit" disabled={routineBusy}>
+                Save routine
               </button>
               <button
                 {...stylex.props(controls.button, controls.secondary)}
@@ -809,36 +829,38 @@ function JarvisTimerRow({
           </form>
         ) : (
           <>
-            <p {...stylex.props(styles.timerMessage)}>{timer.message}</p>
+            <p {...stylex.props(styles.timerMessage)}>{routine.action.message}</p>
             <div {...stylex.props(styles.timerActions)}>
               <button
                 {...stylex.props(controls.button)}
                 type="button"
-                disabled={timerBusy || timer.status !== "active"}
-                onClick={() => onRunAction(timer, "trigger")}
+                disabled={routineBusy || routine.status !== "active"}
+                onClick={() => onRunAction(routine, "trigger")}
               >
                 Trigger Now
               </button>
               <button
                 {...stylex.props(controls.button, controls.secondary)}
                 type="button"
-                disabled={timerBusy || (timer.status !== "active" && timer.status !== "firing")}
-                onClick={() => onRunAction(timer, "pause")}
+                disabled={
+                  routineBusy || (routine.status !== "active" && routine.status !== "firing")
+                }
+                onClick={() => onRunAction(routine, "pause")}
               >
                 Pause
               </button>
               <button
                 {...stylex.props(controls.button, controls.secondary)}
                 type="button"
-                disabled={timerBusy || timer.status !== "paused"}
-                onClick={() => onRunAction(timer, "resume")}
+                disabled={routineBusy || routine.status !== "paused"}
+                onClick={() => onRunAction(routine, "resume")}
               >
                 Resume
               </button>
               <button
                 {...stylex.props(controls.button, controls.secondary)}
                 type="button"
-                disabled={timerBusy || !canEditTimer(timer)}
+                disabled={routineBusy || !canEditTimer(labels)}
                 onClick={onEdit}
               >
                 Edit
@@ -846,16 +868,16 @@ function JarvisTimerRow({
               <button
                 {...stylex.props(controls.button, controls.secondary)}
                 type="button"
-                disabled={timerBusy || !canStopTimer(timer)}
-                onClick={() => onRunAction(timer, "cancel")}
+                disabled={routineBusy || !canStopTimer(labels)}
+                onClick={() => onRunAction(routine, "cancel")}
               >
                 Stop
               </button>
               <button
                 {...stylex.props(controls.button, controls.danger)}
                 type="button"
-                disabled={timerBusy}
-                onClick={() => onDelete(timer)}
+                disabled={routineBusy}
+                onClick={() => onDelete(routine)}
               >
                 Delete
               </button>

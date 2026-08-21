@@ -1,10 +1,12 @@
+import { type as arktype } from "arktype";
 import { desc, eq, inArray } from "drizzle-orm";
+import { safeJsonParse } from "@say-to-me/runtime-validation";
 import { resolveListDisplayName } from "../src/session-display.ts";
 import { drizzleDb } from "./db/index.ts";
 import {
-  jarvisTimers,
   messages,
   notifications,
+  routines,
   sessions,
   spaceSessions,
   spaces,
@@ -21,7 +23,7 @@ import { isInternalRosterNotice } from "./space-session-roster.ts";
  * - delivery failures on those messages
  * - notifications for attached session ids (active + dismissed still in table;
  *   global prune keeps only the newest {@link maxStoredNotifications} rows)
- * - jarvis_timers facts (created / last fired / current status snapshot)
+ * - routines facts (created / last fired / current status snapshot)
  * - space_sessions.importedAt attachment events
  *
  * Scope: only sessions currently attached. Move/release changes the feed.
@@ -80,9 +82,13 @@ export const MAX_ACTIVITY_RANGE_HOURS = 720;
 export const DEFAULT_ACTIVITY_RANGE_HOURS = 168;
 
 const TIMER_FRESHNESS_NOTE =
-  "Timer remaining/next-fire values come from the live jarvis_timers row at fetch time; only createdAt and lastFiredAt are historical.";
+  "Routine remaining/next-fire values come from the live routines row at fetch time; only createdAt and lastFiredAt are historical.";
 const SCOPE_NOTE =
   "Events cover sessions currently attached to this space. Moving or releasing a session changes this feed.";
+
+const DeliverPromptActionDetail = arktype({
+  "message?": "string",
+});
 
 function preview(text: string, max = 220): string {
   const compact = text.replace(/\s+/g, " ").trim();
@@ -97,6 +103,25 @@ function sessionTitleFor(sessionId: string, alias: string | null, cwd: string | 
     opencodeTitle: peekInMemoryProviderTitle(sessionId),
     cwd,
   });
+}
+
+function routineTitle(title: string | null): string {
+  return title?.trim() || "Routine";
+}
+
+function routineDetailMessage(actionJson: string, titleFallback: string): string {
+  const parsed = safeJsonParse(DeliverPromptActionDetail, actionJson);
+  if (parsed?.message?.trim()) return parsed.message;
+  return titleFallback;
+}
+
+function routineRemainingLabel(status: string, nextFireAt: number | null, now: number): string {
+  if (nextFireAt == null) return "no scheduled fire";
+  if (status === "paused") return "paused";
+  if (status === "firing") return "firing now";
+  const remainingMs = nextFireAt - now;
+  if (remainingMs <= 0) return "due now";
+  return `next in ${Math.max(1, Math.round(remainingMs / 1000))}s`;
 }
 
 function toIsoFromMs(ms: number | null | undefined): string | null {
@@ -291,59 +316,52 @@ export function buildSpaceActivity(
     });
   }
 
-  const timerRows = drizzleDb
+  const routineRows = drizzleDb
     .select()
-    .from(jarvisTimers)
-    .where(inArray(jarvisTimers.sessionId, sessionIds))
+    .from(routines)
+    .where(inArray(routines.ownerSessionId, sessionIds))
     .all();
 
-  for (const timer of timerRows) {
-    const sessionTitle = titleOf(timer.sessionId);
+  for (const routine of routineRows) {
+    const sessionTitle = titleOf(routine.ownerSessionId);
+    const title = routineTitle(routine.title);
+    const detail = preview(routineDetailMessage(routine.action, title));
     events.push({
-      id: `timer-created:${timer.id}`,
+      id: `timer-created:${routine.id}`,
       type: "timer",
-      sessionId: timer.sessionId,
+      sessionId: routine.ownerSessionId,
       sessionTitle,
-      title: `Timer created · ${timer.title}`,
-      detail: preview(timer.message),
-      createdAt: timer.createdAt,
-      url: `/ses/${encodeURIComponent(timer.sessionId)}`,
+      title: `Routine created · ${title}`,
+      detail,
+      createdAt: routine.createdAt,
+      url: `/ses/${encodeURIComponent(routine.ownerSessionId)}`,
       dismissedAt: null,
     });
 
-    const firedAt = toIsoFromMs(timer.lastFiredAt);
+    const firedAt = toIsoFromMs(routine.lastFiredAt);
     if (firedAt) {
       events.push({
-        id: `timer-fired:${timer.id}:${timer.lastFiredAt}`,
+        id: `timer-fired:${routine.id}:${routine.lastFiredAt}`,
         type: "timer",
-        sessionId: timer.sessionId,
+        sessionId: routine.ownerSessionId,
         sessionTitle,
-        title: `Timer fired · ${timer.title}`,
-        detail: preview(timer.message),
+        title: `Routine fired · ${title}`,
+        detail,
         createdAt: firedAt,
-        url: `/ses/${encodeURIComponent(timer.sessionId)}`,
+        url: `/ses/${encodeURIComponent(routine.ownerSessionId)}`,
         dismissedAt: null,
       });
     }
 
-    const remainingMs = timer.nextFireAt - now;
-    const remainingLabel =
-      timer.status === "paused"
-        ? "paused"
-        : timer.status === "firing"
-          ? "firing now"
-          : remainingMs <= 0
-            ? "due now"
-            : `next in ${Math.max(1, Math.round(remainingMs / 1000))}s`;
     events.push({
-      id: `timer-status:${timer.id}:${timer.updatedAt}`,
+      id: `timer-status:${routine.id}:${routine.updatedAt}`,
       type: "timer",
-      sessionId: timer.sessionId,
+      sessionId: routine.ownerSessionId,
       sessionTitle,
-      title: `Timer ${timer.status} · ${timer.title}`,
-      detail: `${remainingLabel} · live snapshot from jarvis_timers`,
-      createdAt: timer.updatedAt,
-      url: `/ses/${encodeURIComponent(timer.sessionId)}`,
+      title: `Routine ${routine.status} · ${title}`,
+      detail: `${routineRemainingLabel(routine.status, routine.nextFireAt, now)} · live snapshot from routines`,
+      createdAt: routine.updatedAt,
+      url: `/ses/${encodeURIComponent(routine.ownerSessionId)}`,
       dismissedAt: null,
     });
   }

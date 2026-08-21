@@ -54,7 +54,7 @@ packages/<name>` already separates cache keys; revisit when packages are
 | `@say-to-me/opencode-delivery`     | OpenCode durable-delivery workflow + Layers          |
 | `@say-to-me/completion-watch`      | Completion-watch workflow + Layers                   |
 | `@say-to-me/external-cli-delivery` | External-CLI durable-delivery workflow + Layers      |
-| `@say-to-me/jarvis-timers`         | Jarvis timer workflow + Layers                       |
+| `@say-to-me/routines`              | Routine workflow + Layers                            |
 
 Root Vitest projects (see `vite.config.ts`):
 

@@ -420,15 +420,22 @@ export const NoteRecord = type({
 
 export type NoteRecord = typeof NoteRecord.infer;
 
-export const JarvisTimer = type({
+export const Routine = type({
   id: "number",
-  sessionId: "string",
-  title: "string",
-  message: "string",
-  status: "'active' | 'paused' | 'firing' | 'completed' | 'cancelled'",
-  dueAt: "number",
-  intervalMs: "number | null",
-  nextFireAt: "number",
+  ownerSessionId: "string",
+  status: "'active' | 'paused' | 'firing' | 'fired' | 'cancelled' | 'failed'",
+  title: "string | null",
+  trigger: {
+    kind: "'schedule'",
+    dueAt: "number",
+    intervalMs: "number | null",
+    nextFireAt: "number",
+  },
+  action: {
+    kind: "'deliver_prompt'",
+    title: "string",
+    message: "string",
+  },
   lastFiredAt: "number | null",
   lastMessageId: "number | null",
   lockedAt: "number | null",
@@ -437,14 +444,9 @@ export const JarvisTimer = type({
   createdAt: "string",
   updatedAt: "string",
 });
-
-export type JarvisTimer = typeof JarvisTimer.infer;
-
-export const JarvisTimersPayload = type({
-  timers: JarvisTimer.array(),
-});
-
-export type JarvisTimersPayload = typeof JarvisTimersPayload.infer;
+export type Routine = typeof Routine.infer;
+export const RoutinesPayload = type({ routines: Routine.array() });
+export type RoutinesPayload = typeof RoutinesPayload.infer;
 
 /** Shape returned by GET /api/sessions/:id/messages */
 export const MessagesPayload = type({

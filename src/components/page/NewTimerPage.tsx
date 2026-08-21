@@ -211,10 +211,10 @@ export function NewTimerPage() {
   const targetLabel = targetSession?.alias || targetSession?.opencodeTitle || draft.sessionId;
   const repeatLabel = draft.repeatMinutes.trim()
     ? `Repeats every ${draft.repeatMinutes.trim()}m`
-    : "One-shot timer";
+    : "One-shot routine";
 
   useEffect(() => {
-    document.title = "Create Timer | Say To Me";
+    document.title = "Create Routine | Say To Me";
   }, []);
 
   useEffect(() => {
@@ -227,7 +227,7 @@ export function NewTimerPage() {
     );
   }, [requestedSessionId, sessions]);
 
-  async function createTimer(event: FormEvent) {
+  async function createRoutine(event: FormEvent) {
     event.preventDefault();
     const dueAt = dueAtFromDraft(draft);
     if (!Number.isFinite(dueAt)) {
@@ -237,22 +237,29 @@ export function NewTimerPage() {
     setCreating(true);
     setError("");
     try {
-      const response = await fetch("/api/jarvis-timers", {
+      const response = await fetch("/api/routines", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sessionId: draft.sessionId,
+          ownerSessionId: draft.sessionId,
           title: draft.title,
-          message: draft.message,
-          dueAt,
-          intervalMs: intervalFromDraft(draft),
+          trigger: {
+            kind: "schedule",
+            dueAt,
+            intervalMs: intervalFromDraft(draft),
+          },
+          action: {
+            kind: "deliver_prompt",
+            title: draft.title,
+            message: draft.message,
+          },
         }),
       });
       const payload = await safeResponseJson(response, ErrorPayload);
-      if (!response.ok) throw new Error(errorMessage(payload, "Unable to create timer."));
+      if (!response.ok) throw new Error(errorMessage(payload, "Unable to create routine."));
       await navigate(requestedSessionId ? `/ses/${requestedSessionId}/timers` : "/jarvis");
     } catch (err) {
-      setError(errorMessage(err, "Unable to create timer."));
+      setError(errorMessage(err, "Unable to create routine."));
     } finally {
       setCreating(false);
     }
@@ -262,10 +269,10 @@ export function NewTimerPage() {
     <PageShell
       eyebrow="Jarvis"
       backTo={requestedSessionId ? `/ses/${requestedSessionId}/timers` : "/jarvis"}
-      backLabel={requestedSessionId ? "Back to timers" : "Back to Jarvis"}
+      backLabel={requestedSessionId ? "Back to routines" : "Back to Jarvis"}
       hero={
         <>
-          <h1 {...stylex.props(textStyles.title)}>Create timer</h1>
+          <h1 {...stylex.props(textStyles.title)}>Create routine</h1>
           <p {...stylex.props(textStyles.lede)}>
             Schedule a one-shot or repeating prompt for a target session.
           </p>
@@ -275,7 +282,7 @@ export function NewTimerPage() {
       {error ? <div {...stylex.props(misc.error)}>{error}</div> : null}
       <div {...stylex.props(timerPage.layout)}>
         <section {...stylex.props(card.base, timerPage.formCard)}>
-          <form onSubmit={createTimer}>
+          <form onSubmit={createRoutine}>
             <TimerDraftFields draft={draft} onChange={setDraft} sessions={sessions} />
             <div {...stylex.props(timerPage.submitRow)}>
               <span {...stylex.props(badge.base, timerPage.previewBadge)}>
@@ -283,15 +290,15 @@ export function NewTimerPage() {
               </span>
               <div {...stylex.props(timerPage.submitActions)}>
                 <button {...stylex.props(controls.button)} type="submit" disabled={creating}>
-                  {creating ? "Creating..." : "Create timer"}
+                  {creating ? "Creating..." : "Create routine"}
                 </button>
               </div>
             </div>
           </form>
         </section>
-        <aside {...stylex.props(card.base, timerPage.previewCard)} aria-label="Timer preview">
+        <aside {...stylex.props(card.base, timerPage.previewCard)} aria-label="Routine preview">
           <p {...stylex.props(timerPage.previewEyebrow)}>Preview</p>
-          <h2 {...stylex.props(timerPage.previewTitle)}>{draft.title || "Untitled timer"}</h2>
+          <h2 {...stylex.props(timerPage.previewTitle)}>{draft.title || "Untitled routine"}</h2>
           <div {...stylex.props(timerPage.previewMeta)}>
             <div {...stylex.props(timerPage.previewTargetBlock)}>
               <span {...stylex.props(timerPage.previewTargetLabel)}>Target session</span>
@@ -305,7 +312,7 @@ export function NewTimerPage() {
             <span {...stylex.props(badge.base, timerPage.previewBadge)}>{repeatLabel}</span>
           </div>
           <p {...stylex.props(timerPage.previewMessage)}>
-            {draft.message.trim() || "Timer message preview will appear here."}
+            {draft.message.trim() || "Routine message preview will appear here."}
           </p>
         </aside>
       </div>

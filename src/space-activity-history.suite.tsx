@@ -14,7 +14,7 @@ const payload: SpaceActivityPayload = {
   spaceId: "space-1",
   spaceName: "e2e sessions",
   messageLimit: 200,
-  timerFreshnessNote: "Timer remaining/next-fire values come from the live jarvis_timers row.",
+  timerFreshnessNote: "Routine remaining/next-fire values come from the live routines row.",
   retention: {
     messageScanLimit: 200,
     messageScanTruncated: false,
@@ -22,7 +22,7 @@ const payload: SpaceActivityPayload = {
     maxRangeHours: 720,
     appliedRangeHours: 168,
     rangeClamped: false,
-    timerFreshnessNote: "Timer remaining/next-fire values come from the live jarvis_timers row.",
+    timerFreshnessNote: "Routine remaining/next-fire values come from the live routines row.",
     scopeNote: "Events cover sessions currently attached to this space.",
   },
   events: [

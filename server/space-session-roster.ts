@@ -1,9 +1,9 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { type as arktype } from "arktype";
-import { formatRemaining, formatTimerTime } from "@say-to-me/session-utils/jarvis-timer-labels";
+import { formatRemaining, formatRoutineTime } from "@say-to-me/session-utils/routine-labels";
 import { resolveListDisplayName } from "../src/session-display.ts";
 import { drizzleDb, drizzleSqlite } from "./db/index.ts";
-import { jarvisTimers, sessions, spaceSessions } from "./db/drizzle-schema.ts";
+import { routines, sessions, spaceSessions } from "./db/drizzle-schema.ts";
 import { validateDb } from "./db/schemas.ts";
 import {
   getCachedOpenCodeActivityStatus,
@@ -200,38 +200,45 @@ export function sortSpaceRosterSessions<T extends SpaceRosterSession>(sessions: 
   return [...sessions].sort(compareSpaceRosterSessions);
 }
 
-function timerSummaryForSession(sessionId: string, now: number): string | null {
-  const timer = drizzleDb
-    .select()
-    .from(jarvisTimers)
-    .where(
-      and(
-        eq(jarvisTimers.sessionId, sessionId),
-        inArray(jarvisTimers.status, ["active", "firing", "paused"]),
-      ),
-    )
-    .orderBy(jarvisTimers.nextFireAt)
-    .limit(1)
-    .get();
-  if (!timer) return null;
-  return formatTimerRow(timer, now);
+function routineDisplayTitle(title: string | null): string {
+  return title?.trim() || "Routine";
 }
 
-function formatTimerRow(
-  timer: {
-    title: string;
+function timerSummaryForSession(sessionId: string, now: number): string | null {
+  const routine = drizzleDb
+    .select()
+    .from(routines)
+    .where(
+      and(
+        eq(routines.ownerSessionId, sessionId),
+        inArray(routines.status, ["active", "firing", "paused"]),
+      ),
+    )
+    .orderBy(routines.nextFireAt)
+    .limit(1)
+    .get();
+  if (!routine) return null;
+  return formatRoutineRow(routine, now);
+}
+
+function formatRoutineRow(
+  routine: {
+    title: string | null;
     status: string;
-    nextFireAt: number;
+    nextFireAt: number | null;
   },
   now: number,
-): string {
-  if (timer.status === "firing") return `${timer.title} · firing now`;
-  if (timer.status === "paused") {
-    return `${timer.title} · paused · next ${formatTimerTime(timer.nextFireAt)}`;
+): string | null {
+  const title = routineDisplayTitle(routine.title);
+  if (routine.status === "firing") return `${title} · firing now`;
+  if (routine.status === "paused") {
+    if (routine.nextFireAt == null) return `${title} · paused`;
+    return `${title} · paused · next ${formatRoutineTime(routine.nextFireAt)}`;
   }
-  const remaining = timer.nextFireAt - now;
-  if (remaining <= 0) return `${timer.title} · due now`;
-  return `${timer.title} · in ${formatRemaining(remaining)}`;
+  if (routine.nextFireAt == null) return null;
+  const remaining = routine.nextFireAt - now;
+  if (remaining <= 0) return `${title} · due now`;
+  return `${title} · in ${formatRemaining(remaining)}`;
 }
 
 /** One batched timer query for the attached session set (active/firing/paused only). */
@@ -245,24 +252,25 @@ export function loadTimerSummariesBatch(
 
   const rows = drizzleDb
     .select({
-      sessionId: jarvisTimers.sessionId,
-      title: jarvisTimers.title,
-      status: jarvisTimers.status,
-      nextFireAt: jarvisTimers.nextFireAt,
+      ownerSessionId: routines.ownerSessionId,
+      title: routines.title,
+      status: routines.status,
+      nextFireAt: routines.nextFireAt,
     })
-    .from(jarvisTimers)
+    .from(routines)
     .where(
       and(
-        inArray(jarvisTimers.sessionId, sessionIds),
-        inArray(jarvisTimers.status, ["active", "firing", "paused"]),
+        inArray(routines.ownerSessionId, sessionIds),
+        inArray(routines.status, ["active", "firing", "paused"]),
       ),
     )
-    .orderBy(jarvisTimers.nextFireAt)
+    .orderBy(routines.nextFireAt)
     .all();
 
   for (const row of rows) {
-    if (map.get(row.sessionId) != null) continue;
-    map.set(row.sessionId, formatTimerRow(row, now));
+    if (map.get(row.ownerSessionId) != null) continue;
+    const summary = formatRoutineRow(row, now);
+    if (summary != null) map.set(row.ownerSessionId, summary);
   }
   return map;
 }

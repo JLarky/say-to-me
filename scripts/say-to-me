@@ -88,7 +88,8 @@ To call the HTTP API like OpenCode's api command (raw METHOD PATH):
 Discoverability index:
   say-to-me usage              Voice reply basics (this page)
   say-to-me usage jarvis       Session cards, relay/targetSessionId, jarvis-status
-  say-to-me usage timers       Scheduled prompts / jarvis-timers CRUD
+  say-to-me usage timers       Scheduled prompts / routines CRUD (alias for routines)
+  say-to-me usage routines     Scheduled prompts / routines CRUD
   say-to-me usage api          HTTP API CLI (METHOD PATH + operationId)
   say-to-me usage workflows    Multi-agent recipes (spaces, worktrees, coordinator)
 
@@ -262,9 +263,9 @@ This finds the message, derives its session, and returns the same shape as
 /api/sessions/<session-id>/jarvis-status. On the first call, the requested
 message is guaranteed to appear in messages, including idle system notices.
 
-Timers are scheduled prompts for sessions. To manage timers, run:
+Routines (formerly timers) are scheduled prompts for sessions. To manage routines, run:
 
-  say-to-me usage timers
+  say-to-me usage routines
 
 Jarvis status notes:
 - limit must be 1 through 50.
@@ -275,43 +276,51 @@ Jarvis status notes:
 EOF
 }
 
-timers_usage() {
+routines_usage() {
   cat <<'EOF'
-say-to-me timers usage
+say-to-me routines usage
 
-Use timers when the user wants a future reminder or scheduled prompt delivered
-to a specific session. Timers always target a session.
+Use routines when the user wants a future reminder or scheduled prompt delivered
+to a specific session. Routines always target an owner session.
 
-List all timers:
+List all routines:
 
-  say-to-me api GET '/api/jarvis-timers'
+  say-to-me api GET '/api/routines'
 
-List timers for one session:
+List routines for one session:
 
-  say-to-me api GET '/api/jarvis-timers?sessionId=<session-id>'
+  say-to-me api GET '/api/routines?sessionId=<session-id>'
 
-Create a timer. dueAt is a Unix timestamp in milliseconds. Use intervalMs for
-repeating timers, or null for a one-shot timer:
+Create a routine. trigger.dueAt is a Unix timestamp in milliseconds. Use
+trigger.intervalMs for repeating routines, or null for a one-shot routine:
 
-  say-to-me api POST /api/jarvis-timers \
-    -d '{"sessionId":"ses_target123","title":"Check in","message":"Please continue if appropriate.","dueAt":1781880000000,"intervalMs":null}'
+  say-to-me api POST /api/routines \
+    -d '{"ownerSessionId":"ses_target123","title":"Check in","trigger":{"kind":"schedule","dueAt":1781880000000,"intervalMs":null},"action":{"kind":"deliver_prompt","title":"Check in","message":"Please continue if appropriate."}}'
 
-Manage an existing timer:
+Manage an existing routine:
 
-  say-to-me api PATCH /api/jarvis-timers/<timer-id> \
-    -d '{"title":"Updated title","dueAt":1781883600000}'
+  say-to-me api PATCH /api/routines/<routine-id> \
+    -d '{"title":"Updated title","trigger":{"kind":"schedule","dueAt":1781883600000}}'
 
-  say-to-me api POST /api/jarvis-timers/<timer-id>/actions \
+  say-to-me api POST /api/routines/<routine-id>/actions \
     -d '{"action":"pause"}'
 
-Timer actions are: trigger, pause, resume, cancel. Delete removes the timer row:
+Routine actions are: trigger, pause, resume, cancel. Delete removes the routine row:
 
-  say-to-me api DELETE '/api/jarvis-timers/<timer-id>'
+  say-to-me api DELETE '/api/routines/<routine-id>'
 
-UI routes: /jarvis shows all timers, /ses/<session-id>/timers shows timers for
-one session, and /jarvis/timers/new?sessionId=<session-id> creates a timer with
+UI routes: /jarvis shows all routines, /ses/<session-id>/timers shows routines for
+one session, and /jarvis/timers/new?sessionId=<session-id> creates a routine with
 that session preselected.
 EOF
+}
+
+timers_usage() {
+  cat <<'EOF'
+Timers were renamed to routines. This page documents the routines API.
+
+EOF
+  routines_usage
 }
 
 workflows_usage() {
@@ -364,14 +373,14 @@ List spaces / repos to discover ids:
   say-to-me api GET /api/spaces
 
 ────────────────────────────────────────
-2) Timers for scheduled prompts
+2) Routines for scheduled prompts
 ────────────────────────────────────────
 
-Use timers when a session should wake later (or on an interval) with a prompt.
-Full CRUD: `say-to-me usage timers`.
+Use routines when a session should wake later (or on an interval) with a prompt.
+Full CRUD: `say-to-me usage routines`.
 
-  say-to-me api POST /api/jarvis-timers \
-    -d '{"sessionId":"<session-id>","title":"Check in","message":"Please continue if appropriate.","dueAt":1781880000000,"intervalMs":null}'
+  say-to-me api POST /api/routines \
+    -d '{"ownerSessionId":"<session-id>","title":"Check in","trigger":{"kind":"schedule","dueAt":1781880000000,"intervalMs":null},"action":{"kind":"deliver_prompt","title":"Check in","message":"Please continue if appropriate."}}'
 
 ────────────────────────────────────────
 3) Coordinator pattern (builder + validator + reviewer)
@@ -497,6 +506,9 @@ case "$command:$topic" in
     ;;
   usage:timers|usage:timer|timers:|timer:)
     timers_usage
+    ;;
+  usage:routines|usage:routine|routines:|routine:)
+    routines_usage
     ;;
   usage:workflows|usage:workflow|workflows:|workflow:)
     workflows_usage

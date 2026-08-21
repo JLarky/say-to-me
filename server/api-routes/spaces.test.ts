@@ -837,7 +837,7 @@ describe("Spaces API regressions", () => {
     };
     expect(body.spaceId).toBe(spaceId);
     expect(body.spaceName).toBe("Activity API");
-    expect(body.timerFreshnessNote).toContain("jarvis_timers");
+    expect(body.timerFreshnessNote).toContain("routines");
     expect(body.retention.scopeNote).toContain("currently attached");
     expect(body.retention.maxRangeHours).toBe(720);
     expect(body.events.some((event) => event.detail.includes("ROSTER-LIVE-2026"))).toBe(true);

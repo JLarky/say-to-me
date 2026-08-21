@@ -8,7 +8,7 @@ const testDbDir = mkdtempSync(path.join(tmpdir(), "say-to-me-roster-batch-"));
 process.env.SAY_TO_ME_DB = path.join(testDbDir, "queue.sqlite");
 
 const { drizzleDb, drizzleSqlite } = await import("./db/index.ts");
-const { jarvisTimers, messages, sessions } = await import("./db/drizzle-schema.ts");
+const { messages, routines, sessions } = await import("./db/drizzle-schema.ts");
 const {
   countRosterMessageCandidates,
   loadLatestMessageFactsBatch,
@@ -81,24 +81,44 @@ describe("space roster bounded batch loaders", () => {
     drizzleDb.insert(sessions).values({ id: b, alias: "B" }).run();
     const now = Date.parse("2026-07-18T12:00:00Z");
     drizzleDb
-      .insert(jarvisTimers)
+      .insert(routines)
       .values({
-        sessionId: a,
+        ownerSessionId: a,
         title: "Soon A",
-        message: "a",
         status: "active",
-        dueAt: now + 60_000,
+        triggerKind: "schedule",
+        trigger: JSON.stringify({
+          kind: "schedule",
+          dueAt: now + 60_000,
+          intervalMs: null,
+          nextFireAt: now + 60_000,
+        }),
+        action: JSON.stringify({
+          kind: "deliver_prompt",
+          title: "Soon A",
+          message: "a",
+        }),
         nextFireAt: now + 60_000,
       })
       .run();
     drizzleDb
-      .insert(jarvisTimers)
+      .insert(routines)
       .values({
-        sessionId: b,
+        ownerSessionId: b,
         title: "Soon B",
-        message: "b",
         status: "paused",
-        dueAt: now + 120_000,
+        triggerKind: "schedule",
+        trigger: JSON.stringify({
+          kind: "schedule",
+          dueAt: now + 120_000,
+          intervalMs: null,
+          nextFireAt: now + 120_000,
+        }),
+        action: JSON.stringify({
+          kind: "deliver_prompt",
+          title: "Soon B",
+          message: "b",
+        }),
         nextFireAt: now + 120_000,
       })
       .run();
