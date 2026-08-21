@@ -8,7 +8,7 @@ import { opencodeStatusCache } from "./opencode/cache.ts";
 import { ensureSession } from "./sessions.ts";
 import { JarvisStatusOpenCode, waitForIdleStatusEffect } from "./jarvis-status.ts";
 import { fakeServiceLayer } from "./effect-test-helpers.ts";
-import type { OpenCodeStatus } from "../src/types.ts";
+import type { OpenCodeStatus, WaitingStatePayload } from "../src/types.ts";
 
 function jarvisStatusRequest(sessionId: string, query = "") {
   return Effect.promise(() =>
@@ -50,11 +50,14 @@ function jarvisStatusProgram(sessionId: string, query: URLSearchParams = new URL
 
 function fakeJarvisStatusOpenCode({
   statuses,
+  waitingStates,
   onStatusCall,
 }: {
-  statuses: OpenCodeStatus[];
+  statuses: Array<OpenCodeStatus | null>;
+  waitingStates?: WaitingStatePayload[];
   onStatusCall?: (call: number) => void;
 }) {
+  let waitingCalls = 0;
   const fake = fakeServiceLayer(JarvisStatusOpenCode, (calls) => ({
     getStatus: () =>
       Effect.sync(() => {
@@ -73,13 +76,22 @@ function fakeJarvisStatusOpenCode({
         })),
       }),
     getWaitingState: () =>
-      Effect.succeed({
-        state: "can_continue",
-        reason: "Fake Jarvis status service is idle.",
-        source: "heuristic",
+      Effect.sync(() => {
+        waitingCalls += 1;
+        const fallback: WaitingStatePayload = {
+          state: "can_continue",
+          reason: "Fake Jarvis status service is idle.",
+          source: "heuristic",
+        };
+        if (!waitingStates || waitingStates.length === 0) return fallback;
+        return waitingStates[Math.min(waitingCalls - 1, waitingStates.length - 1)] ?? fallback;
       }),
   }));
-  return { getStatusCalls: () => fake.calls.length, layer: fake.layer };
+  return {
+    getStatusCalls: () => fake.calls.filter((call) => call === "status").length,
+    getWaitingStateCalls: () => waitingCalls,
+    layer: fake.layer,
+  };
 }
 
 function insertAgentMessage(
@@ -432,6 +444,112 @@ describe("say API: Jarvis status", () => {
       wait: { requestedMs: 500, timedOut: false },
     });
     expect(fakeOpenCode.getStatusCalls()).toBe(1);
+  });
+
+  it("waits for a CLI session whose waiting-state is working", async () => {
+    // Regression for #19: non-OpenCode backends report opencodeState null while
+    // waitingState already knows the agent is mid-turn. wait must consult that.
+    const sessionId = "gr_a19f0c11-0001-4000-8000-000000000001";
+    const fakeOpenCode = fakeJarvisStatusOpenCode({
+      statuses: [null, null],
+      waitingStates: [
+        {
+          state: "working",
+          reason: "The agent is working on the last message.",
+          source: "heuristic",
+        },
+        {
+          state: "can_continue",
+          reason: "The agent reported back.",
+          source: "heuristic",
+        },
+      ],
+    });
+
+    insertAgentMessage(sessionId, "cli turn in flight");
+    const payload = await Effect.runPromise(
+      Effect.gen(function* () {
+        const fiber = yield* jarvisStatusProgram(sessionId, new URLSearchParams("wait=500ms")).pipe(
+          Effect.provide(fakeOpenCode.layer),
+          Effect.fork,
+        );
+
+        yield* TestClock.adjust(Duration.millis(100));
+        return yield* Fiber.join(fiber);
+      }).pipe(Effect.provide(TestContext.TestContext)),
+    );
+
+    expect(payload).toMatchObject({
+      sessionId,
+      opencodeState: null,
+      wait: { requestedMs: 500, timedOut: false },
+      waitingState: { state: "can_continue" },
+    });
+    expect(payload.wait.waitedMs).toBeGreaterThan(0);
+    expect(fakeOpenCode.getWaitingStateCalls()).toBeGreaterThanOrEqual(2);
+  });
+
+  it("times out when a CLI session stays working", async () => {
+    const sessionId = "cur_b19f0c11-0002-4000-8000-000000000002";
+    const fakeOpenCode = fakeJarvisStatusOpenCode({
+      statuses: [null],
+      waitingStates: [
+        {
+          state: "working",
+          reason: "The agent is working on the last message.",
+          source: "heuristic",
+        },
+      ],
+    });
+
+    insertAgentMessage(sessionId, "still working");
+    const payload = await Effect.runPromise(
+      Effect.gen(function* () {
+        const fiber = yield* jarvisStatusProgram(sessionId, new URLSearchParams("wait=250ms")).pipe(
+          Effect.provide(fakeOpenCode.layer),
+          Effect.fork,
+        );
+
+        yield* TestClock.adjust(Duration.millis(250));
+        return yield* Fiber.join(fiber);
+      }).pipe(Effect.provide(TestContext.TestContext)),
+    );
+
+    expect(payload).toMatchObject({
+      opencodeState: null,
+      wait: { requestedMs: 250, timedOut: true, waitedMs: 250 },
+      waitingState: { state: "working" },
+    });
+    expect(fakeOpenCode.getWaitingStateCalls()).toBeGreaterThan(1);
+  });
+
+  it("does not long-poll an idle CLI session", async () => {
+    const sessionId = "cc_c19f0c11-0003-4000-8000-000000000003";
+    const fakeOpenCode = fakeJarvisStatusOpenCode({
+      statuses: [null],
+      waitingStates: [
+        {
+          state: "can_continue",
+          reason: "The agent reported back.",
+          source: "heuristic",
+        },
+      ],
+    });
+
+    insertAgentMessage(sessionId, "already idle");
+    const payload = await Effect.runPromise(
+      jarvisStatusProgram(sessionId, new URLSearchParams("wait=500ms")).pipe(
+        Effect.provide(fakeOpenCode.layer),
+      ),
+    );
+
+    expect(payload).toMatchObject({
+      opencodeState: null,
+      wait: { requestedMs: 500, timedOut: false },
+      waitingState: { state: "can_continue" },
+    });
+    expect(payload.wait.waitedMs).toBeLessThan(50);
+    expect(fakeOpenCode.getWaitingStateCalls()).toBe(2);
   });
 
   it("returns route-level JSON errors for invalid query strings", async () => {
