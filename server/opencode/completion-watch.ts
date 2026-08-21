@@ -49,6 +49,7 @@ export {
   CompletionWatchStoreError,
   type CompletionWatchStoreService,
   DEFAULT_COMPLETION_WATCH_POLL_MS,
+  promptReachedTarget,
   runCompletionWatchTickEffect,
   type CompletionWatchEnv,
   type OpenCodeSessionStatus,

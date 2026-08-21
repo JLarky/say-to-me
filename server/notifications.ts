@@ -23,7 +23,7 @@ import {
   updateForwardTarget,
   updateOpencodeDelivery,
 } from "./messages.ts";
-import { stopCompletionWatch } from "./opencode/completion-watch.ts";
+import { promptReachedTarget, stopCompletionWatch } from "./opencode/completion-watch.ts";
 import { enqueueClaudeDeliveryJob } from "./claude/durable-delivery.ts";
 import { enqueueCursorDeliveryJob } from "./cursor/durable-delivery.ts";
 import { enqueueCodexDeliveryJob } from "./codex/durable-delivery.ts";
@@ -274,6 +274,11 @@ export async function checkForwardCompletionNotification(
   }
 
   if (status !== "idle" || !watch.seenWorking) return false;
+  // Same invariant as the completion-watch tick: an idle read only means the
+  // relay finished if the prompt actually reached the target in the first place.
+  if (!promptReachedTarget(getMessage(watch.targetMessageId)?.opencodeDeliveryStatus ?? null)) {
+    return false;
+  }
 
   const {
     completeSessionIdleRoutine,

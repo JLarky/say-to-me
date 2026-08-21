@@ -1,30 +1,37 @@
-import { isCodexSessionBusy } from "../codex/delivery.ts";
-import { enqueueCodexDeliveryJob } from "../codex/durable-delivery.ts";
-import { isClaudeSessionBusy } from "../claude/delivery.ts";
-import { enqueueClaudeDeliveryJob } from "../claude/durable-delivery.ts";
-import { isCursorSessionBusy } from "../cursor/delivery.ts";
-import { enqueueCursorDeliveryJob } from "../cursor/durable-delivery.ts";
-import { isGrokSessionBusy } from "../grok/delivery.ts";
-import { enqueueGrokDeliveryJob } from "../grok/durable-delivery.ts";
+import { enqueueCodexDeliveryJob, hasCodexOwedDeliveryWork } from "../codex/durable-delivery.ts";
+import { enqueueClaudeDeliveryJob, hasClaudeOwedDeliveryWork } from "../claude/durable-delivery.ts";
+import { enqueueCursorDeliveryJob, hasCursorOwedDeliveryWork } from "../cursor/durable-delivery.ts";
+import { enqueueGrokDeliveryJob, hasGrokOwedDeliveryWork } from "../grok/durable-delivery.ts";
 import { getOpenCodeStatus } from "../opencode/client.ts";
 import { enqueueOpenCodeDeliveryJob } from "../opencode/durable-delivery.ts";
 import { detectSessionBackend } from "../session-id.ts";
 
 export type SessionWorkStatus = "pending" | "idle" | "unavailable";
 
+/**
+ * Work status as the notification watchers need it: `idle` has to mean "this
+ * session owes the relay nothing", not merely "no prompt is in front of the
+ * agent this instant".
+ *
+ * External CLI backends have no live session status to read, so this is derived
+ * from the delivery queue. It deliberately counts a job that is queued or
+ * backing off as `pending` too — those windows are exactly when a watch would
+ * otherwise see a brand-new relay as already finished. `isXSessionBusy` keeps
+ * the narrower "prompt in flight" meaning for the activity/UI layer.
+ */
 export async function getSessionWorkStatus(sessionId: string): Promise<SessionWorkStatus> {
   const backend = detectSessionBackend(sessionId);
   if (backend === "claude") {
-    return isClaudeSessionBusy(sessionId) ? "pending" : "idle";
+    return hasClaudeOwedDeliveryWork(sessionId) ? "pending" : "idle";
   }
   if (backend === "cursor") {
-    return isCursorSessionBusy(sessionId) ? "pending" : "idle";
+    return hasCursorOwedDeliveryWork(sessionId) ? "pending" : "idle";
   }
   if (backend === "codex") {
-    return isCodexSessionBusy(sessionId) ? "pending" : "idle";
+    return hasCodexOwedDeliveryWork(sessionId) ? "pending" : "idle";
   }
   if (backend === "grok") {
-    return isGrokSessionBusy(sessionId) ? "pending" : "idle";
+    return hasGrokOwedDeliveryWork(sessionId) ? "pending" : "idle";
   }
   if (backend === "opencode") {
     const status = await getOpenCodeStatus(sessionId);

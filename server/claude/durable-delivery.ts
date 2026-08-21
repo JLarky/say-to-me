@@ -76,6 +76,7 @@ export type EnqueueClaudeDeliveryInput = {
 
 export const enqueueClaudeDeliveryJob = claudeDelivery.enqueueDeliveryJob;
 export const retryClaudeDeliveryJob = claudeDelivery.retryDeliveryJob;
+export const hasClaudeOwedDeliveryWork = claudeDelivery.hasOwedDeliveryWork;
 export const resumeClaudeDeliveryWorkers = claudeDelivery.resumePendingDeliveryWorkers;
 
 export type ClaudeDeliveryQueueService = {

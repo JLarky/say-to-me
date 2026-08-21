@@ -72,6 +72,7 @@ export type EnqueueGrokDeliveryInput = {
 
 export const enqueueGrokDeliveryJob = grokDelivery.enqueueDeliveryJob;
 export const retryGrokDeliveryJob = grokDelivery.retryDeliveryJob;
+export const hasGrokOwedDeliveryWork = grokDelivery.hasOwedDeliveryWork;
 export const resumeGrokDeliveryWorkers = grokDelivery.resumePendingDeliveryWorkers;
 
 export type GrokDeliveryQueueService = {

@@ -78,6 +78,7 @@ export type EnqueueCodexDeliveryInput = {
 
 export const enqueueCodexDeliveryJob = codexDelivery.enqueueDeliveryJob;
 export const retryCodexDeliveryJob = codexDelivery.retryDeliveryJob;
+export const hasCodexOwedDeliveryWork = codexDelivery.hasOwedDeliveryWork;
 export const resumeCodexDeliveryWorkers = codexDelivery.resumePendingDeliveryWorkers;
 
 export type CodexDeliveryQueueService = {
