@@ -129,5 +129,9 @@ export const markGrokDeliveryJobUnconfirmedFromWorker =
   grokDelivery.markDeliveryJobUnconfirmedFromWorker;
 export const cancelGrokDeliveryJobFromWorker = grokDelivery.cancelDeliveryJobFromWorker;
 export const renewGrokDeliveryJobFromWorker = grokDelivery.renewDeliveryJobFromWorker;
+export const confirmGrokDeliveryFromObservedWork =
+  grokDelivery.confirmDispatchedDeliveryFromObservedWork;
+export const confirmGrokDeliveriesForSessionFromObservedWork =
+  grokDelivery.confirmDeliveriesForSessionFromObservedWork;
 export const runGrokDeliveryOnce = grokDelivery.runDeliveryOnce;
 export const grokDeliveryWorkerLoop = grokDelivery.deliveryWorkerLoop;

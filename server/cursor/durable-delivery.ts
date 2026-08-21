@@ -128,5 +128,9 @@ export const markCursorDeliveryJobUnconfirmedFromWorker =
   cursorDelivery.markDeliveryJobUnconfirmedFromWorker;
 export const cancelCursorDeliveryJobFromWorker = cursorDelivery.cancelDeliveryJobFromWorker;
 export const renewCursorDeliveryJobFromWorker = cursorDelivery.renewDeliveryJobFromWorker;
+export const confirmCursorDeliveryFromObservedWork =
+  cursorDelivery.confirmDispatchedDeliveryFromObservedWork;
+export const confirmCursorDeliveriesForSessionFromObservedWork =
+  cursorDelivery.confirmDeliveriesForSessionFromObservedWork;
 export const runCursorDeliveryOnce = cursorDelivery.runDeliveryOnce;
 export const cursorDeliveryWorkerLoop = cursorDelivery.deliveryWorkerLoop;

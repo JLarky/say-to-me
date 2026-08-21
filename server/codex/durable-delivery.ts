@@ -134,5 +134,9 @@ export const markCodexDeliveryJobUnconfirmedFromWorker =
   codexDelivery.markDeliveryJobUnconfirmedFromWorker;
 export const cancelCodexDeliveryJobFromWorker = codexDelivery.cancelDeliveryJobFromWorker;
 export const renewCodexDeliveryJobFromWorker = codexDelivery.renewDeliveryJobFromWorker;
+export const confirmCodexDeliveryFromObservedWork =
+  codexDelivery.confirmDispatchedDeliveryFromObservedWork;
+export const confirmCodexDeliveriesForSessionFromObservedWork =
+  codexDelivery.confirmDeliveriesForSessionFromObservedWork;
 export const runCodexDeliveryOnce = codexDelivery.runDeliveryOnce;
 export const codexDeliveryWorkerLoop = codexDelivery.deliveryWorkerLoop;

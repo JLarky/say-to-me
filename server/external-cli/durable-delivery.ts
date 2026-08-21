@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, lte, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, lte, sql, type SQL } from "drizzle-orm";
 import { Effect, Layer, Schedule } from "effect";
 import { randomUUID } from "node:crypto";
 import {
@@ -17,11 +17,12 @@ import {
   type WorkerIdentityService,
 } from "@say-to-me/external-cli-delivery/workflow";
 import { broadcastQueue } from "../broadcast.ts";
-import type {
-  claudeDeliveryJobs,
-  codexDeliveryJobs,
-  cursorDeliveryJobs,
-  grokDeliveryJobs,
+import {
+  messages as messagesTable,
+  type claudeDeliveryJobs,
+  type codexDeliveryJobs,
+  type cursorDeliveryJobs,
+  type grokDeliveryJobs,
 } from "../db/drizzle-schema.ts";
 import { drizzleDb } from "../db/index.ts";
 import type { DbMessage } from "../db/schemas.ts";
@@ -230,8 +231,99 @@ export function createExternalCliDurableDelivery<
     return row ? config.validateJob(row, `${config.backendLabel}DeliveryJob`) : null;
   }
 
+  function loadLatestJobForMessage(messageId: number): TJob | null {
+    const row = drizzleDb
+      .select(config.jobSelectColumns)
+      .from(config.jobsTable)
+      .where(eq(config.jobsTable.messageId, messageId))
+      .orderBy(desc(config.jobsTable.id))
+      .limit(1)
+      .get();
+    return row ? config.validateJob(row, `${config.backendLabel}DeliveryJob`) : null;
+  }
+
   function getSessionId(job: TJob): string {
     return job[config.sessionIdField];
+  }
+
+  function sessionHasLaterAgentReply(message: DbMessage): boolean {
+    const later = drizzleDb
+      .select({ id: messagesTable.id })
+      .from(messagesTable)
+      .where(
+        and(
+          eq(messagesTable.sessionId, message.sessionId),
+          eq(messagesTable.author, "agent"),
+          gt(messagesTable.id, message.id),
+        ),
+      )
+      .limit(1)
+      .get();
+    return later != null;
+  }
+
+  /**
+   * Mark a terminal/running job succeeded without clearing the dispatch marker
+   * or creating a new attempt — confirmation only, never a re-prompt.
+   */
+  function markJobConfirmedWithoutReprompt(job: TJob): void {
+    drizzleDb
+      .update(config.jobsTable)
+      .set({
+        status: "succeeded",
+        lastError: null,
+        lockedAt: null,
+        lockedBy: null,
+        updatedAt: nowSql(),
+      })
+      .where(
+        and(
+          eq(config.jobsTable.id, job.id),
+          inArray(config.jobsTable.status, ["failed", "running", "retrying", "cancelled"]),
+        ),
+      )
+      .run();
+  }
+
+  /**
+   * Phase B: if the prompt was dispatched and the session later shows agent
+   * work, treat delivery as confirmed (`sent`) without enqueueing again.
+   */
+  function confirmDispatchedDeliveryFromObservedWork(messageId: number): boolean {
+    const message = getMessage(messageId);
+    if (!message) return false;
+    if (message.opencodeDeliveryStatus === "sent") return false;
+    if (
+      message.opencodeDeliveryStatus !== "failed" &&
+      message.opencodeDeliveryStatus !== "pending" &&
+      message.opencodeDeliveryStatus !== "queued"
+    ) {
+      return false;
+    }
+    const job = loadLatestJobForMessage(messageId);
+    if (job == null || job.promptDispatchedAt == null) return false;
+    if (!sessionHasLaterAgentReply(message)) return false;
+    markJobConfirmedWithoutReprompt(job);
+    afterDelivery(job, message);
+    return true;
+  }
+
+  function confirmDeliveriesForSessionFromObservedWork(sessionId: string): number {
+    const candidates = drizzleDb
+      .select({ id: messagesTable.id })
+      .from(messagesTable)
+      .where(
+        and(
+          eq(messagesTable.sessionId, sessionId),
+          inArray(messagesTable.opencodeDeliveryStatus, ["failed", "pending", "queued"]),
+        ),
+      )
+      .all();
+    let confirmed = 0;
+    for (const candidate of candidates) {
+      if (confirmDispatchedDeliveryFromObservedWork(candidate.id)) confirmed += 1;
+    }
+    return confirmed;
   }
 
   function enqueueDeliveryJob(input: EnqueueInput): TJob {
@@ -785,6 +877,14 @@ export function createExternalCliDurableDelivery<
   }
 
   function afterDeliveryFailure(message: DbMessage, error = config.failureMessage): void {
+    const job = loadLatestJobForMessage(message.id);
+    // Dispatched + later agent reply means the prompt landed; confirm instead of
+    // leaving a false-failed delivery that skips completion watches.
+    if (job?.promptDispatchedAt != null && sessionHasLaterAgentReply(message)) {
+      markJobConfirmedWithoutReprompt(job);
+      afterDelivery(job, message);
+      return;
+    }
     updateOpencodeDelivery(message.id, "failed", error, null);
     if (message.forwardRole) updateForwardStatus(message.id, "failed");
     if (message.forwardRole === "target" && message.forwardSourceMessageId != null) {
@@ -966,6 +1066,8 @@ export function createExternalCliDurableDelivery<
     markDeliveryJobUnconfirmedFromWorker,
     cancelDeliveryJobFromWorker,
     renewDeliveryJobFromWorker,
+    confirmDispatchedDeliveryFromObservedWork,
+    confirmDeliveriesForSessionFromObservedWork,
     runDeliveryOnce,
     deliveryWorkerLoop,
     DeliveryQueue,
