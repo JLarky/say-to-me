@@ -25,6 +25,7 @@ import {
 } from "./messages.ts";
 import { ensureT3DeliveryJobForMessage } from "./t3/durable-delivery.ts";
 import { ensurePaseoDeliveryJobForMessage } from "./paseo/durable-delivery.ts";
+import { confirmObservedDeliveriesForSession } from "./external-cli/confirm-observed-delivery.ts";
 import { enqueueDelivery } from "./session-services/session-router.ts";
 import { recordInAppNotification, sendBrowserPush } from "./push.ts";
 import { detectSessionBackend } from "./session-id.ts";
@@ -224,6 +225,10 @@ export async function createMessageResult({
   }
   prunePlayedHistory(sessionId);
   broadcastQueue(sessionId);
+
+  if (author === "agent") {
+    confirmObservedDeliveriesForSession(sessionId);
+  }
 
   if (author === "agent" && notifyAgent) {
     // In-app notification (top-right panel) is the unchanged audit log. Browser

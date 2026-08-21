@@ -132,5 +132,9 @@ export const markClaudeDeliveryJobUnconfirmedFromWorker =
   claudeDelivery.markDeliveryJobUnconfirmedFromWorker;
 export const cancelClaudeDeliveryJobFromWorker = claudeDelivery.cancelDeliveryJobFromWorker;
 export const renewClaudeDeliveryJobFromWorker = claudeDelivery.renewDeliveryJobFromWorker;
+export const confirmClaudeDeliveryFromObservedWork =
+  claudeDelivery.confirmDispatchedDeliveryFromObservedWork;
+export const confirmClaudeDeliveriesForSessionFromObservedWork =
+  claudeDelivery.confirmDeliveriesForSessionFromObservedWork;
 export const runClaudeDeliveryOnce = claudeDelivery.runDeliveryOnce;
 export const claudeDeliveryWorkerLoop = claudeDelivery.deliveryWorkerLoop;
