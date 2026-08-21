@@ -940,7 +940,7 @@ function JarvisTimerRow({
                 disabled={routineBusy}
                 onClick={() => onDelete(routine)}
               >
-                {isIdleWait ? "Cancel wait" : "Delete"}
+                {isIdleWait && canStopTimer(labels) ? "Cancel wait" : "Delete"}
               </button>
             </div>
           </>

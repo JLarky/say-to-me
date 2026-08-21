@@ -279,13 +279,30 @@ export function deleteRoutineEffect(id: number) {
     const repository = yield* RoutineRepository;
     const current = yield* repository.get(id);
     if (!current) return yield* Effect.fail(routineError("Routine not found.", 404));
-    // Soft-cancel before disarm so an in-flight tick sees a terminal routine first.
     if (isSessionIdleRoutine(current)) {
-      const cancelled = yield* repository.cancel(id);
-      if (!cancelled) return yield* Effect.fail(routineError("Unable to cancel wait.", 409));
-      disarmIdleWait(cancelled);
-      kickRoutineWorker();
-      return { ok: true };
+      const cancellable =
+        current.status === "active" || current.status === "paused" || current.status === "firing";
+      if (cancellable) {
+        // Soft-cancel before disarm so an in-flight tick sees a terminal routine first.
+        const cancelled = yield* repository.cancel(id);
+        if (!cancelled) return yield* Effect.fail(routineError("Unable to cancel wait.", 409));
+        disarmIdleWait(cancelled);
+        kickRoutineWorker();
+        return { ok: true };
+      }
+      // Terminal idle waits (fired/failed/cancelled) cannot soft-cancel again; remove the
+      // row so the session UI can clear history without a misleading 409.
+      if (
+        current.status === "fired" ||
+        current.status === "failed" ||
+        current.status === "cancelled"
+      ) {
+        const deleted = yield* repository.delete(id);
+        if (!deleted) return yield* Effect.fail(routineError("Routine not found.", 404));
+        kickRoutineWorker();
+        return { ok: true };
+      }
+      return yield* Effect.fail(routineError("Unable to cancel wait.", 409));
     }
     disarmIdleWait(current);
     const deleted = yield* repository.delete(id);
