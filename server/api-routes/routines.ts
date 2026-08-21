@@ -279,14 +279,15 @@ export function deleteRoutineEffect(id: number) {
     const repository = yield* RoutineRepository;
     const current = yield* repository.get(id);
     if (!current) return yield* Effect.fail(routineError("Routine not found.", 404));
-    disarmIdleWait(current);
-    // session_idle waits soft-cancel so notify gates still see a terminal row after "Cancel wait".
+    // Soft-cancel before disarm so an in-flight tick sees a terminal routine first.
     if (isSessionIdleRoutine(current)) {
       const cancelled = yield* repository.cancel(id);
       if (!cancelled) return yield* Effect.fail(routineError("Unable to cancel wait.", 409));
+      disarmIdleWait(cancelled);
       kickRoutineWorker();
       return { ok: true };
     }
+    disarmIdleWait(current);
     const deleted = yield* repository.delete(id);
     if (!deleted) return yield* Effect.fail(routineError("Routine not found.", 404));
     kickRoutineWorker();

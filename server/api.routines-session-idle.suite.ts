@@ -416,4 +416,42 @@ describe("say API: session_idle routines (phase 2)", () => {
       await closeTestServer(server);
     }
   });
+
+  it("soft-cancels the routine before disarm so cancelled status is durable first", async () => {
+    const app = createApiMiddleware();
+    const { origin, server } = await listen(app);
+    try {
+      const sourceSessionId = "ses_a9a9a9a9a9a9OwnerA9Wait009";
+      const targetSessionId = "ses_b9b9b9b9b9b9TargetB9Wait09";
+      await createTestSession(sourceSessionId);
+      await createTestSession(targetSessionId);
+
+      const forward = await json<{ message: { id: number }; targetMessage: { id: number } }>(
+        await fetch(`${origin}/api/sessions/${sourceSessionId}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            author: "user",
+            text: "cancel order",
+            targetSessionId,
+            notifyOnCompletion: true,
+          }),
+        }),
+      );
+      const routine = findSessionIdleRoutineBySourceMessageId(forward.message.id)!;
+      expect(routine.status).toBe("active");
+
+      const deleted = await fetch(`${origin}/api/routines/${routine.id}`, { method: "DELETE" });
+      expect(deleted.status).toBe(200);
+
+      const cancelled = findSessionIdleRoutineBySourceMessageId(forward.message.id);
+      expect(cancelled).toMatchObject({ status: "cancelled" });
+      const target = listMessages(targetSessionId).find(
+        (message) => message.id === forward.targetMessage.id,
+      );
+      expect(target?.completionWatchStatus).toBe("cancelled");
+    } finally {
+      await closeTestServer(server);
+    }
+  });
 });

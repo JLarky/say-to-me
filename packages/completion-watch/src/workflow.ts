@@ -341,7 +341,11 @@ export function runCompletionWatchTickEffect(
     const store = yield* CompletionWatchStore;
     const effects = yield* CompletionWatchEffects;
     const watched = yield* store.getMessage(messageId);
-    if (!watched || watched.completionWatchStatus === "completed") {
+    if (
+      !watched ||
+      watched.completionWatchStatus === "completed" ||
+      watched.completionWatchStatus === "cancelled"
+    ) {
       yield* effects.stopWatch(messageId);
       return;
     }
@@ -378,8 +382,22 @@ export function runCompletionWatchTickEffect(
       return;
     }
 
-    yield* insertTargetNotification(store, effects, watched);
-    const refreshed = (yield* store.getMessage(watched.id)) ?? watched;
+    // Re-read after gate: Cancel wait may have soft-cancelled then disarmed mid-tick.
+    const latest = (yield* store.getMessage(watched.id)) ?? watched;
+    if (
+      latest.completionWatchStatus === "cancelled" ||
+      latest.completionWatchStatus === "completed"
+    ) {
+      yield* effects.stopWatch(watched.id);
+      return;
+    }
+
+    yield* insertTargetNotification(store, effects, latest);
+    const refreshed = (yield* store.getMessage(watched.id)) ?? latest;
+    if (refreshed.completionWatchStatus === "cancelled") {
+      yield* effects.stopWatch(watched.id);
+      return;
+    }
     const sourceDelivered = yield* deliverSourceNotification(store, effects, refreshed).pipe(
       Effect.orElseSucceed(() => false),
     );
@@ -391,6 +409,10 @@ export function runCompletionWatchTickEffect(
     }
 
     const afterNotify = (yield* store.getMessage(watched.id)) ?? refreshed;
+    if (afterNotify.completionWatchStatus === "cancelled") {
+      yield* effects.stopWatch(watched.id);
+      return;
+    }
     if (afterNotify.completionSourceNotificationMessageId != null) {
       yield* effects.completeSessionIdle({
         sourceMessageId,
