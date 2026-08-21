@@ -139,6 +139,20 @@ export type CompletionWatchEffectsService = {
   getActiveBaseUrl: (
     messageId: number,
   ) => Effect.Effect<string | undefined, CompletionWatchEffectsError>;
+  /**
+   * Phase 2 session_idle gate: `continue` if active wait (or no routine yet),
+   * `stop` if the wait was cancelled/deleted.
+   */
+  getSessionIdleGate: (
+    sourceMessageId: number | null,
+  ) => Effect.Effect<"continue" | "stop", CompletionWatchEffectsError>;
+  completeSessionIdle: (input: {
+    sourceMessageId: number | null;
+    notificationMessageId: number;
+    targetSessionId: string;
+    targetMessageId: number;
+    reason: "idle" | "failed";
+  }) => Effect.Effect<void, CompletionWatchEffectsError>;
 };
 
 export const CompletionWatchEffects = Context.GenericTag<CompletionWatchEffectsService>(
@@ -154,8 +168,8 @@ function isWorking(status: OpenCodeSessionStatus): boolean {
   return status === "pending";
 }
 
-function targetNoticeText(targetSessionId: string): string {
-  return `<say-to-me-system>${targetSessionId} is idle now</say-to-me-system>`;
+function targetNoticeText(_targetSessionId: string): string {
+  return "Session is now idle.";
 }
 
 function systemTextFragment(text: string): string {
@@ -169,24 +183,26 @@ function sourceCompletionEntry(watched: WatchedMessage): string {
 }
 
 function sourceNoticeText(
-  watched: WatchedMessage,
-  entries = [sourceCompletionEntry(watched)],
+  _watched: WatchedMessage,
+  entries = [sourceCompletionEntry(_watched)],
 ): string {
-  const target = watched.forwardTargetSessionId || watched.sessionId;
-  const label = entries.length === 1 ? "forwarded message" : "forwarded messages";
-  return `<say-to-me-system>${target} is idle now after ${label}: ${entries.join("; ")}</say-to-me-system>`;
+  return entries.length > 1 ? "Sessions are now idle." : "Session is now idle.";
 }
 
 function sourceNoticeEntries(text: string): string[] {
-  const match = text.match(
+  const legacy = text.match(
     /^<say-to-me-system>.*? is idle now after forwarded messages?: ([\s\S]*?)<\/say-to-me-system>$/,
   );
-  return match?.[1]
-    ? match[1]
-        .split(";")
-        .map((entry) => entry.trim())
-        .filter(Boolean)
-    : [];
+  if (legacy?.[1]) {
+    return legacy[1]
+      .split(";")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+  // Speakable notices do not embed entry lists; synthesize counts for coalescing.
+  if (text.trim() === "Sessions are now idle.") return ["prior-a", "prior-b"];
+  if (text.trim() === "Session is now idle.") return ["prior"];
+  return [];
 }
 
 function appendSourceNoticeEntry(
@@ -325,7 +341,11 @@ export function runCompletionWatchTickEffect(
     const store = yield* CompletionWatchStore;
     const effects = yield* CompletionWatchEffects;
     const watched = yield* store.getMessage(messageId);
-    if (!watched || watched.completionWatchStatus === "completed") {
+    if (
+      !watched ||
+      watched.completionWatchStatus === "completed" ||
+      watched.completionWatchStatus === "cancelled"
+    ) {
       yield* effects.stopWatch(messageId);
       return;
     }
@@ -354,17 +374,53 @@ export function runCompletionWatchTickEffect(
       return;
     }
 
-    yield* insertTargetNotification(store, effects, watched);
-    const sourceDelivered = yield* deliverSourceNotification(
-      store,
-      effects,
-      (yield* store.getMessage(watched.id)) ?? watched,
-    ).pipe(Effect.orElseSucceed(() => false));
+    const sourceMessageId = watched.completionSourceMessageId ?? watched.forwardSourceMessageId;
+    const gate = yield* effects.getSessionIdleGate(sourceMessageId);
+    if (gate === "stop") {
+      yield* store.setCompletionWatchStatus(watched.id, "cancelled");
+      yield* effects.stopWatch(watched.id);
+      return;
+    }
+
+    // Re-read after gate: Cancel wait may have soft-cancelled then disarmed mid-tick.
+    const latest = (yield* store.getMessage(watched.id)) ?? watched;
+    if (
+      latest.completionWatchStatus === "cancelled" ||
+      latest.completionWatchStatus === "completed"
+    ) {
+      yield* effects.stopWatch(watched.id);
+      return;
+    }
+
+    yield* insertTargetNotification(store, effects, latest);
+    const refreshed = (yield* store.getMessage(watched.id)) ?? latest;
+    if (refreshed.completionWatchStatus === "cancelled") {
+      yield* effects.stopWatch(watched.id);
+      return;
+    }
+    const sourceDelivered = yield* deliverSourceNotification(store, effects, refreshed).pipe(
+      Effect.orElseSucceed(() => false),
+    );
 
     if (!sourceDelivered) {
       const decisionTime = yield* Clock.currentTimeMillis;
       yield* store.setCompletionWatchStatus(watched.id, "source_failed", decisionTime + pollMs);
       return;
+    }
+
+    const afterNotify = (yield* store.getMessage(watched.id)) ?? refreshed;
+    if (afterNotify.completionWatchStatus === "cancelled") {
+      yield* effects.stopWatch(watched.id);
+      return;
+    }
+    if (afterNotify.completionSourceNotificationMessageId != null) {
+      yield* effects.completeSessionIdle({
+        sourceMessageId,
+        notificationMessageId: afterNotify.completionSourceNotificationMessageId,
+        targetSessionId: watched.sessionId,
+        targetMessageId: watched.id,
+        reason: "idle",
+      });
     }
 
     yield* store.setCompletionWatchStatus(watched.id, "completed");

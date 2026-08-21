@@ -9,6 +9,7 @@ import {
   RoutineWorkerIdentity,
   runDueRoutinesUntilIdle,
   runDueRoutineOnce,
+  isScheduleRoutine,
   type Routine,
   type RoutineRepositoryService,
 } from "./workflow.ts";
@@ -25,6 +26,17 @@ function routine(overrides: Partial<Routine> = {}): Routine {
     title: "Check build",
     message: "Review the current status.",
   };
+  const trigger =
+    overrides.trigger?.kind === "session_idle"
+      ? overrides.trigger
+      : { ...defaultTrigger, ...(overrides.trigger?.kind === "schedule" ? overrides.trigger : {}) };
+  const action =
+    overrides.action?.kind === "notify_owner"
+      ? overrides.action
+      : {
+          ...defaultAction,
+          ...(overrides.action?.kind === "deliver_prompt" ? overrides.action : {}),
+        };
   return {
     id: 1,
     ownerSessionId: "ses_timerTarget",
@@ -38,8 +50,8 @@ function routine(overrides: Partial<Routine> = {}): Routine {
     createdAt: "2026-06-19 00:00:00",
     updatedAt: "2026-06-19 00:00:00",
     ...overrides,
-    trigger: { ...defaultTrigger, ...overrides.trigger },
-    action: { ...defaultAction, ...overrides.action },
+    trigger,
+    action,
   };
 }
 
@@ -67,25 +79,29 @@ function fakeRoutineLayers(initialRoutine: Routine, options: { failFire?: boolea
     update: (_id, input) =>
       Effect.sync(() => {
         if (state.routine.status !== "active" && state.routine.status !== "paused") return null;
+        if (!isScheduleRoutine(state.routine)) return null;
+        const nextTrigger = {
+          kind: "schedule" as const,
+          dueAt: input.trigger?.dueAt ?? state.routine.trigger.dueAt,
+          intervalMs:
+            input.trigger?.intervalMs !== undefined
+              ? input.trigger.intervalMs
+              : state.routine.trigger.intervalMs,
+          nextFireAt: input.trigger?.dueAt ?? state.routine.trigger.nextFireAt,
+        };
+        const nextAction = input.action
+          ? {
+              kind: "deliver_prompt" as const,
+              title: input.action.title ?? state.routine.action.title,
+              message: input.action.message ?? state.routine.action.message,
+            }
+          : state.routine.action;
         state.routine = {
           ...state.routine,
           ...(input.ownerSessionId !== undefined ? { ownerSessionId: input.ownerSessionId } : {}),
           ...(input.title !== undefined ? { title: input.title } : {}),
-          trigger: {
-            ...state.routine.trigger,
-            ...(input.trigger?.dueAt !== undefined ? { dueAt: input.trigger.dueAt } : {}),
-            ...(input.trigger?.intervalMs !== undefined
-              ? { intervalMs: input.trigger.intervalMs }
-              : {}),
-            nextFireAt: input.trigger?.dueAt ?? state.routine.trigger.nextFireAt,
-          },
-          action: input.action
-            ? {
-                ...state.routine.action,
-                ...input.action,
-                kind: "deliver_prompt",
-              }
-            : state.routine.action,
+          trigger: nextTrigger,
+          action: nextAction,
           lastError: null,
           lockedAt: null,
           lockedBy: null,
@@ -101,7 +117,11 @@ function fakeRoutineLayers(initialRoutine: Routine, options: { failFire?: boolea
         if (state.routine.status === "firing" && state.routine.lockedAt == null) {
           state.routine = { ...state.routine, status: "active", lockedAt: null, lockedBy: null };
         }
-        if (state.routine.status !== "active" || state.routine.trigger.nextFireAt > now) {
+        if (
+          state.routine.status !== "active" ||
+          !isScheduleRoutine(state.routine) ||
+          state.routine.trigger.nextFireAt > now
+        ) {
           return null;
         }
         state.routine = {
@@ -116,6 +136,7 @@ function fakeRoutineLayers(initialRoutine: Routine, options: { failFire?: boolea
       Effect.sync(() => {
         calls.push(`complete:${messageId}:${firedAt}`);
         if (claimed.lockedBy !== state.routine.lockedBy) return false;
+        if (!isScheduleRoutine(state.routine)) return false;
         state.routine = {
           ...state.routine,
           status: state.routine.trigger.intervalMs ? "active" : "fired",
@@ -135,6 +156,7 @@ function fakeRoutineLayers(initialRoutine: Routine, options: { failFire?: boolea
     fail: (_claimed, error, now) =>
       Effect.sync(() => {
         calls.push(`fail:${error}:${now}`);
+        if (!isScheduleRoutine(state.routine)) return false;
         state.routine = {
           ...state.routine,
           status: "active",
@@ -154,6 +176,7 @@ function fakeRoutineLayers(initialRoutine: Routine, options: { failFire?: boolea
     resume: (_id, now) =>
       Effect.sync(() => {
         if (state.routine.status !== "paused") return null;
+        if (!isScheduleRoutine(state.routine)) return null;
         state.routine = {
           ...state.routine,
           status: "active",
@@ -183,7 +206,9 @@ function fakeRoutineLayers(initialRoutine: Routine, options: { failFire?: boolea
         if (state.routine.status !== "active") return null;
         state.routine = {
           ...state.routine,
-          trigger: { ...state.routine.trigger, nextFireAt: now },
+          trigger: isScheduleRoutine(state.routine)
+            ? { ...state.routine.trigger, nextFireAt: now }
+            : state.routine.trigger,
           lockedAt: null,
           lockedBy: null,
         };
@@ -219,7 +244,8 @@ function fakeRoutineListLayers(initialRoutines: Routine[]) {
     claimDue: (workerId, now) =>
       Effect.sync(() => {
         const index = state.routines.findIndex(
-          (item) => item.status === "active" && item.trigger.nextFireAt <= now,
+          (item) =>
+            item.status === "active" && isScheduleRoutine(item) && item.trigger.nextFireAt <= now,
         );
         if (index < 0) return null;
         const claimed = {
@@ -299,7 +325,9 @@ describe("Routines Effect workflow", () => {
     );
 
     expect(fake.state.routine.status).toBe("active");
-    expect(fake.state.routine.trigger.nextFireAt).toBe(60_000);
+    expect(isScheduleRoutine(fake.state.routine) && fake.state.routine.trigger.nextFireAt).toBe(
+      60_000,
+    );
     expect(fake.calls).toContain("fire");
   });
 
@@ -318,7 +346,9 @@ describe("Routines Effect workflow", () => {
     if (Exit.isSuccess(exit)) expect(exit.value).toBe(true);
     expect(fake.state.routine.status).toBe("active");
     expect(fake.state.routine.lastError).toContain("boom");
-    expect(fake.state.routine.trigger.nextFireAt).toBe(5_000);
+    expect(isScheduleRoutine(fake.state.routine) && fake.state.routine.trigger.nextFireAt).toBe(
+      5_000,
+    );
     expect(fake.state.routine.lockedAt).toBeNull();
     expect(fake.state.routine.lockedBy).toBeNull();
   });

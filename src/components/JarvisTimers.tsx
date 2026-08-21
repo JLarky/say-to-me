@@ -293,7 +293,9 @@ export function SessionTimerSummary({
   timersHref: string;
 }) {
   const [routines, setRoutines] = useState<Routine[]>([]);
-  const now = useTimerNow(routines.some((routine) => timerNeedsClock(routineLabelInput(routine))));
+  const now = useTimerNow(
+    routines.some((routine) => timerNeedsClock(routineLabelInput(routine, sessionId))),
+  );
 
   useEffect(() => {
     if (!sessionId) return;
@@ -323,7 +325,11 @@ export function SessionTimerSummary({
       (routine) =>
         routine.status === "active" || routine.status === "firing" || routine.status === "paused",
     )
-    .sort((a, b) => a.trigger.nextFireAt - b.trigger.nextFireAt);
+    .sort((a, b) => {
+      const aAt = a.trigger.kind === "schedule" ? a.trigger.nextFireAt : 0;
+      const bAt = b.trigger.kind === "schedule" ? b.trigger.nextFireAt : 0;
+      return aAt - bAt;
+    });
 
   return (
     <div {...stylex.props(styles.compactTimerInfo)}>
@@ -342,13 +348,13 @@ export function SessionTimerSummary({
               badge.base,
               styles.timerBadge,
               routine.status === "active" && badge.pending,
-              isExpiredPausedTimer(routineLabelInput(routine), now) && badge.pending,
+              isExpiredPausedTimer(routineLabelInput(routine, sessionId), now) && badge.pending,
               styles.compactTimerLink,
             )}
             to={timersHref}
           >
-            {routine.title ?? routine.action.title}{" "}
-            {timerCountdownLabel(routineLabelInput(routine), now)}
+            {routineDisplayTitle(routine)}{" "}
+            {timerCountdownLabel(routineLabelInput(routine, sessionId), now)}
           </Link>
         ))
       ) : (
@@ -459,12 +465,13 @@ export function JarvisTimersOverview({
                             badge.base,
                             styles.timerBadge,
                             routine.status === "active" && badge.pending,
-                            isExpiredPausedTimer(routineLabelInput(routine), now) && badge.pending,
+                            isExpiredPausedTimer(routineLabelInput(routine, sessionId), now) &&
+                              badge.pending,
                             routine.status === "cancelled" && badge.failed,
                           )}
                         >
-                          {routine.title ?? routine.action.title}{" "}
-                          {timerCountdownLabel(routineLabelInput(routine), now)}
+                          {routineDisplayTitle(routine)}{" "}
+                          {timerCountdownLabel(routineLabelInput(routine, sessionId), now)}
                         </span>
                       ))}
                     </div>
@@ -580,7 +587,9 @@ export function JarvisTimersPanel({
   const [editingRoutineId, setEditingRoutineId] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState<TimerDraft | null>(null);
   const [routineBusy, setRoutineBusy] = useState(false);
-  const now = useTimerNow(routines.some((routine) => timerNeedsClock(routineLabelInput(routine))));
+  const now = useTimerNow(
+    routines.some((routine) => timerNeedsClock(routineLabelInput(routine, sessionId))),
+  );
 
   async function refreshRoutines() {
     const response = await fetch(
@@ -646,7 +655,11 @@ export function JarvisTimersPanel({
     routine: Routine,
     action: "trigger" | "pause" | "resume" | "cancel",
   ) {
-    if (action === "resume" && routine.trigger.nextFireAt <= Date.now()) {
+    if (
+      action === "resume" &&
+      routine.trigger.kind === "schedule" &&
+      routine.trigger.nextFireAt <= Date.now()
+    ) {
       setError("This routine is in the past. Edit it before resuming.");
       return;
     }
@@ -724,6 +737,7 @@ export function JarvisTimersPanel({
               routine={routine}
               routineBusy={routineBusy}
               now={now}
+              viewerSessionId={sessionId}
             />
           ))}
         </ol>
@@ -732,6 +746,13 @@ export function JarvisTimersPanel({
       )}
     </section>
   );
+}
+
+function routineDisplayTitle(routine: Routine): string {
+  if (routine.title) return routine.title;
+  if (routine.action.kind === "deliver_prompt") return routine.action.title;
+  if (routine.trigger.kind === "session_idle") return `Wait for ${routine.trigger.targetSessionId}`;
+  return "Routine";
 }
 
 function JarvisTimerRow({
@@ -747,6 +768,7 @@ function JarvisTimerRow({
   routine,
   routineBusy,
   now,
+  viewerSessionId,
 }: {
   editDraft: TimerDraft | null;
   editing: boolean;
@@ -760,10 +782,16 @@ function JarvisTimerRow({
   routine: Routine;
   routineBusy: boolean;
   now: number;
+  viewerSessionId?: string;
 }) {
-  const labels = routineLabelInput(routine);
-  const target = sessions.find((session) => session.id === routine.ownerSessionId);
-  const displayTitle = routine.title ?? routine.action.title;
+  const labels = routineLabelInput(routine, viewerSessionId);
+  const isIdleWait = routine.trigger.kind === "session_idle";
+  const linkSessionId =
+    routine.trigger.kind === "session_idle"
+      ? routine.trigger.targetSessionId
+      : routine.ownerSessionId;
+  const target = sessions.find((session) => session.id === linkSessionId);
+  const displayTitle = routineDisplayTitle(routine);
   return (
     <li {...stylex.props(styles.timerItem)}>
       <div {...stylex.props(styles.timerCard)}>
@@ -783,10 +811,12 @@ function JarvisTimerRow({
           </span>
         </div>
         <div {...stylex.props(styles.meta)}>
-          <Link {...stylex.props(styles.timerTargetLink)} to={`/ses/${routine.ownerSessionId}`}>
-            <span {...stylex.props(styles.timerTargetLabel)}>Target session</span>
+          <Link {...stylex.props(styles.timerTargetLink)} to={`/ses/${linkSessionId}`}>
+            <span {...stylex.props(styles.timerTargetLabel)}>
+              {isIdleWait ? "Watched session" : "Target session"}
+            </span>
             <span {...stylex.props(styles.timerTargetValue)}>
-              {target?.alias || target?.opencodeTitle || routine.ownerSessionId}
+              {target?.alias || target?.opencodeTitle || linkSessionId}
             </span>
           </Link>
           <span
@@ -811,7 +841,7 @@ function JarvisTimerRow({
             </span>
           ) : null}
         </div>
-        {editing && editDraft ? (
+        {editing && editDraft && !isIdleWait ? (
           <form {...stylex.props(styles.timerGrid)} onSubmit={onSaveEdit}>
             <TimerDraftFields draft={editDraft} onChange={onEditDraft} sessions={sessions} />
             <div {...stylex.props(styles.timerActions)}>
@@ -829,57 +859,63 @@ function JarvisTimerRow({
           </form>
         ) : (
           <>
-            <p {...stylex.props(styles.timerMessage)}>{routine.action.message}</p>
+            {!isIdleWait && routine.action.kind === "deliver_prompt" ? (
+              <p {...stylex.props(styles.timerMessage)}>{routine.action.message}</p>
+            ) : null}
             <div {...stylex.props(styles.timerActions)}>
-              <button
-                {...stylex.props(controls.button)}
-                type="button"
-                disabled={routineBusy || routine.status !== "active"}
-                onClick={() => onRunAction(routine, "trigger")}
-              >
-                Trigger Now
-              </button>
-              <button
-                {...stylex.props(controls.button, controls.secondary)}
-                type="button"
-                disabled={
-                  routineBusy || (routine.status !== "active" && routine.status !== "firing")
-                }
-                onClick={() => onRunAction(routine, "pause")}
-              >
-                Pause
-              </button>
-              <button
-                {...stylex.props(controls.button, controls.secondary)}
-                type="button"
-                disabled={routineBusy || routine.status !== "paused"}
-                onClick={() => onRunAction(routine, "resume")}
-              >
-                Resume
-              </button>
-              <button
-                {...stylex.props(controls.button, controls.secondary)}
-                type="button"
-                disabled={routineBusy || !canEditTimer(labels)}
-                onClick={onEdit}
-              >
-                Edit
-              </button>
-              <button
-                {...stylex.props(controls.button, controls.secondary)}
-                type="button"
-                disabled={routineBusy || !canStopTimer(labels)}
-                onClick={() => onRunAction(routine, "cancel")}
-              >
-                Stop
-              </button>
+              {!isIdleWait ? (
+                <>
+                  <button
+                    {...stylex.props(controls.button)}
+                    type="button"
+                    disabled={routineBusy || routine.status !== "active"}
+                    onClick={() => onRunAction(routine, "trigger")}
+                  >
+                    Trigger Now
+                  </button>
+                  <button
+                    {...stylex.props(controls.button, controls.secondary)}
+                    type="button"
+                    disabled={
+                      routineBusy || (routine.status !== "active" && routine.status !== "firing")
+                    }
+                    onClick={() => onRunAction(routine, "pause")}
+                  >
+                    Pause
+                  </button>
+                  <button
+                    {...stylex.props(controls.button, controls.secondary)}
+                    type="button"
+                    disabled={routineBusy || routine.status !== "paused"}
+                    onClick={() => onRunAction(routine, "resume")}
+                  >
+                    Resume
+                  </button>
+                  <button
+                    {...stylex.props(controls.button, controls.secondary)}
+                    type="button"
+                    disabled={routineBusy || !canEditTimer(labels)}
+                    onClick={onEdit}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    {...stylex.props(controls.button, controls.secondary)}
+                    type="button"
+                    disabled={routineBusy || !canStopTimer(labels)}
+                    onClick={() => onRunAction(routine, "cancel")}
+                  >
+                    Stop
+                  </button>
+                </>
+              ) : null}
               <button
                 {...stylex.props(controls.button, controls.danger)}
                 type="button"
                 disabled={routineBusy}
                 onClick={() => onDelete(routine)}
               >
-                Delete
+                {isIdleWait ? "Cancel wait" : "Delete"}
               </button>
             </div>
           </>

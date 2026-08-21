@@ -70,12 +70,27 @@ export function browserSpeechText(
 }
 
 export function isIdleNotificationMessage(message: Message): boolean {
-  return message.text.startsWith("<say-to-me-system>") && message.text.includes(" is idle now");
+  if (message.routineEvent?.kind === "watcher_completed") return true;
+  if (message.text.startsWith("<say-to-me-system>") && message.text.includes(" is idle now")) {
+    return true;
+  }
+  return (
+    (/\bis now idle\b/i.test(message.text) || /\bcould not be delivered\b/i.test(message.text)) &&
+    ((message.sessions?.length ?? 0) > 0 ||
+      message.forwardTargetSessionId != null ||
+      message.forwardSourceMessageId != null)
+  );
 }
 
 export function idleNotificationSpeechText(message: Message): string {
-  const match = message.text.match(/^<say-to-me-system>([\s\S]*?) is idle now/);
-  const idleSessionId = match?.[1]?.trim();
+  if (message.routineEvent?.reason === "failed") {
+    return "Your relay could not be delivered.";
+  }
+  const idleSessionId =
+    message.routineEvent?.targetSessionId ??
+    message.text.match(/^<say-to-me-system>([\s\S]*?) is idle now/)?.[1]?.trim() ??
+    message.sessions?.find((session) => session.id !== message.sessionId)?.id ??
+    message.sessions?.[0]?.id;
   const idleSession = idleSessionId
     ? message.sessions?.find((session) => session.id === idleSessionId)
     : undefined;

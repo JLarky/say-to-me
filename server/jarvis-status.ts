@@ -4,6 +4,7 @@ import { getOpenCodeActivityPreview } from "./opencode/activity.ts";
 import { getOpenCodeStatus } from "./opencode/client.ts";
 import { getWaitingState } from "./waiting-state.ts";
 import type { deserializeMessage } from "./messages.ts";
+import { isIdleNoticeText } from "@say-to-me/session-utils/idle-notices";
 
 type Message = ReturnType<typeof deserializeMessage>;
 export type JarvisStatusActivityPreview = {
@@ -46,9 +47,7 @@ const maxLimit = 50;
 const waitPollMs = 100;
 
 function isIdleSystemNotice(text: string): boolean {
-  return /^<say-to-me-system>[^<]+ is idle now(?: after [^<]+)?<\/say-to-me-system>$/.test(
-    text.trim(),
-  );
+  return isIdleNoticeText(text);
 }
 
 function previewExtraMarkdown(extraMarkdown: string | null): string | null {

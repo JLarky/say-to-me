@@ -23,12 +23,28 @@ export type TimerDraft = {
   repeatMinutes: string;
 };
 
-export function routineLabelInput(routine: Routine) {
+export function routineLabelInput(routine: Routine, viewerSessionId?: string | null) {
+  if (routine.trigger.kind === "session_idle") {
+    return {
+      status: routine.status,
+      nextFireAt: Number.MAX_SAFE_INTEGER,
+      intervalMs: null,
+      lastError: routine.lastError,
+      triggerKind: "session_idle" as const,
+      viewerSessionId: viewerSessionId ?? null,
+      ownerSessionId: routine.ownerSessionId,
+      targetSessionId: routine.trigger.targetSessionId,
+    };
+  }
   return {
     status: routine.status,
     nextFireAt: routine.trigger.nextFireAt,
     intervalMs: routine.trigger.intervalMs,
     lastError: routine.lastError,
+    triggerKind: "schedule" as const,
+    viewerSessionId: viewerSessionId ?? null,
+    ownerSessionId: routine.ownerSessionId,
+    targetSessionId: null,
   };
 }
 
@@ -68,6 +84,9 @@ export function localDateTime(timestamp: number): string {
 }
 
 export function draftFromRoutine(routine: Routine): TimerDraft {
+  if (routine.trigger.kind !== "schedule" || routine.action.kind !== "deliver_prompt") {
+    return emptyTimerDraft([]);
+  }
   return {
     sessionId: routine.ownerSessionId,
     title: routine.title ?? routine.action.title,

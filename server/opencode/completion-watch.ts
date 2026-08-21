@@ -33,6 +33,11 @@ import {
 import { detectSessionBackend } from "../session-id.ts";
 import { getOpenCodeStatus } from "./client.ts";
 import { openCodeBaseUrl } from "./http.ts";
+import {
+  completeSessionIdleRoutine,
+  findActiveSessionIdleRoutineBySourceMessageId,
+  findSessionIdleRoutineBySourceMessageId,
+} from "../routines.ts";
 
 export {
   CompletionWatchEffects,
@@ -122,6 +127,30 @@ export const CompletionWatchEffectsLive = Layer.succeed(CompletionWatchEffects, 
     tryWatchEffects(() => enqueueSourceCompletionNotice(input)),
   stopWatch: (messageId) => tryWatchEffects(() => stopCompletionWatch(messageId)),
   getActiveBaseUrl: (messageId) => tryWatchEffects(() => activeBaseUrls.get(messageId)),
+  getSessionIdleGate: (sourceMessageId) =>
+    tryWatchEffects(() => {
+      if (sourceMessageId == null) return "continue";
+      if (findActiveSessionIdleRoutineBySourceMessageId(sourceMessageId)) return "continue";
+      const routine = findSessionIdleRoutineBySourceMessageId(sourceMessageId);
+      // Cancelled / fired / failed waits must not notify again. No row = legacy path.
+      return routine ? "stop" : "continue";
+    }),
+  completeSessionIdle: (input) =>
+    tryWatchEffects(() => {
+      if (input.sourceMessageId == null) return;
+      const routine =
+        findActiveSessionIdleRoutineBySourceMessageId(input.sourceMessageId) ??
+        findSessionIdleRoutineBySourceMessageId(input.sourceMessageId);
+      if (!routine) return;
+      completeSessionIdleRoutine({
+        routineId: routine.id,
+        messageId: input.notificationMessageId,
+        targetSessionId: input.targetSessionId,
+        targetMessageId: input.targetMessageId,
+        sourceMessageId: input.sourceMessageId,
+        reason: input.reason,
+      });
+    }),
 } satisfies CompletionWatchEffectsService);
 
 function completionWatchPoller(messageId: number): Effect.Effect<void, never> {

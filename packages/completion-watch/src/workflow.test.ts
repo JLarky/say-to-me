@@ -147,6 +147,8 @@ function silentEffects(): Layer.Layer<CompletionWatchEffectsService> {
     enqueueSourceCompletionNotice: () => Effect.void,
     stopWatch: () => Effect.void,
     getActiveBaseUrl: () => Effect.succeed(undefined),
+    getSessionIdleGate: () => Effect.succeed("continue"),
+    completeSessionIdle: () => Effect.void,
   };
   return Layer.succeed(CompletionWatchEffects, service);
 }
@@ -171,7 +173,7 @@ describe("completion-watch workflow (in-memory, no DB)", () => {
         yield* runCompletionWatchTickEffect(10);
         expect(store.rows.get(10)).toMatchObject({ completionWatchStatus: "watching" });
         expect(
-          [...store.rows.values()].filter((row) => row.text.startsWith("<say-to-me-system>")),
+          [...store.rows.values()].filter((row) => row.text === "Session is now idle."),
         ).toHaveLength(0);
 
         store.rows.set(10, { ...store.rows.get(10)!, completionWatchWorkSeen: 1 });
@@ -191,7 +193,7 @@ describe("completion-watch workflow (in-memory, no DB)", () => {
       completionWatchStatus: "completed",
     });
     expect(
-      [...store.rows.values()].filter((row) => row.text.startsWith("<say-to-me-system>")),
+      [...store.rows.values()].filter((row) => row.text === "Session is now idle."),
     ).toHaveLength(1);
   });
 
@@ -251,6 +253,8 @@ describe("completion-watch workflow (in-memory, no DB)", () => {
         }),
       stopWatch: () => Effect.void,
       getActiveBaseUrl: () => Effect.succeed(undefined),
+      getSessionIdleGate: () => Effect.succeed("continue"),
+      completeSessionIdle: () => Effect.void,
     } satisfies CompletionWatchEffectsService);
     const fakeOpenCode = Layer.succeed(CompletionWatchOpenCode, {
       getStatus: () => Effect.succeed("idle" as const),
@@ -267,7 +271,7 @@ describe("completion-watch workflow (in-memory, no DB)", () => {
 
     expect(store.rows.get(20)).toMatchObject({ completionWatchStatus: "completed" });
     const notice = [...store.rows.values()].find(
-      (row) => row.sessionId === sourceSessionId && row.text.includes("is idle now after"),
+      (row) => row.sessionId === sourceSessionId && row.text.includes("is now idle"),
     );
     expect(notice).toMatchObject({ opencodeDeliveryStatus: "queued" });
     expect(enqueued).toEqual([]);
@@ -309,5 +313,94 @@ describe("completion-watch workflow (in-memory, no DB)", () => {
 
     expect(Exit.isSuccess(exit)).toBe(true);
     expect(Exit.isFailure(exit) && Cause.isDie(exit.cause)).toBe(false);
+  });
+
+  it("treats cancelled completion-watch status as terminal and does not notify", async () => {
+    const store = inMemoryCompletionStore([
+      baseMessage({
+        id: 40,
+        sessionId: "ses_cancelledWatch",
+        text: "already cancelled",
+        completionWatchStatus: "cancelled",
+        completionWatchWorkSeen: 1,
+      }),
+    ]);
+    const fakeOpenCode = Layer.succeed(CompletionWatchOpenCode, {
+      getStatus: () => Effect.die("should not status after cancel"),
+    });
+    let stopped = false;
+    const effects = Layer.succeed(CompletionWatchEffects, {
+      broadcastQueue: () => Effect.void,
+      getSessionWorkStatus: () => Effect.succeed("idle"),
+      enqueueSourceCompletionNotice: () => Effect.void,
+      stopWatch: () =>
+        Effect.sync(() => {
+          stopped = true;
+        }),
+      getActiveBaseUrl: () => Effect.succeed(undefined),
+      getSessionIdleGate: () => Effect.succeed("continue"),
+      completeSessionIdle: () => Effect.void,
+    } satisfies CompletionWatchEffectsService);
+
+    await Effect.runPromise(
+      runCompletionWatchTickEffect(40).pipe(
+        Effect.provide(fakeOpenCode),
+        Effect.provide(store.layer),
+        Effect.provide(effects),
+        Effect.provide(TestContext.TestContext),
+      ),
+    );
+
+    expect(stopped).toBe(true);
+    expect(
+      [...store.rows.values()].filter((row) => row.text === "Session is now idle."),
+    ).toHaveLength(0);
+  });
+
+  it("stops before notify when watch becomes cancelled mid-tick", async () => {
+    const store = inMemoryCompletionStore([
+      baseMessage({
+        id: 41,
+        sessionId: "ses_midTickCancel",
+        text: "cancel mid tick",
+        completionWatchStatus: "watching",
+        completionWatchWorkSeen: 1,
+        completionSourceMessageId: 7,
+        completionSourceSessionId: "ses_midTickOwner",
+      }),
+    ]);
+    const fakeOpenCode = Layer.succeed(CompletionWatchOpenCode, {
+      getStatus: () => Effect.succeed("idle" as const),
+    });
+    const effects = Layer.succeed(CompletionWatchEffects, {
+      broadcastQueue: () => Effect.void,
+      getSessionWorkStatus: () => Effect.succeed("idle"),
+      enqueueSourceCompletionNotice: () => Effect.void,
+      stopWatch: () => Effect.void,
+      getActiveBaseUrl: () => Effect.succeed(undefined),
+      getSessionIdleGate: () =>
+        Effect.sync(() => {
+          store.rows.set(41, {
+            ...store.rows.get(41)!,
+            completionWatchStatus: "cancelled",
+          });
+          return "continue" as const;
+        }),
+      completeSessionIdle: () => Effect.void,
+    } satisfies CompletionWatchEffectsService);
+
+    await Effect.runPromise(
+      runCompletionWatchTickEffect(41).pipe(
+        Effect.provide(fakeOpenCode),
+        Effect.provide(store.layer),
+        Effect.provide(effects),
+        Effect.provide(TestContext.TestContext),
+      ),
+    );
+
+    expect(store.rows.get(41)?.completionWatchStatus).toBe("cancelled");
+    expect(
+      [...store.rows.values()].filter((row) => row.text === "Session is now idle."),
+    ).toHaveLength(0);
   });
 });

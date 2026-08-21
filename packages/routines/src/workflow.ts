@@ -12,20 +12,45 @@ export type ScheduleTrigger = {
   nextFireAt: number;
 };
 
-/** Phase 1 worker only fires schedule + deliver_prompt routines. */
+export type SessionIdleTrigger = {
+  kind: "session_idle";
+  targetSessionId: string;
+  sourceMessageId: number | null;
+  afterWorkSeen: true;
+};
+
+export type RoutineTrigger = ScheduleTrigger | SessionIdleTrigger;
+
 export type DeliverPromptAction = {
   kind: "deliver_prompt";
   title: string;
   message: string;
 };
 
+export type WatcherCompletedEvent = {
+  kind: "watcher_completed";
+  routineId: number;
+  sourceMessageId: number | null;
+  targetSessionId: string;
+  targetMessageId: number | null;
+  reason: "idle" | "failed";
+};
+
+export type NotifyOwnerAction = {
+  kind: "notify_owner";
+  /** Filled when the idle/failed watch completes. */
+  result?: WatcherCompletedEvent;
+};
+
+export type RoutineAction = DeliverPromptAction | NotifyOwnerAction;
+
 export type Routine = {
   id: number;
   ownerSessionId: string;
   status: RoutineStatus;
   title: string | null;
-  trigger: ScheduleTrigger;
-  action: DeliverPromptAction;
+  trigger: RoutineTrigger;
+  action: RoutineAction;
   lastFiredAt: number | null;
   lastMessageId: number | null;
   lockedAt: number | null;
@@ -35,6 +60,25 @@ export type Routine = {
   updatedAt: string;
 };
 
+export type ScheduleRoutine = Routine & {
+  trigger: ScheduleTrigger;
+  action: DeliverPromptAction;
+};
+
+export type SessionIdleRoutine = Routine & {
+  trigger: SessionIdleTrigger;
+  action: NotifyOwnerAction;
+};
+
+export function isScheduleRoutine(routine: Routine): routine is ScheduleRoutine {
+  return routine.trigger.kind === "schedule" && routine.action.kind === "deliver_prompt";
+}
+
+export function isSessionIdleRoutine(routine: Routine): routine is SessionIdleRoutine {
+  return routine.trigger.kind === "session_idle" && routine.action.kind === "notify_owner";
+}
+
+/** Public create body for schedule routines (Phase 1). Session-idle is relay-created in Phase 2. */
 export type CreateRoutineInput = {
   ownerSessionId: string;
   title?: string | null;
@@ -44,6 +88,18 @@ export type CreateRoutineInput = {
     intervalMs: number | null;
   };
   action: DeliverPromptAction;
+};
+
+export type CreateSessionIdleRoutineInput = {
+  ownerSessionId: string;
+  title?: string | null;
+  trigger: {
+    kind: "session_idle";
+    targetSessionId: string;
+    sourceMessageId: number | null;
+    afterWorkSeen: true;
+  };
+  action: { kind: "notify_owner" };
 };
 
 export type UpdateRoutineInput = {
@@ -142,6 +198,10 @@ export function runDueRoutineOnce(): Effect.Effect<boolean, never, RoutineEnv> {
     const now = yield* clock.now;
     const routine = yield* repository.claimDue(worker.id, now);
     if (!routine) return false;
+    if (!isScheduleRoutine(routine)) {
+      yield* repository.fail(routine, "Non-schedule routine claimed by schedule worker.", now);
+      return true;
+    }
 
     const messageResult = yield* Effect.either(messages.fire(routine));
     if (messageResult._tag === "Left") {

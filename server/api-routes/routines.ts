@@ -10,10 +10,14 @@ import {
   RoutineClock,
   RoutineRepository,
   serializeRoutine,
+  isScheduleRoutine,
+  isSessionIdleRoutine,
   type CreateRoutineInput,
   type RoutineStatus,
   type UpdateRoutineInput,
 } from "../routines.ts";
+import { disarmSessionIdleWatch } from "../session-idle-disarm.ts";
+import { stopForwardCompletionNotificationWatch } from "../notifications.ts";
 import { openApiDocs } from "./openapi-docs.ts";
 
 export type RoutineError = {
@@ -240,6 +244,9 @@ export function updateRoutineEffect(id: number, input: UpdateRoutineInput) {
     const clock = yield* RoutineClock;
     const current = yield* repository.get(id);
     if (!current) return yield* Effect.fail(routineError("Routine not found.", 404));
+    if (!isScheduleRoutine(current)) {
+      return yield* Effect.fail(routineError("Only schedule routines can be edited.", 409));
+    }
     if (!canEditRoutine(current.status)) {
       return yield* Effect.fail(routineError(`Cannot edit a ${current.status} routine.`, 409));
     }
@@ -261,9 +268,26 @@ export function updateRoutineEffect(id: number, input: UpdateRoutineInput) {
   });
 }
 
+function disarmIdleWait(routine: import("../routines.ts").Routine) {
+  if (!isSessionIdleRoutine(routine)) return;
+  const sourceMessageId = disarmSessionIdleWatch(routine);
+  if (sourceMessageId != null) stopForwardCompletionNotificationWatch(sourceMessageId);
+}
+
 export function deleteRoutineEffect(id: number) {
   return Effect.gen(function* () {
     const repository = yield* RoutineRepository;
+    const current = yield* repository.get(id);
+    if (!current) return yield* Effect.fail(routineError("Routine not found.", 404));
+    // Soft-cancel before disarm so an in-flight tick sees a terminal routine first.
+    if (isSessionIdleRoutine(current)) {
+      const cancelled = yield* repository.cancel(id);
+      if (!cancelled) return yield* Effect.fail(routineError("Unable to cancel wait.", 409));
+      disarmIdleWait(cancelled);
+      kickRoutineWorker();
+      return { ok: true };
+    }
+    disarmIdleWait(current);
     const deleted = yield* repository.delete(id);
     if (!deleted) return yield* Effect.fail(routineError("Routine not found.", 404));
     kickRoutineWorker();
@@ -278,9 +302,19 @@ export function runRoutineActionEffect(id: number, action: string) {
     const now = yield* clock.now;
     const current = yield* repository.get(id);
     if (!current) return yield* Effect.fail(routineError("Routine not found.", 404));
-    if (action === "resume" && current.status === "paused" && current.trigger.nextFireAt <= now) {
+    if (action === "resume" && isScheduleRoutine(current) && current.status === "paused") {
+      if (current.trigger.nextFireAt <= now) {
+        return yield* Effect.fail(
+          routineError("This routine is in the past. Edit it before resuming."),
+        );
+      }
+    }
+    if (
+      (action === "pause" || action === "resume" || action === "trigger") &&
+      isSessionIdleRoutine(current)
+    ) {
       return yield* Effect.fail(
-        routineError("This routine is in the past. Edit it before resuming."),
+        routineError(`Cannot ${action} a session_idle wait. Delete it to cancel.`, 409),
       );
     }
     const validAction =
@@ -309,6 +343,7 @@ export function runRoutineActionEffect(id: number, action: string) {
       }
     })();
     if (!routine) return yield* Effect.fail(routineError("Unable to update routine.", 409));
+    if (action === "cancel") disarmIdleWait(routine);
     kickRoutineWorker();
     return { routine: serializeRoutine(routine) };
   });

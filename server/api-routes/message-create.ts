@@ -14,10 +14,7 @@ import {
   deserializeMessage,
   getMessage,
   getMessageByClientId,
-  insertForwardMessageRow,
   prunePlayedHistory,
-  updateForwardStatus,
-  updateForwardTarget,
   updateOpencodeDelivery,
 } from "../messages.ts";
 import { insertMarkdownAttachmentForMessage, redactInlineAudioAttachmentPaths } from "../images.ts";
@@ -29,6 +26,10 @@ import { ensureSession, getSession } from "../sessions.ts";
 import { replyBodyKeys, sayBodyKeys } from "../validation.ts";
 import { maxMessageLength, maxUserMessageLength, minMessageLength } from "../config.ts";
 import { broadcastQueue } from "../broadcast.ts";
+import {
+  createForwardRelayWithOptionalIdleWait,
+  type CreateForwardRelayInput,
+} from "../forward-relay-idle.ts";
 import { publicRouteErrorResponse } from "./route-errors.ts";
 import { openApiDocs } from "./openapi-docs.ts";
 
@@ -59,21 +60,15 @@ export type MessageCreateService = {
   ) => Effect.Effect<CreateMessageResult, MessageCreateError>;
   ensureSession: (sessionId: string) => Effect.Effect<void>;
   requireSession: (sessionId: string) => Effect.Effect<void, MessageCreateError>;
-  insertForwardMessage: (
-    input: Parameters<typeof insertForwardMessageRow>[0],
-  ) => Effect.Effect<ReturnType<typeof insertForwardMessageRow>>;
+  createForwardRelay: (
+    input: CreateForwardRelayInput,
+  ) => Effect.Effect<ReturnType<typeof createForwardRelayWithOptionalIdleWait>>;
   getMessageByClientId: (
     sessionId: string,
     author: "agent" | "user",
     clientMessageId: string,
   ) => Effect.Effect<ReturnType<typeof getMessage>>;
   insertMarkdownAttachment: (messageId: number, content: string) => Effect.Effect<void>;
-  updateForwardTarget: (
-    sourceMessageId: number,
-    targetMessageId: number,
-    status: string,
-  ) => Effect.Effect<void>;
-  updateForwardStatus: (messageId: number, status: string) => Effect.Effect<void>;
   updateOpencodeDelivery: (
     messageId: number,
     status: string,
@@ -119,15 +114,11 @@ export const MessageCreateLive = Layer.succeed(MessageCreate, {
             });
           }
         }),
-  insertForwardMessage: (input) => Effect.sync(() => insertForwardMessageRow(input)),
+  createForwardRelay: (input) => Effect.sync(() => createForwardRelayWithOptionalIdleWait(input)),
   getMessageByClientId: (sessionId, author, clientMessageId) =>
     Effect.sync(() => getMessageByClientId(sessionId, author, clientMessageId)),
   insertMarkdownAttachment: (messageId, content) =>
     Effect.sync(() => insertMarkdownAttachmentForMessage(messageId, content)),
-  updateForwardTarget: (sourceMessageId, targetMessageId, status) =>
-    Effect.sync(() => updateForwardTarget(sourceMessageId, targetMessageId, status)),
-  updateForwardStatus: (messageId, status) =>
-    Effect.sync(() => updateForwardStatus(messageId, status)),
   updateOpencodeDelivery: (messageId, status, error, opencodeMessageId) =>
     Effect.sync(() => updateOpencodeDelivery(messageId, status, error, opencodeMessageId)),
   enqueueDelivery: (sessionId, input) =>
@@ -235,48 +226,23 @@ export function createSessionMessageEffect(
         }
       }
 
-      const sourceMessage = yield* service.insertForwardMessage({
+      const { sourceMessage, targetMessage } = yield* service.createForwardRelay({
         sessionId,
-        text: `<say-to-me-system>${targetSessionId} received message: ${forwardedText.replace(/[<>]/g, "").trim()}. You will be notified once the session is idle.</say-to-me-system>`,
-        author: "user",
-        status: "received",
+        targetSessionId,
+        sourceText: `<say-to-me-system>${targetSessionId} received message: ${forwardedText.replace(/[<>]/g, "").trim()}. You will be notified once the session is idle.</say-to-me-system>`,
+        targetText: forwardedText,
         links: linksJson,
-        sessionRefs: JSON.stringify([
+        sourceSessionRefs: JSON.stringify([
           {
             id: targetSessionId,
             ...(leadingRelay?.session.alias ? { alias: leadingRelay.session.alias } : {}),
           },
         ]),
+        targetSessionRefs: JSON.stringify([{ id: sessionId }]),
         clientMessageId,
-        forwardRole: "source",
-        forwardSourceSessionId: sessionId,
-        forwardSourceMessageId: null,
-        forwardTargetSessionId: targetSessionId,
-        forwardTargetMessageId: null,
-        forwardStatus: "pending",
-      });
-      const targetMessage = yield* service.insertForwardMessage({
-        sessionId: targetSessionId,
-        text: forwardedText,
-        author: "user",
-        status: "received",
-        links: linksJson,
-        sessionRefs: JSON.stringify([{ id: sessionId }]),
-        clientMessageId: null,
-        forwardRole: "target",
-        forwardSourceSessionId: sessionId,
-        forwardSourceMessageId: sourceMessage.id,
-        forwardTargetSessionId: targetSessionId,
-        forwardTargetMessageId: null,
-        forwardStatus: "pending",
-        completionWatchStatus: notifyOnCompletion ? "watching" : null,
-        completionSourceSessionId: notifyOnCompletion ? sessionId : null,
-        completionSourceMessageId: notifyOnCompletion ? sourceMessage.id : null,
+        notifyOnCompletion,
       });
       if (extraMarkdown) yield* service.insertMarkdownAttachment(targetMessage.id, extraMarkdown);
-      yield* service.updateForwardTarget(sourceMessage.id, targetMessage.id, "pending");
-      yield* service.updateForwardTarget(sourceMessage.id, targetMessage.id, "queued");
-      yield* service.updateForwardStatus(targetMessage.id, "queued");
       const targetBackend = detectSessionBackend(targetSessionId);
       if (targetBackend === "opencode") {
         yield* service.updateOpencodeDelivery(targetMessage.id, "queued", null, null);

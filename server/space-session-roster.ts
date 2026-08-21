@@ -11,6 +11,7 @@ import {
   getCachedOpenCodeStatusReason,
   opencodeSessionInfoCache,
 } from "./opencode/cache.ts";
+import { isIdleNoticeText } from "@say-to-me/session-utils/idle-notices";
 import { detectSessionBackend } from "./session-id.ts";
 import { peekInMemoryProviderTitle } from "./session-enrich.ts";
 
@@ -305,9 +306,7 @@ export function isInternalRosterNotice(
   deliveryStatus: string | null | undefined,
 ): boolean {
   if (deliveryStatus === "ui_only") return true;
-  return /^<say-to-me-system>[^<]+ is idle now(?: after [^<]+)?<\/say-to-me-system>$/.test(
-    text.trim(),
-  );
+  return isIdleNoticeText(text);
 }
 
 export function pickLatestMeaningfulMessageFacts(

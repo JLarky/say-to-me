@@ -72,6 +72,9 @@ describe("routine OpenCode enqueue failures", () => {
       lockedBy: null,
     });
     expect(routines[0]?.lastError).toContain("sqlite enqueue exploded");
-    expect(routines[0]?.trigger.nextFireAt).toBeGreaterThan(0);
+    expect(routines[0]?.trigger.kind).toBe("schedule");
+    if (routines[0]?.trigger.kind === "schedule") {
+      expect(routines[0].trigger.nextFireAt).toBeGreaterThan(0);
+    }
   });
 });

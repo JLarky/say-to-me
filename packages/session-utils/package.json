@@ -24,6 +24,10 @@
       "import": "./src/routine-labels.ts",
       "default": "./src/routine-labels.ts"
     },
+    "./idle-notices": {
+      "import": "./src/idle-notices.ts",
+      "default": "./src/idle-notices.ts"
+    },
     "./waiting-state-classify": {
       "import": "./src/waiting-state-classify.ts",
       "default": "./src/waiting-state-classify.ts"
