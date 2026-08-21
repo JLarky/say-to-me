@@ -167,21 +167,47 @@ type WaitForIdleStatusOptions = {
   getStatusEffect?: (
     sessionId: string,
   ) => Effect.Effect<OpenCodeStatus | null, never, JarvisStatusOpenCodeService>;
+  getWaitingStateEffect?: (
+    sessionId: string,
+  ) => Effect.Effect<WaitingStatePayload, never, JarvisStatusOpenCodeService>;
   pollMs?: number;
 };
+
+/**
+ * Busy enough to keep long-polling. OpenCode `pending` covers the original
+ * path; `waitingState.working` covers CLI backends where `opencodeState` is
+ * null but the payload already knows the agent is mid-turn. Either signal
+ * alone is enough — a CLI session must not return `timedOut: false` with
+ * `waitedMs: 0` while still working.
+ */
+function isWaitingForIdle(
+  opencodeState: OpenCodeStatus | null,
+  waitingState: WaitingStatePayload,
+): boolean {
+  return opencodeState === "pending" || waitingState.state === "working";
+}
+
+function getFreshWaitingStateEffect(sessionId: string) {
+  return Effect.gen(function* () {
+    const openCode = yield* JarvisStatusOpenCode;
+    return yield* openCode.getWaitingState(sessionId);
+  });
+}
 
 export function waitForIdleStatusEffect(
   sessionId: string,
   waitMs: number,
   {
     getStatusEffect = getFreshOpenCodeStatusEffect,
+    getWaitingStateEffect = getFreshWaitingStateEffect,
     pollMs = waitPollMs,
   }: WaitForIdleStatusOptions = {},
 ): Effect.Effect<JarvisStatusWaitResult, never, JarvisStatusOpenCodeService> {
   return Effect.gen(function* () {
     const started = yield* Clock.currentTimeMillis;
     let opencodeState = yield* getStatusEffect(sessionId);
-    if (opencodeState !== "pending" || waitMs <= 0) {
+    let waitingState = yield* getWaitingStateEffect(sessionId);
+    if (!isWaitingForIdle(opencodeState, waitingState) || waitMs <= 0) {
       return {
         opencodeState,
         waitedMs: (yield* Clock.currentTimeMillis) - started,
@@ -194,7 +220,8 @@ export function waitForIdleStatusEffect(
       const remainingMs = waitMs - elapsedMs;
       yield* Effect.sleep(Duration.millis(Math.min(pollMs, remainingMs)));
       opencodeState = yield* getStatusEffect(sessionId);
-      if (opencodeState === "idle") {
+      waitingState = yield* getWaitingStateEffect(sessionId);
+      if (!isWaitingForIdle(opencodeState, waitingState)) {
         return {
           opencodeState,
           waitedMs: (yield* Clock.currentTimeMillis) - started,
