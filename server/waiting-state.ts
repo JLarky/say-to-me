@@ -8,6 +8,7 @@ import { listMessages } from "./messages.ts";
 import { getOpenCodeStatus } from "./opencode/client.ts";
 import { getCachedOpenCodeActivityStatus } from "./opencode/cache.ts";
 import { classifyWithJinx, isJinxEnabled } from "./opencode/jinx.ts";
+import { hasExternalCliSessionWork } from "./external-cli/cli-session-busy.ts";
 
 const recentMessageWindow = 10;
 
@@ -78,6 +79,7 @@ export function getWaitingStateEffect(
       const input: WaitingStateInput = {
         opencodeStatus,
         activityStatus,
+        sessionWorkPending: hasExternalCliSessionWork(sessionId),
         messages: recent.map(({ author, text, opencodeDeliveryStatus }) => ({
           author,
           text,
@@ -90,7 +92,7 @@ export function getWaitingStateEffect(
       };
       const latest = recent.at(-1);
       const cacheKey = latest
-        ? `${latest.id}:${latest.status}:${latest.opencodeDeliveryStatus ?? ""}:${opencodeStatus ?? ""}:${activityStatus ?? ""}`
+        ? `${latest.id}:${latest.status}:${latest.opencodeDeliveryStatus ?? ""}:${opencodeStatus ?? ""}:${activityStatus ?? ""}:${input.sessionWorkPending ? "1" : "0"}`
         : "";
       return refineWithJinx(sessionId, input, heuristic, cacheKey);
     }),

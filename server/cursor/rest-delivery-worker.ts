@@ -24,14 +24,36 @@ function deliveryPrompt(job: DbCursorDeliveryJob, message: DbMessage): string {
 }
 
 export function parseCursorJsonOutput(stdout: string): { isError?: boolean; text?: string } {
-  const entry = safeJsonParse(UnknownJson, stdout.trim());
-  if (!entry || typeof entry !== "object") return {};
-  const record = entry as Record<string, unknown>;
-  if (record.type !== "result") return {};
-  return {
-    isError: record.is_error === true,
-    text: typeof record.result === "string" ? record.result : undefined,
-  };
+  // `--output-format json` has shipped as a bare result object, an array of
+  // events, or NDJSON depending on version. Accept all three; dropping the
+  // reply here loses the agent's final text and skips the idle notice.
+  const trimmed = stdout.trim();
+  if (!trimmed) return {};
+  const candidates: unknown[] = [];
+  const single = safeJsonParse(UnknownJson, trimmed);
+  if (single !== null) {
+    candidates.push(single);
+  } else {
+    for (const line of trimmed.split("\n")) {
+      const parsed = safeJsonParse(UnknownJson, line.trim());
+      if (parsed !== null) candidates.push(parsed);
+    }
+  }
+  let isError = false;
+  let text: string | undefined;
+  for (const entry of candidates) {
+    const records = Array.isArray(entry) ? entry : [entry];
+    for (const record of records.reverse()) {
+      if (!record || typeof record !== "object") continue;
+      const typed = record as Record<string, unknown>;
+      if (typed.type !== "result") continue;
+      isError = typed.is_error === true;
+      if (typeof typed.result === "string" && typed.result.trim()) text = typed.result;
+      break;
+    }
+    if (text != null || isError) break;
+  }
+  return { isError, text };
 }
 
 export function cursorCommandArgs(resumeId: string, prompt: string, model?: string): string[] {

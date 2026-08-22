@@ -78,6 +78,26 @@ describe("classifyWaitingState", () => {
     }
   });
 
+  it("returns working while CLI session work is pending even if the latest message is from the agent", () => {
+    expect(
+      classifyWaitingState({
+        opencodeStatus: null,
+        sessionWorkPending: true,
+        messages: [user("Sleep 5 seconds, then send 1"), agent("1")],
+      }),
+    ).toMatchObject({ state: "working" });
+  });
+
+  it("returns can_continue after an idle notice once CLI work is done", () => {
+    expect(
+      classifyWaitingState({
+        opencodeStatus: null,
+        sessionWorkPending: false,
+        messages: [user("Sleep then stop"), agent("3"), user("Session is now idle.")],
+      }),
+    ).toMatchObject({ state: "can_continue" });
+  });
+
   it("infers can_continue from an agent message when OpenCode status is missing", () => {
     expect(
       classifyWaitingState({ opencodeStatus: null, messages: [agent("Tests pass.")] }),
