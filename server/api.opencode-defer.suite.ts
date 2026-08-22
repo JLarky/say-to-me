@@ -118,6 +118,80 @@ describe("say API: send-when-idle delivery", () => {
     }
   });
 
+  it("delivers the original queued message once OpenCode goes idle", async () => {
+    let status = "busy";
+    const openCode = await mockOpenCodeWithStatus(() => status);
+    process.env.SAY_TO_ME_OPENCODE_URL = openCode.url;
+
+    try {
+      await createTestSession(sessionId);
+      await postUserMessage({ text: "later" });
+      await waitFor(async () => (await fetchUserReply()).opencodeDeliveryStatus === "queued");
+      const queued = await fetchUserReply();
+
+      status = "idle";
+      opencodeStatusCache.clear();
+      await waitFor(async () =>
+        (await fetchUserMessages()).some(
+          (m) => m.id === queued.id && m.opencodeDeliveryStatus === "sent",
+        ),
+      );
+
+      const users = await fetchUserMessages();
+      const original = users.find((m) => m.id === queued.id)!;
+      expect(users).toHaveLength(1);
+      expect(original.mergedIntoMessageId).toBeNull();
+      expect(original.opencodeDeliveryStatus).toBe("sent");
+      expect(promptCount(openCode)).toBe(1);
+    } finally {
+      openCode.server.close();
+    }
+  });
+
+  it("posts an idle notification after a queued message is delivered", async () => {
+    let status = "busy";
+    const openCode = await mockOpenCodeWithStatus(() => status);
+    process.env.SAY_TO_ME_OPENCODE_URL = openCode.url;
+
+    try {
+      await createTestSession(sessionId);
+      await postUserMessage({ text: "later" });
+      await waitFor(async () => (await fetchUserReply()).opencodeDeliveryStatus === "queued");
+      const queued = await fetchUserReply();
+
+      status = "idle";
+      opencodeStatusCache.clear();
+      await waitFor(async () =>
+        (await fetchUserMessages()).some(
+          (m) => m.id === queued.id && m.opencodeDeliveryStatus === "sent",
+        ),
+      );
+
+      const delivered = (await fetchUserMessages()).find((m) => m.id === queued.id)!;
+      status = "busy";
+      opencodeStatusCache.clear();
+      expect(await checkIdleNotification(delivered.id)).toBe(false);
+
+      status = "idle";
+      opencodeStatusCache.clear();
+      expect(await checkIdleNotification(delivered.id)).toBe(true);
+
+      const messages = await fetchUserMessages();
+      expect(messages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            clientMessageId: `target-idle-${delivered.id}`,
+            opencodeDeliveryStatus: "ui_only",
+            text: `<say-to-me-system>${sessionId} is idle now</say-to-me-system>`,
+          }),
+        ]),
+      );
+      expect(promptCount(openCode)).toBe(1);
+    } finally {
+      openCode.server.close();
+    }
+  });
+
   it("resumes idle notification watches from durable delivery jobs on API startup", async () => {
     let status = "busy";
     const openCode = await mockOpenCodeWithStatus(() => status);
@@ -153,6 +227,44 @@ describe("say API: send-when-idle delivery", () => {
     }
   });
 
+  it("delivers multiple queued messages without merge duplicates on idle", async () => {
+    let status = "busy";
+    const openCode = await mockOpenCodeWithStatus(() => status);
+    process.env.SAY_TO_ME_OPENCODE_URL = openCode.url;
+
+    try {
+      await createTestSession(sessionId);
+      for (const text of ["one", "two", "three"]) await postUserMessage({ text });
+      const queuedIds = (await fetchUserMessages()).map((m) => m.id);
+
+      status = "idle";
+      opencodeStatusCache.clear();
+      await waitFor(async () =>
+        (await fetchUserMessages())
+          .filter((m) => queuedIds.includes(m.id))
+          .every((m) => m.opencodeDeliveryStatus === "sent"),
+      );
+
+      const users = await fetchUserMessages();
+      expect(users.filter((m) => queuedIds.includes(m.id))).toHaveLength(3);
+      for (const id of queuedIds)
+        expect(users.find((m) => m.id === id)!.mergedIntoMessageId).toBeNull();
+
+      expect(promptCount(openCode)).toBe(3);
+      const promptBodies = openCode.requests
+        .filter(
+          (request) =>
+            request.method === "POST" && request.url?.startsWith(`/session/${sessionId}/message`),
+        )
+        .map((request) => JSON.stringify(request.body));
+      expect(promptBodies.some((body) => body.includes("one"))).toBe(true);
+      expect(promptBodies.some((body) => body.includes("two"))).toBe(true);
+      expect(promptBodies.some((body) => body.includes("three"))).toBe(true);
+    } finally {
+      openCode.server.close();
+    }
+  });
+
   it("force sends deliver immediately even when OpenCode is busy", async () => {
     const openCode = await mockOpenCodeWithStatus(() => "busy");
     process.env.SAY_TO_ME_OPENCODE_URL = openCode.url;
@@ -171,6 +283,31 @@ describe("say API: send-when-idle delivery", () => {
         opencodeMessageId: "msg_delivered",
       });
       expect(promptCount(openCode)).toBe(1);
+    } finally {
+      openCode.server.close();
+    }
+  });
+
+  it("explicit retry requeues an existing durable delivery job", async () => {
+    const openCode = await mockOpenCodeWithStatus(() => "busy");
+    process.env.SAY_TO_ME_OPENCODE_URL = openCode.url;
+
+    try {
+      await createTestSession(sessionId);
+      await postUserMessage({ text: "queued then forced" });
+      await waitFor(async () => (await fetchUserReply()).opencodeDeliveryStatus === "queued");
+      const queued = await fetchUserReply();
+
+      const forced = await fetch(`${origin}/api/messages/${queued.id}/retry-opencode`, {
+        method: "POST",
+      });
+      expect(forced.ok).toBe(true);
+
+      const users = await fetchUserMessages();
+      expect(users.length).toBe(1);
+      expect(users[0].id).toBe(queued.id);
+      expect(users[0].opencodeDeliveryStatus).toBe("queued");
+      expect(promptCount(openCode)).toBe(0);
     } finally {
       openCode.server.close();
     }
