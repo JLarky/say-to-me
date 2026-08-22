@@ -1,3 +1,4 @@
+import { isLiveCompletionWatchStatus } from "@say-to-me/completion-watch/workflow";
 import {
   completeSessionIdleRoutine,
   findActiveSessionIdleRoutineBySourceMessageId,
@@ -22,7 +23,7 @@ import { enqueueSourceCompletionNotice } from "./external-cli/session-work-statu
  */
 export function failSessionIdleForWatchedMessage(messageId: number): void {
   const message = getMessage(messageId);
-  if (!message || message.completionWatchStatus !== "watching") return;
+  if (!message || !isLiveCompletionWatchStatus(message.completionWatchStatus)) return;
   const sourceMessageId = message.completionSourceMessageId ?? message.forwardSourceMessageId;
   const sourceSessionId = message.completionSourceSessionId ?? message.forwardSourceSessionId;
   if (sourceMessageId == null || !sourceSessionId) return;

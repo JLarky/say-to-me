@@ -155,6 +155,23 @@ export function createExternalCliRestDeliveryWorker<
     );
   }
 
+  function markTurnEnded(job: TJob): Effect.Effect<boolean> {
+    return Effect.tryPromise(async () => {
+      const body = await postInternalJson(`${config.apiBasePath}/turn-ended`, { job }, OkResponse);
+      return body.ok;
+    }).pipe(
+      Effect.catchAll((error) =>
+        Effect.sync(() => {
+          console.error(
+            `[${config.backendLabel}-delivery-worker] could not record CLI turn end for job ${job.id}:`,
+            error,
+          );
+          return false;
+        }),
+      ),
+    );
+  }
+
   function markUnconfirmed(job: TJob, error: string): Effect.Effect<boolean> {
     return Effect.promise(async () => {
       const body = await postInternalJson(
@@ -288,6 +305,10 @@ export function createExternalCliRestDeliveryWorker<
       const outcome = yield* Effect.either(
         runDelivery({ ...claimed, job, message } as ClaimedJobWithMessage),
       ).pipe(Effect.ensuring(Fiber.interrupt(heartbeat)));
+
+      // Process settled (success or fail after spawn). Queue-empty must not
+      // mean idle until this marker is set — including when complete() CAS fails.
+      yield* markTurnEnded(job);
 
       if (Either.isRight(outcome)) {
         // Even a worker that saw a renewal failure tries to complete: the

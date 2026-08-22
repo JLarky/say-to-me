@@ -32,6 +32,7 @@ const jobSelectColumns = {
   lockedBy: codexDeliveryJobs.lockedBy,
   lastError: codexDeliveryJobs.lastError,
   promptDispatchedAt: codexDeliveryJobs.promptDispatchedAt,
+  cliTurnEndedAt: codexDeliveryJobs.cliTurnEndedAt,
   createdAt: codexDeliveryJobs.createdAt,
   updatedAt: codexDeliveryJobs.updatedAt,
 };
@@ -79,6 +80,7 @@ export type EnqueueCodexDeliveryInput = {
 export const enqueueCodexDeliveryJob = codexDelivery.enqueueDeliveryJob;
 export const retryCodexDeliveryJob = codexDelivery.retryDeliveryJob;
 export const hasCodexOwedDeliveryWork = codexDelivery.hasOwedDeliveryWork;
+export const hasCodexOpenCliTurn = codexDelivery.hasOpenCliTurn;
 export const resumeCodexDeliveryWorkers = codexDelivery.resumePendingDeliveryWorkers;
 
 export type CodexDeliveryQueueService = {
@@ -131,6 +133,8 @@ export const retryCodexDeliveryJobFromWorker = codexDelivery.retryDeliveryJobFro
 export const failCodexDeliveryJobFromWorker = codexDelivery.failDeliveryJobFromWorker;
 export const markCodexDeliveryJobDispatchedFromWorker =
   codexDelivery.markDeliveryJobDispatchedFromWorker;
+export const markCodexDeliveryJobCliTurnEndedFromWorker =
+  codexDelivery.markDeliveryJobCliTurnEndedFromWorker;
 export const markCodexDeliveryJobUnconfirmedFromWorker =
   codexDelivery.markDeliveryJobUnconfirmedFromWorker;
 export const cancelCodexDeliveryJobFromWorker = codexDelivery.cancelDeliveryJobFromWorker;

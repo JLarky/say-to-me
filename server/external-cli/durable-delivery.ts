@@ -1,4 +1,16 @@
-import { and, asc, desc, eq, gt, inArray, isNull, lte, sql, type SQL } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import { Effect, Layer, Schedule } from "effect";
 import { randomUUID } from "node:crypto";
 import {
@@ -40,6 +52,7 @@ import {
   startIdleNotificationWatch,
 } from "../notifications.ts";
 import { echoReplyDelayMs, workerMode, type ExternalCliWorkerEnvPrefix } from "./worker-env.ts";
+import { isLiveCompletionWatchStatus } from "@say-to-me/completion-watch/workflow";
 
 export type { ExternalCliDeliveryJobKind } from "@say-to-me/external-cli-delivery/workflow";
 
@@ -56,6 +69,7 @@ export type ExternalCliDeliveryJobRow = {
   lockedBy: string | null;
   lastError: string | null;
   promptDispatchedAt: number | null;
+  cliTurnEndedAt: number | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -88,7 +102,8 @@ export type RetryDeliveryJobResult<TJob> = {
 };
 
 const WORKER_POLL_MS = Number(process.env.SAY_TO_ME_EXTERNAL_CLI_DELIVERY_POLL_MS || 250);
-const JOB_LEASE_MS = 30_000;
+/** Lease for in-flight delivery jobs. Not a turn-end signal — a ~100s CLI turn outlives this. */
+export const JOB_LEASE_MS = 30_000;
 const DEFAULT_MAX_ATTEMPTS = 3;
 
 type DeliveryJobsTable =
@@ -112,6 +127,7 @@ type DeliveryJobSelectColumns =
       lockedBy: typeof claudeDeliveryJobs.lockedBy;
       lastError: typeof claudeDeliveryJobs.lastError;
       promptDispatchedAt: typeof claudeDeliveryJobs.promptDispatchedAt;
+      cliTurnEndedAt: typeof claudeDeliveryJobs.cliTurnEndedAt;
       createdAt: typeof claudeDeliveryJobs.createdAt;
       updatedAt: typeof claudeDeliveryJobs.updatedAt;
     }
@@ -129,6 +145,7 @@ type DeliveryJobSelectColumns =
       lockedBy: typeof cursorDeliveryJobs.lockedBy;
       lastError: typeof cursorDeliveryJobs.lastError;
       promptDispatchedAt: typeof cursorDeliveryJobs.promptDispatchedAt;
+      cliTurnEndedAt: typeof cursorDeliveryJobs.cliTurnEndedAt;
       createdAt: typeof cursorDeliveryJobs.createdAt;
       updatedAt: typeof cursorDeliveryJobs.updatedAt;
     }
@@ -146,6 +163,7 @@ type DeliveryJobSelectColumns =
       lockedBy: typeof codexDeliveryJobs.lockedBy;
       lastError: typeof codexDeliveryJobs.lastError;
       promptDispatchedAt: typeof codexDeliveryJobs.promptDispatchedAt;
+      cliTurnEndedAt: typeof codexDeliveryJobs.cliTurnEndedAt;
       createdAt: typeof codexDeliveryJobs.createdAt;
       updatedAt: typeof codexDeliveryJobs.updatedAt;
     }
@@ -163,6 +181,7 @@ type DeliveryJobSelectColumns =
       lockedBy: typeof grokDeliveryJobs.lockedBy;
       lastError: typeof grokDeliveryJobs.lastError;
       promptDispatchedAt: typeof grokDeliveryJobs.promptDispatchedAt;
+      cliTurnEndedAt: typeof grokDeliveryJobs.cliTurnEndedAt;
       createdAt: typeof grokDeliveryJobs.createdAt;
       updatedAt: typeof grokDeliveryJobs.updatedAt;
     };
@@ -472,6 +491,7 @@ export function createExternalCliDurableDelivery<
           lockedBy: null,
           lastError: null,
           promptDispatchedAt: null,
+          cliTurnEndedAt: null,
           updatedAt: nowSql(),
         })
         .where(
@@ -518,6 +538,25 @@ export function createExternalCliDurableDelivery<
       .from(config.jobsTable)
       .where(
         and(eq(sessionIdColumn, sessionId), inArray(config.jobsTable.status, OWED_JOB_STATUSES)),
+      )
+      .get();
+    return (row?.count ?? 0) > 0;
+  }
+
+  /**
+   * True while a prompt was handed to the CLI and the worker has not yet
+   * observed that turn end. Queue-empty (succeeded/failed/expired) is not idle.
+   */
+  function hasOpenCliTurn(sessionId: string): boolean {
+    const row = drizzleDb
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(config.jobsTable)
+      .where(
+        and(
+          eq(sessionIdColumn, sessionId),
+          isNotNull(config.jobsTable.promptDispatchedAt),
+          isNull(config.jobsTable.cliTurnEndedAt),
+        ),
       )
       .get();
     return (row?.count ?? 0) > 0;
@@ -673,6 +712,8 @@ export function createExternalCliDurableDelivery<
           lockedAt: null,
           lockedBy: null,
           lastError: config.unconfirmedMessage,
+          // Backstop: the worker never reported process-end. LATE, never forever-pending.
+          cliTurnEndedAt: sql`COALESCE(${config.jobsTable.cliTurnEndedAt}, ${Date.now()})`,
           updatedAt: nowSql(),
         })
         .where(and(eq(config.jobsTable.id, row.id), eq(config.jobsTable.status, "running")))
@@ -687,6 +728,9 @@ export function createExternalCliDurableDelivery<
     claimNext: (workerId, sessionId) =>
       tryQueue(() => {
         const now = Date.now();
+        // JOB_LEASE_MS is not a turn-end signal — a ~100s CLI turn outlives this.
+        // Reclaim of a dispatched job still closes the open-turn marker so idle
+        // detection cannot stay pending forever after a crashed worker.
         reclaimExpiredLeases(now - JOB_LEASE_MS);
 
         const candidate = drizzleDb.transaction((tx) => {
@@ -751,14 +795,31 @@ export function createExternalCliDurableDelivery<
       tryQueue(() => {
         // better-sqlite3 writes synchronously, so this statement has committed by
         // the time the internal request that carries it answers the worker. The
-        // worker only spawns the provider after that answer.
+        // worker only spawns the provider after that answer. Clearing
+        // cliTurnEndedAt starts this attempt's turn; queue-empty is not idle
+        // until the worker observes the CLI process settle.
         const result = drizzleDb
           .update(config.jobsTable)
           .set({
             promptDispatchedAt: sql`COALESCE(${config.jobsTable.promptDispatchedAt}, ${Date.now()})`,
+            cliTurnEndedAt: null,
             updatedAt: nowSql(),
           })
           .where(leaseHeld(job))
+          .run();
+        return result.changes > 0;
+      }),
+    markCliTurnEnded: (job) =>
+      tryQueue(() => {
+        // No lease CAS: the worker observed the process settle even if renewal
+        // already lost the row. COALESCE keeps the first observation.
+        const result = drizzleDb
+          .update(config.jobsTable)
+          .set({
+            cliTurnEndedAt: sql`COALESCE(${config.jobsTable.cliTurnEndedAt}, ${Date.now()})`,
+            updatedAt: nowSql(),
+          })
+          .where(eq(config.jobsTable.id, job.id))
           .run();
         return result.changes > 0;
       }),
@@ -786,6 +847,7 @@ export function createExternalCliDurableDelivery<
             lockedAt: null,
             lockedBy: null,
             lastError: error,
+            cliTurnEndedAt: sql`COALESCE(${config.jobsTable.cliTurnEndedAt}, ${Date.now()})`,
             updatedAt: nowSql(),
           })
           .where(leaseHeld(job))
@@ -801,6 +863,7 @@ export function createExternalCliDurableDelivery<
             lockedAt: null,
             lockedBy: null,
             lastError: error,
+            cliTurnEndedAt: sql`COALESCE(${config.jobsTable.cliTurnEndedAt}, ${Date.now()})`,
             updatedAt: nowSql(),
           })
           .where(leaseHeld(job))
@@ -816,6 +879,7 @@ export function createExternalCliDurableDelivery<
             lockedAt: null,
             lockedBy: null,
             lastError: reason,
+            cliTurnEndedAt: sql`COALESCE(${config.jobsTable.cliTurnEndedAt}, ${Date.now()})`,
             updatedAt: nowSql(),
           })
           .where(leaseHeld(job))
@@ -875,7 +939,7 @@ export function createExternalCliDurableDelivery<
     if (message.sessionId !== externalSessionId) broadcastQueue(externalSessionId);
 
     if (job.kind === "forward_target_message") {
-      if (message.completionWatchStatus === "watching") {
+      if (isLiveCompletionWatchStatus(message.completionWatchStatus)) {
         startForwardCompletionNotificationWatch({
           sourceMessageId:
             message.completionSourceMessageId ?? message.forwardSourceMessageId ?? message.id,
@@ -940,7 +1004,9 @@ export function createExternalCliDurableDelivery<
         }
         if (message) {
           updateOpencodeDelivery(message.id, "pending", null, null);
-          if (message.completionWatchStatus === "watching") markCompletionWorkSeen(message.id);
+          if (isLiveCompletionWatchStatus(message.completionWatchStatus)) {
+            markCompletionWorkSeen(message.id);
+          }
           broadcastQueue(message.sessionId);
         }
         return {
@@ -953,6 +1019,7 @@ export function createExternalCliDurableDelivery<
   }
 
   async function completeDeliveryJobFromWorker(job: TJob, reply: string | null): Promise<boolean> {
+    await markDeliveryJobCliTurnEndedFromWorker(job);
     const message = getMessage(job.messageId);
     const completed = await queueProgram(
       Effect.gen(function* () {
@@ -967,6 +1034,7 @@ export function createExternalCliDurableDelivery<
   }
 
   async function retryDeliveryJobFromWorker(job: TJob, error: string): Promise<boolean> {
+    await markDeliveryJobCliTurnEndedFromWorker(job);
     const message = getMessage(job.messageId);
     const retried = await queueProgram(
       Effect.gen(function* () {
@@ -980,6 +1048,7 @@ export function createExternalCliDurableDelivery<
   }
 
   async function endDeliveryJobFromWorker(job: TJob, error: string): Promise<boolean> {
+    await markDeliveryJobCliTurnEndedFromWorker(job);
     const message = getMessage(job.messageId);
     const failed = await queueProgram(
       Effect.gen(function* () {
@@ -1012,6 +1081,15 @@ export function createExternalCliDurableDelivery<
       Effect.gen(function* () {
         const queue = yield* DeliveryQueue;
         return yield* queue.markDispatched(toWorkflowJob(job));
+      }),
+    );
+  }
+
+  function markDeliveryJobCliTurnEndedFromWorker(job: TJob): Promise<boolean> {
+    return queueProgram(
+      Effect.gen(function* () {
+        const queue = yield* DeliveryQueue;
+        return yield* queue.markCliTurnEnded(toWorkflowJob(job));
       }),
     );
   }
@@ -1085,12 +1163,14 @@ export function createExternalCliDurableDelivery<
     enqueueDeliveryJob,
     retryDeliveryJob,
     hasOwedDeliveryWork,
+    hasOpenCliTurn,
     resumePendingDeliveryWorkers,
     claimDeliveryJobForWorker,
     completeDeliveryJobFromWorker,
     retryDeliveryJobFromWorker,
     failDeliveryJobFromWorker,
     markDeliveryJobDispatchedFromWorker,
+    markDeliveryJobCliTurnEndedFromWorker,
     markDeliveryJobUnconfirmedFromWorker,
     cancelDeliveryJobFromWorker,
     renewDeliveryJobFromWorker,

@@ -22,6 +22,7 @@ import {
 } from "./activity-routes.ts";
 import { getOpenCodeStatus } from "./client.ts";
 import { resumeCompletionWatches, startCompletionWatch } from "./completion-watch.ts";
+import { isLiveCompletionWatchStatus } from "@say-to-me/completion-watch/workflow";
 import { createOpenCodeClient, openCodeBaseUrl, openCodeFetch } from "./http.ts";
 import { classifyCliTimeoutFromActivity } from "./timeout-classification.ts";
 import { buildAgentVoicePrompt } from "../agent-voice-prompt.ts";
@@ -54,7 +55,7 @@ export async function deliverReplyToOpencode(
   if (!validateSessionId(sessionId)) return;
 
   updateOpencodeDelivery(reply.id, "pending", null, null);
-  if (reply.completionWatchStatus === "watching") markCompletionWorkSeen(reply.id);
+  if (isLiveCompletionWatchStatus(reply.completionWatchStatus)) markCompletionWorkSeen(reply.id);
   broadcastQueue(sessionId);
   const deliveryStartedAt = Date.now();
 
@@ -74,7 +75,11 @@ export async function deliverReplyToOpencode(
       );
       updateOpencodeDelivery(reply.id, status, status === "pending" ? null : error.message, null);
       const delivered = getMessage(reply.id);
-      if (status === "pending" && delivered?.completionWatchStatus === "watching") {
+      if (
+        status === "pending" &&
+        delivered &&
+        isLiveCompletionWatchStatus(delivered.completionWatchStatus)
+      ) {
         startCompletionWatch(delivered.id);
       }
       broadcastQueue(sessionId);
@@ -84,7 +89,9 @@ export async function deliverReplyToOpencode(
     if (error instanceof OpenCodeCliActivityConfirmedError) {
       updateOpencodeDelivery(reply.id, "sent", null, null);
       const delivered = getMessage(reply.id);
-      if (delivered?.completionWatchStatus === "watching") startCompletionWatch(delivered.id);
+      if (delivered && isLiveCompletionWatchStatus(delivered.completionWatchStatus)) {
+        startCompletionWatch(delivered.id);
+      }
       broadcastQueue(sessionId);
       return;
     }
@@ -101,7 +108,7 @@ export async function deliverReplyToOpencode(
   if (
     (delivered?.opencodeDeliveryStatus === "sent" ||
       delivered?.opencodeDeliveryStatus === "pending") &&
-    delivered.completionWatchStatus === "watching"
+    isLiveCompletionWatchStatus(delivered.completionWatchStatus)
   ) {
     startCompletionWatch(delivered.id);
   }
@@ -213,7 +220,9 @@ export async function deliverQueuedAsNewMessage(
         updateForwardStatus(combined.id, status);
       }
     }
-    if (delivered?.completionWatchStatus === "watching") startCompletionWatch(delivered.id);
+    if (delivered && isLiveCompletionWatchStatus(delivered.completionWatchStatus)) {
+      startCompletionWatch(delivered.id);
+    }
     resumeCompletionWatches(sessionId);
     return { combined: delivered ?? combined, pending };
   } finally {

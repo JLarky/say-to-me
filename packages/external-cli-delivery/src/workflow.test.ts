@@ -115,6 +115,7 @@ function unusedQueue(): DeliveryQueueService {
   return {
     claimNext: () => Effect.die("unused"),
     markDispatched: () => Effect.die("unused"),
+    markCliTurnEnded: () => Effect.succeed(true),
     complete: () => Effect.die("unused"),
     retry: () => Effect.die("unused"),
     fail: () => Effect.die("unused"),

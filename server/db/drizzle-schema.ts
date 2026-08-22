@@ -408,6 +408,11 @@ export const cursorDeliveryJobs = sqliteTable(
     dispatchKey: text("dispatch_key").notNull().default(""),
     /** Set when the provider prompt is spawned/accepted; blocks re-prompt on reclaim. */
     promptDispatchedAt: integer("prompt_dispatched_at"),
+    /**
+     * Set when the worker observes the CLI turn actually end. Independent of
+     * job status: a succeeded/failed/expired job can still have an open turn.
+     */
+    cliTurnEndedAt: integer("cli_turn_ended_at"),
     createdAt: text("created_at")
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
@@ -450,6 +455,11 @@ export const claudeDeliveryJobs = sqliteTable(
     dispatchKey: text("dispatch_key").notNull().default(""),
     /** Set when the provider prompt is spawned/accepted; blocks re-prompt on reclaim. */
     promptDispatchedAt: integer("prompt_dispatched_at"),
+    /**
+     * Set when the worker observes the CLI turn actually end. Independent of
+     * job status: a succeeded/failed/expired job can still have an open turn.
+     */
+    cliTurnEndedAt: integer("cli_turn_ended_at"),
     createdAt: text("created_at")
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
@@ -492,6 +502,8 @@ export const codexDeliveryJobs = sqliteTable(
     dispatchKey: text("dispatch_key").notNull().default(""),
     /** Set when the provider prompt is spawned/accepted; blocks re-prompt on reclaim. */
     promptDispatchedAt: integer("prompt_dispatched_at"),
+    /** Set when the worker observes the CLI turn actually end; independent of job status. */
+    cliTurnEndedAt: integer("cli_turn_ended_at"),
     createdAt: text("created_at")
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
@@ -534,6 +546,8 @@ export const grokDeliveryJobs = sqliteTable(
     dispatchKey: text("dispatch_key").notNull().default(""),
     /** Set when the provider prompt is spawned/accepted; blocks re-prompt on reclaim. */
     promptDispatchedAt: integer("prompt_dispatched_at"),
+    /** Set when the worker observes the CLI turn actually end; independent of job status. */
+    cliTurnEndedAt: integer("cli_turn_ended_at"),
     createdAt: text("created_at")
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),

@@ -253,6 +253,13 @@
       "when": 1787280162866,
       "tag": "0035_routines",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1787390000036,
+      "tag": "0036_external_cli_turn_ended",
+      "breakpoints": true
     }
   ]
 }

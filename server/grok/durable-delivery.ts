@@ -27,6 +27,7 @@ const jobSelectColumns = {
   lockedBy: grokDeliveryJobs.lockedBy,
   lastError: grokDeliveryJobs.lastError,
   promptDispatchedAt: grokDeliveryJobs.promptDispatchedAt,
+  cliTurnEndedAt: grokDeliveryJobs.cliTurnEndedAt,
   createdAt: grokDeliveryJobs.createdAt,
   updatedAt: grokDeliveryJobs.updatedAt,
 };
@@ -73,6 +74,7 @@ export type EnqueueGrokDeliveryInput = {
 export const enqueueGrokDeliveryJob = grokDelivery.enqueueDeliveryJob;
 export const retryGrokDeliveryJob = grokDelivery.retryDeliveryJob;
 export const hasGrokOwedDeliveryWork = grokDelivery.hasOwedDeliveryWork;
+export const hasGrokOpenCliTurn = grokDelivery.hasOpenCliTurn;
 export const resumeGrokDeliveryWorkers = grokDelivery.resumePendingDeliveryWorkers;
 
 export type GrokDeliveryQueueService = {
@@ -126,6 +128,8 @@ export const retryGrokDeliveryJobFromWorker = grokDelivery.retryDeliveryJobFromW
 export const failGrokDeliveryJobFromWorker = grokDelivery.failDeliveryJobFromWorker;
 export const markGrokDeliveryJobDispatchedFromWorker =
   grokDelivery.markDeliveryJobDispatchedFromWorker;
+export const markGrokDeliveryJobCliTurnEndedFromWorker =
+  grokDelivery.markDeliveryJobCliTurnEndedFromWorker;
 export const markGrokDeliveryJobUnconfirmedFromWorker =
   grokDelivery.markDeliveryJobUnconfirmedFromWorker;
 export const cancelGrokDeliveryJobFromWorker = grokDelivery.cancelDeliveryJobFromWorker;

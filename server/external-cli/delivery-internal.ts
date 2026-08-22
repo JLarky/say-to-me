@@ -30,6 +30,7 @@ export type ExternalCliDeliveryInternalConfig<TLease extends ExternalCliDelivery
   retryDeliveryJobFromWorker: (job: TLease, error: string) => Promise<boolean>;
   failDeliveryJobFromWorker: (job: TLease, error: string) => Promise<boolean>;
   markDeliveryJobDispatchedFromWorker: (job: TLease) => Promise<boolean>;
+  markDeliveryJobCliTurnEndedFromWorker: (job: TLease) => Promise<boolean>;
   markDeliveryJobUnconfirmedFromWorker: (job: TLease, error: string) => Promise<boolean>;
   cancelDeliveryJobFromWorker: (job: TLease, reason: string) => Promise<boolean>;
   renewDeliveryJobFromWorker: (job: TLease) => Promise<TLease | null>;
@@ -151,6 +152,12 @@ export function createExternalCliDeliveryInternalDispatcher<
       const job = leaseField(body, config.sessionIdLeaseField);
       if (!job) return error("Missing valid job lease.");
       return json({ ok: await config.markDeliveryJobDispatchedFromWorker(job) });
+    }
+
+    if (pathname === `${config.basePath}/turn-ended`) {
+      const job = leaseField(body, config.sessionIdLeaseField);
+      if (!job) return error("Missing valid job lease.");
+      return json({ ok: await config.markDeliveryJobCliTurnEndedFromWorker(job) });
     }
 
     if (pathname === `${config.basePath}/unconfirmed`) {

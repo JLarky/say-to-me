@@ -24,6 +24,10 @@ import {
   updateOpencodeDelivery,
 } from "./messages.ts";
 import { promptReachedTarget, stopCompletionWatch } from "./opencode/completion-watch.ts";
+import {
+  DEFAULT_COMPLETION_WATCH_QUIET_MS,
+  isLiveCompletionWatchStatus,
+} from "@say-to-me/completion-watch/workflow";
 import { enqueueClaudeDeliveryJob } from "./claude/durable-delivery.ts";
 import { enqueueCursorDeliveryJob } from "./cursor/durable-delivery.ts";
 import { enqueueCodexDeliveryJob } from "./codex/durable-delivery.ts";
@@ -36,12 +40,26 @@ import { detectSessionBackend } from "./session-id.ts";
 
 const forwardCompletionPollMs = Number(process.env.SAY_TO_ME_FORWARD_COMPLETION_POLL_MS || 5_000);
 
+function externalCliQuietWindowMs(): number {
+  const raw = process.env.SAY_TO_ME_COMPLETION_WATCH_QUIET_MS;
+  if (raw != null && raw !== "") {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+  }
+  return DEFAULT_COMPLETION_WATCH_QUIET_MS;
+}
+
+function quietWindowMsForSession(sessionId: string): number {
+  return detectSessionBackend(sessionId) === "opencode" ? 0 : externalCliQuietWindowMs();
+}
+
 type ForwardCompletionWatch = {
   sourceMessageId: number;
   sourceSessionId: string;
   targetMessageId: number;
   targetSessionId: string;
   seenWorking: boolean;
+  quietSince: number | null;
 };
 
 type StartForwardCompletionNotificationWatchOptions = ForwardCompletionWatch & {
@@ -91,6 +109,7 @@ type IdleNotificationWatch = {
   sessionId: string;
   triggerMessageId: number;
   seenWorking: boolean;
+  quietSince: number | null;
 };
 
 const idleNotificationWatches = new Map<number, IdleNotificationWatch>();
@@ -139,12 +158,13 @@ export function startIdleNotificationWatch({
   sessionId,
   triggerMessageId,
   seenWorking = false,
-}: Omit<IdleNotificationWatch, "seenWorking"> & { seenWorking?: boolean }): void {
+}: Omit<IdleNotificationWatch, "seenWorking" | "quietSince"> & { seenWorking?: boolean }): void {
   const existing = idleNotificationWatches.get(triggerMessageId);
   idleNotificationWatches.set(triggerMessageId, {
     sessionId,
     triggerMessageId,
     seenWorking: existing?.seenWorking || seenWorking,
+    quietSince: existing?.quietSince ?? null,
   });
 
   if (idleNotificationTimers.has(triggerMessageId)) return;
@@ -161,10 +181,23 @@ export async function checkIdleNotification(triggerMessageId: number): Promise<b
 
   const status = await getSessionWorkStatus(watch.sessionId);
   if (status === "pending") {
-    idleNotificationWatches.set(triggerMessageId, { ...watch, seenWorking: true });
+    idleNotificationWatches.set(triggerMessageId, {
+      ...watch,
+      seenWorking: true,
+      quietSince: null,
+    });
     return false;
   }
   if (status !== "idle" || !watch.seenWorking) return false;
+  const quietMs = quietWindowMsForSession(watch.sessionId);
+  if (quietMs > 0) {
+    const now = Date.now();
+    if (watch.quietSince == null) {
+      idleNotificationWatches.set(triggerMessageId, { ...watch, quietSince: now });
+      return false;
+    }
+    if (now - watch.quietSince < quietMs) return false;
+  }
 
   const notification = ensureTargetIdleNotification(
     watch.sessionId,
@@ -190,7 +223,7 @@ export function startForwardCompletionNotificationWatch({
   targetSessionId,
   seenWorking = false,
   autoPoll = true,
-}: Omit<StartForwardCompletionNotificationWatchOptions, "seenWorking"> & {
+}: Omit<StartForwardCompletionNotificationWatchOptions, "seenWorking" | "quietSince"> & {
   seenWorking?: boolean;
 }): void {
   const existing = forwardCompletionWatches.get(sourceMessageId);
@@ -200,6 +233,7 @@ export function startForwardCompletionNotificationWatch({
     targetMessageId,
     targetSessionId,
     seenWorking: existing?.seenWorking || seenWorking,
+    quietSince: existing?.quietSince ?? null,
   });
 
   if (!autoPoll || forwardCompletionTimers.has(sourceMessageId)) return;
@@ -218,7 +252,11 @@ export async function checkForwardCompletionNotification(
 
   const status = await getSessionWorkStatus(watch.targetSessionId);
   if (status === "pending") {
-    forwardCompletionWatches.set(sourceMessageId, { ...watch, seenWorking: true });
+    forwardCompletionWatches.set(sourceMessageId, {
+      ...watch,
+      seenWorking: true,
+      quietSince: null,
+    });
     return false;
   }
 
@@ -278,6 +316,15 @@ export async function checkForwardCompletionNotification(
   // relay finished if the prompt actually reached the target in the first place.
   if (!promptReachedTarget(getMessage(watch.targetMessageId)?.opencodeDeliveryStatus ?? null)) {
     return false;
+  }
+  const quietMs = quietWindowMsForSession(watch.targetSessionId);
+  if (quietMs > 0) {
+    const now = Date.now();
+    if (watch.quietSince == null) {
+      forwardCompletionWatches.set(sourceMessageId, { ...watch, quietSince: now });
+      return false;
+    }
+    if (now - watch.quietSince < quietMs) return false;
   }
 
   const {
@@ -405,7 +452,7 @@ function resumableWatchForDeliveryJob(
     };
   }
 
-  if (message.completionWatchStatus === "watching") {
+  if (isLiveCompletionWatchStatus(message.completionWatchStatus)) {
     const sourceMessageId =
       message.completionSourceMessageId ?? message.forwardSourceMessageId ?? message.id;
     return {

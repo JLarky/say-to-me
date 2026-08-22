@@ -6,6 +6,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
 const testDbDir = mkdtempSync(path.join(tmpdir(), "say-to-me-test-relay-invariant-"));
 process.env.SAY_TO_ME_DB = path.join(testDbDir, "queue.sqlite");
+process.env.SAY_TO_ME_COMPLETION_WATCH_QUIET_MS = "0";
 process.env.SAY_TO_ME_CURSOR_WORKER_AUTOSTART = "0";
 process.env.SAY_TO_ME_CLAUDE_WORKER_AUTOSTART = "0";
 process.env.SAY_TO_ME_CODEX_WORKER_AUTOSTART = "0";
@@ -15,7 +16,15 @@ const { teardownApi } = await import("../api.harness.ts");
 const { drizzleDb } = await import("../db/index.ts");
 const { claudeDeliveryJobs, codexDeliveryJobs, cursorDeliveryJobs, grokDeliveryJobs } =
   await import("../db/drizzle-schema.ts");
-const { getMessage, listMessages } = await import("../messages.ts");
+const {
+  getMessage,
+  listActiveCompletionWatches,
+  listMessages,
+  listWatchingMessagesBySourceMessageId,
+  markCompletionWorkSeen,
+  setCompletionWatchStatus,
+  updateOpencodeDelivery,
+} = await import("../messages.ts");
 const { setSessionCwd } = await import("../sessions.ts");
 const { createForwardRelayWithOptionalIdleWait } = await import("../forward-relay-idle.ts");
 const { createMessageResult } = await import("../create-message.ts");
@@ -30,6 +39,7 @@ const {
   claimCursorDeliveryJobForWorker,
   completeCursorDeliveryJobFromWorker,
   enqueueCursorDeliveryJob,
+  markCursorDeliveryJobCliTurnEndedFromWorker,
   markCursorDeliveryJobDispatchedFromWorker,
 } = await import("../cursor/durable-delivery.ts");
 const { enqueueClaudeDeliveryJob } = await import("../claude/durable-delivery.ts");
@@ -162,6 +172,57 @@ describe("relay completion invariant", () => {
     expect(sourceIdleNotices(sourceSessionId)).toHaveLength(1);
   });
 
+  it("does not treat a succeeded job as idle while the CLI turn is still open", async () => {
+    const targetSessionId = nextSessionId("cur_");
+    const sourceSessionId = nextSessionId("cur_");
+    const { sourceMessage, targetMessage } = relayToTarget(sourceSessionId, targetSessionId);
+
+    enqueueCursorDeliveryJob({
+      messageId: targetMessage.id,
+      messageSessionId: targetSessionId,
+      cursorSessionId: targetSessionId,
+      kind: "forward_target_message",
+    });
+    // Terminal the way a 30s lease expiry + confirm would, without process-end.
+    drizzleDb
+      .update(cursorDeliveryJobs)
+      .set({
+        status: "succeeded",
+        lockedAt: null,
+        lockedBy: null,
+        promptDispatchedAt: Date.now(),
+        cliTurnEndedAt: null,
+      })
+      .where(eq(cursorDeliveryJobs.messageId, targetMessage.id))
+      .run();
+    const job = drizzleDb
+      .select()
+      .from(cursorDeliveryJobs)
+      .where(eq(cursorDeliveryJobs.messageId, targetMessage.id))
+      .get();
+    expect(job).toBeTruthy();
+    // Enqueue marks the prompt queued; confirm is what marks it reached.
+    updateOpencodeDelivery(targetMessage.id, "sent", null, null);
+
+    startForwardCompletionNotificationWatch({
+      sourceMessageId: sourceMessage.id,
+      sourceSessionId,
+      targetMessageId: targetMessage.id,
+      targetSessionId,
+      seenWorking: true,
+      autoPoll: false,
+    });
+
+    expect(await getSessionWorkStatus(targetSessionId)).toBe("pending");
+    expect(await checkForwardCompletionNotification(sourceMessage.id)).toBe(false);
+    expect(sourceIdleNotices(sourceSessionId)).toEqual([]);
+
+    expect(await markCursorDeliveryJobCliTurnEndedFromWorker(job!)).toBe(true);
+    expect(await getSessionWorkStatus(targetSessionId)).toBe("idle");
+    expect(await checkForwardCompletionNotification(sourceMessage.id)).toBe(true);
+    expect(sourceIdleNotices(sourceSessionId)).toHaveLength(1);
+  });
+
   it("does not notify the relay source while the target prompt is still queued", async () => {
     const targetSessionId = nextSessionId("cur_");
     const sourceSessionId = nextSessionId("cur_");
@@ -182,6 +243,22 @@ describe("relay completion invariant", () => {
     expect(sourceIdleNotices(sourceSessionId)).toEqual([]);
     // Still undelivered: a relay row only gets a delivery status once a worker takes it.
     expect(getMessage(targetMessage.id)?.opencodeDeliveryStatus).toBeNull();
+  });
+
+  it("still lists a mid-quiet-window watch so a restart can resume it", () => {
+    const targetSessionId = nextSessionId("cur_");
+    const sourceSessionId = nextSessionId("cur_");
+    const { sourceMessage, targetMessage } = relayToTarget(sourceSessionId, targetSessionId);
+    updateOpencodeDelivery(targetMessage.id, "sent", null, null);
+    markCompletionWorkSeen(targetMessage.id);
+    setCompletionWatchStatus(targetMessage.id, "debouncing", Date.now() + 20_000);
+
+    expect(listActiveCompletionWatches(targetSessionId).map((row) => row.id)).toContain(
+      targetMessage.id,
+    );
+    expect(listWatchingMessagesBySourceMessageId(sourceMessage.id).map((row) => row.id)).toContain(
+      targetMessage.id,
+    );
   });
 
   it.each([
