@@ -136,6 +136,23 @@ describe("shared notifications flag and fallback", () => {
     stop();
     expect(instances[0]?.close).toHaveBeenCalled();
   });
+  it("cleans up safely when EventSource double omits removeEventListener", () => {
+    class IncompleteEventSource {
+      onmessage: ((event: MessageEvent) => void) | null = null;
+      onerror: (() => void) | null = null;
+      addEventListener() {}
+      close = vi.fn();
+    }
+
+    vi.stubGlobal("EventSource", IncompleteEventSource);
+    vi.stubGlobal("SharedWorker", undefined);
+
+    const stop = subscribeNotificationsRealtime({
+      onEvent: () => {},
+    });
+
+    expect(() => stop()).not.toThrow();
+  });
 });
 
 describe("multi-tab capacity copy", () => {
