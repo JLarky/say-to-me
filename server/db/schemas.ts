@@ -194,6 +194,8 @@ export const DbClaudeDeliveryJob = arktype({
   lastError: "string | null",
   /** Set before the provider prompt is spawned; blocks any re-prompt of this job. */
   promptDispatchedAt: "number | null",
+  /** Set when the worker observes the CLI turn end; independent of job status. */
+  cliTurnEndedAt: "number | null",
   createdAt: "string",
   updatedAt: "string",
 });
@@ -214,6 +216,8 @@ export const DbCursorDeliveryJob = arktype({
   lastError: "string | null",
   /** Set before the provider prompt is spawned; blocks any re-prompt of this job. */
   promptDispatchedAt: "number | null",
+  /** Set when the worker observes the CLI turn end; independent of job status. */
+  cliTurnEndedAt: "number | null",
   createdAt: "string",
   updatedAt: "string",
 });
@@ -234,6 +238,8 @@ export const DbCodexDeliveryJob = arktype({
   lastError: "string | null",
   /** Set before the provider prompt is spawned; blocks any re-prompt of this job. */
   promptDispatchedAt: "number | null",
+  /** Set when the worker observes the CLI turn end; independent of job status. */
+  cliTurnEndedAt: "number | null",
   createdAt: "string",
   updatedAt: "string",
 });
@@ -254,6 +260,8 @@ export const DbGrokDeliveryJob = arktype({
   lastError: "string | null",
   /** Set before the provider prompt is spawned; blocks any re-prompt of this job. */
   promptDispatchedAt: "number | null",
+  /** Set when the worker observes the CLI turn end; independent of job status. */
+  cliTurnEndedAt: "number | null",
   createdAt: "string",
   updatedAt: "string",
 });

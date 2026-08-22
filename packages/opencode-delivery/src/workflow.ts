@@ -174,6 +174,10 @@ export const OpenCodeDeliveryRuntime = Context.GenericTag<OpenCodeDeliveryRuntim
   "say-to-me/OpenCodeDeliveryRuntime",
 );
 
+function isLiveCompletionWatchStatus(status: string | null): boolean {
+  return status === "watching" || status === "debouncing";
+}
+
 function afterDelivery(
   job: DeliveryJob,
   message: DeliveryMessage,
@@ -186,7 +190,7 @@ function afterDelivery(
     if (message.forwardRole === "source") {
       yield* store.updateForwardStatus(message.id, outcome === "sent" ? "sent" : "pending");
     }
-    if (message.completionWatchStatus === "watching") {
+    if (isLiveCompletionWatchStatus(message.completionWatchStatus)) {
       yield* fx.startCompletionWatch(message.id);
     }
     if (job.kind === "forward_target_message") {
@@ -198,7 +202,7 @@ function afterDelivery(
         );
       }
       yield* store.updateForwardStatus(message.id, outcome === "sent" ? "sent" : "pending");
-      if (message.completionWatchStatus === "watching") {
+      if (isLiveCompletionWatchStatus(message.completionWatchStatus)) {
         yield* fx.startForwardCompletionNotificationWatch({
           sourceMessageId:
             message.completionSourceMessageId ?? message.forwardSourceMessageId ?? message.id,
@@ -270,7 +274,7 @@ export function runOpenCodeDeliveryOnce(): Effect.Effect<boolean, never, OpenCod
     }
 
     yield* store.updateOpencodeDelivery(message.id, "pending", null, null);
-    if (message.completionWatchStatus === "watching") {
+    if (isLiveCompletionWatchStatus(message.completionWatchStatus)) {
       yield* store.markCompletionWorkSeen(message.id);
     }
     yield* fx.broadcastQueue(message.sessionId);

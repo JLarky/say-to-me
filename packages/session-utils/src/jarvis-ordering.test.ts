@@ -44,6 +44,14 @@ describe("jarvis session ordering", () => {
     });
 
     expect(jarvisBucketForSession(active)).toBe("active");
+    expect(
+      jarvisBucketForSession(
+        session({
+          id: "ses_debouncing",
+          jarvisOverviewDetails: { latestCompletionWatchStatus: "debouncing" },
+        }),
+      ),
+    ).toBe("active");
     expect(jarvisBucketForSession(unknown)).toBe("unknown");
     expect(jarvisBucketForSession(idle)).toBe("idle");
     expect(jarvisWindowForSession(active, now)).toBe("lastHour");

@@ -14,6 +14,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { isIdleNoticeText } from "@say-to-me/session-utils/idle-notices";
+import { RESUMABLE_COMPLETION_WATCH_STATUSES } from "@say-to-me/completion-watch/workflow";
 import { maxTotalMessages } from "./config.ts";
 import { messages as messagesTable, routines as routinesTable } from "./db/drizzle-schema.ts";
 import { drizzleDb, drizzleSqlite } from "./db/index.ts";
@@ -650,7 +651,7 @@ export function listActiveCompletionWatches(sessionId?: string): DbMessage[] {
   const conditions = [
     eq(messagesTable.author, "user" as const),
     deliveryAllowsWatch,
-    inArray(messagesTable.completionWatchStatus, ["watching", "source_failed"]),
+    inArray(messagesTable.completionWatchStatus, [...RESUMABLE_COMPLETION_WATCH_STATUSES]),
   ];
   if (sessionId) conditions.push(eq(messagesTable.sessionId, sessionId));
   return drizzleDb
@@ -716,7 +717,7 @@ export function listWatchingMessagesBySourceMessageId(sourceMessageId: number): 
     .where(
       and(
         eq(messagesTable.completionSourceMessageId, sourceMessageId),
-        inArray(messagesTable.completionWatchStatus, ["watching", "source_failed"]),
+        inArray(messagesTable.completionWatchStatus, [...RESUMABLE_COMPLETION_WATCH_STATUSES]),
       ),
     )
     .orderBy(asc(messagesTable.id))

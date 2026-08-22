@@ -69,7 +69,9 @@ const windowTitles: Record<JarvisWindowId, string> = {
 };
 
 function isActiveStatus(value: string | null | undefined): boolean {
-  return ["busy", "pending", "queued", "retrying", "speaking", "watching"].includes(value ?? "");
+  return ["busy", "pending", "queued", "retrying", "speaking", "watching", "debouncing"].includes(
+    value ?? "",
+  );
 }
 
 function activityTime(session: JarvisOrderingSession): number {

@@ -31,6 +31,7 @@ const jobSelectColumns = {
   lockedBy: claudeDeliveryJobs.lockedBy,
   lastError: claudeDeliveryJobs.lastError,
   promptDispatchedAt: claudeDeliveryJobs.promptDispatchedAt,
+  cliTurnEndedAt: claudeDeliveryJobs.cliTurnEndedAt,
   createdAt: claudeDeliveryJobs.createdAt,
   updatedAt: claudeDeliveryJobs.updatedAt,
 };
@@ -77,6 +78,7 @@ export type EnqueueClaudeDeliveryInput = {
 export const enqueueClaudeDeliveryJob = claudeDelivery.enqueueDeliveryJob;
 export const retryClaudeDeliveryJob = claudeDelivery.retryDeliveryJob;
 export const hasClaudeOwedDeliveryWork = claudeDelivery.hasOwedDeliveryWork;
+export const hasClaudeOpenCliTurn = claudeDelivery.hasOpenCliTurn;
 export const resumeClaudeDeliveryWorkers = claudeDelivery.resumePendingDeliveryWorkers;
 
 export type ClaudeDeliveryQueueService = {
@@ -129,6 +131,8 @@ export const retryClaudeDeliveryJobFromWorker = claudeDelivery.retryDeliveryJobF
 export const failClaudeDeliveryJobFromWorker = claudeDelivery.failDeliveryJobFromWorker;
 export const markClaudeDeliveryJobDispatchedFromWorker =
   claudeDelivery.markDeliveryJobDispatchedFromWorker;
+export const markClaudeDeliveryJobCliTurnEndedFromWorker =
+  claudeDelivery.markDeliveryJobCliTurnEndedFromWorker;
 export const markClaudeDeliveryJobUnconfirmedFromWorker =
   claudeDelivery.markDeliveryJobUnconfirmedFromWorker;
 export const cancelClaudeDeliveryJobFromWorker = claudeDelivery.cancelDeliveryJobFromWorker;

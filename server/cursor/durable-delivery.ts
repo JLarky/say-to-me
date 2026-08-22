@@ -27,6 +27,7 @@ const jobSelectColumns = {
   lockedBy: cursorDeliveryJobs.lockedBy,
   lastError: cursorDeliveryJobs.lastError,
   promptDispatchedAt: cursorDeliveryJobs.promptDispatchedAt,
+  cliTurnEndedAt: cursorDeliveryJobs.cliTurnEndedAt,
   createdAt: cursorDeliveryJobs.createdAt,
   updatedAt: cursorDeliveryJobs.updatedAt,
 };
@@ -73,6 +74,7 @@ export type EnqueueCursorDeliveryInput = {
 export const enqueueCursorDeliveryJob = cursorDelivery.enqueueDeliveryJob;
 export const retryCursorDeliveryJob = cursorDelivery.retryDeliveryJob;
 export const hasCursorOwedDeliveryWork = cursorDelivery.hasOwedDeliveryWork;
+export const hasCursorOpenCliTurn = cursorDelivery.hasOpenCliTurn;
 export const resumeCursorDeliveryWorkers = cursorDelivery.resumePendingDeliveryWorkers;
 
 export type CursorDeliveryQueueService = {
@@ -125,6 +127,8 @@ export const retryCursorDeliveryJobFromWorker = cursorDelivery.retryDeliveryJobF
 export const failCursorDeliveryJobFromWorker = cursorDelivery.failDeliveryJobFromWorker;
 export const markCursorDeliveryJobDispatchedFromWorker =
   cursorDelivery.markDeliveryJobDispatchedFromWorker;
+export const markCursorDeliveryJobCliTurnEndedFromWorker =
+  cursorDelivery.markDeliveryJobCliTurnEndedFromWorker;
 export const markCursorDeliveryJobUnconfirmedFromWorker =
   cursorDelivery.markDeliveryJobUnconfirmedFromWorker;
 export const cancelCursorDeliveryJobFromWorker = cursorDelivery.cancelDeliveryJobFromWorker;

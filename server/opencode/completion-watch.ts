@@ -9,6 +9,9 @@ import {
   CompletionWatchStoreError,
   type CompletionWatchStoreService,
   DEFAULT_COMPLETION_WATCH_POLL_MS,
+  DEFAULT_COMPLETION_WATCH_QUIET_MS,
+  EXTERNAL_CLI_JOB_LEASE_MS,
+  isLiveCompletionWatchStatus,
   runCompletionWatchTickEffect,
 } from "@say-to-me/completion-watch/workflow";
 import { broadcastQueueEffect } from "../broadcast.ts";
@@ -49,6 +52,9 @@ export {
   CompletionWatchStoreError,
   type CompletionWatchStoreService,
   DEFAULT_COMPLETION_WATCH_POLL_MS,
+  DEFAULT_COMPLETION_WATCH_QUIET_MS,
+  EXTERNAL_CLI_JOB_LEASE_MS,
+  isLiveCompletionWatchStatus,
   promptReachedTarget,
   runCompletionWatchTickEffect,
   type CompletionWatchEnv,
@@ -182,8 +188,13 @@ export function startCompletionWatch(
 }
 
 export async function runCompletionWatchTick(messageId: number): Promise<void> {
+  const watched = getMessage(messageId);
+  const quietWindowMs =
+    watched && detectSessionBackend(watched.sessionId) === "opencode"
+      ? 0
+      : DEFAULT_COMPLETION_WATCH_QUIET_MS;
   await Effect.runPromise(
-    runCompletionWatchTickEffect(messageId, { pollMs: POLL_MS }).pipe(
+    runCompletionWatchTickEffect(messageId, { pollMs: POLL_MS, quietWindowMs }).pipe(
       Effect.provide(CompletionWatchOpenCodeLive),
       Effect.provide(CompletionWatchStoreLive),
       Effect.provide(CompletionWatchEffectsLive),

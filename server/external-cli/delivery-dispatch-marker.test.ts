@@ -16,6 +16,7 @@ const { drizzleDb } = await import("../db/index.ts");
 const { claudeDeliveryJobs, codexDeliveryJobs, cursorDeliveryJobs, grokDeliveryJobs } =
   await import("../db/drizzle-schema.ts");
 const { getMessage, insertMessageRow, listMessages } = await import("../messages.ts");
+const { getSessionWorkStatus } = await import("./session-work-status.ts");
 const { setSessionCwd } = await import("../sessions.ts");
 const claude = await import("../claude/durable-delivery.ts");
 const cursor = await import("../cursor/durable-delivery.ts");
@@ -77,6 +78,7 @@ function jobRow(table: DeliveryJobsTable, jobId: number) {
       lockedBy: table.lockedBy,
       lastError: table.lastError,
       promptDispatchedAt: table.promptDispatchedAt,
+      cliTurnEndedAt: table.cliTurnEndedAt,
     })
     .from(table)
     .where(eq(table.id, jobId))
@@ -120,12 +122,56 @@ function describeBackend<TJob extends Lease>(backend: BackendSuite<TJob>): void 
       expect(row.status).toBe("failed");
       expect(row.lastError).toBe(backend.unconfirmedMessage);
       expect(row.promptDispatchedAt).not.toBeNull();
+      expect(row.cliTurnEndedAt).not.toBeNull();
+      expect(await getSessionWorkStatus(sessionId)).toBe("idle");
       // Terminal `failed`, but carrying the unconfirmed explanation rather than
       // the generic failure text, so the user knows to check before retrying.
       expect(getMessage(messageId)).toMatchObject({
         opencodeDeliveryStatus: "failed",
         opencodeDeliveryError: backend.unconfirmedMessage,
       });
+    });
+
+    it("goes idle after a dispatched reclaim and stays idle after a later clean turn", async () => {
+      const sessionId = nextSessionId(backend.prefix);
+      const firstId = seedMessage(sessionId, "crashed mid-turn");
+      backend.enqueue(firstId, sessionId);
+      const first = await claimOne("worker-a", sessionId);
+      await backend.markDispatched(first);
+      expect(await getSessionWorkStatus(sessionId)).toBe("pending");
+
+      expireLease(backend.table, first.id);
+      await expect(backend.claim("worker-b", sessionId)).resolves.toBeNull();
+      expect(await getSessionWorkStatus(sessionId)).toBe("idle");
+
+      const secondId = seedMessage(sessionId, "turn two");
+      backend.enqueue(secondId, sessionId);
+      const second = await claimOne("worker-c", sessionId);
+      await backend.markDispatched(second);
+      expect(await getSessionWorkStatus(sessionId)).toBe("pending");
+      await expect(backend.complete(second, "done")).resolves.toBe(true);
+      expect(await getSessionWorkStatus(sessionId)).toBe("idle");
+    });
+
+    it("closes the open CLI turn on fail and retry even without a prior turn-ended write", async () => {
+      const failSession = nextSessionId(backend.prefix);
+      const failMessage = seedMessage(failSession, "fail closes turn");
+      backend.enqueue(failMessage, failSession);
+      const failJob = await claimOne("fail-worker", failSession);
+      await backend.markDispatched(failJob);
+      await expect(backend.fail(failJob, "provider failed")).resolves.toBe(true);
+      expect(jobRow(backend.table, failJob.id).cliTurnEndedAt).not.toBeNull();
+      expect(await getSessionWorkStatus(failSession)).toBe("idle");
+
+      const retrySession = nextSessionId(backend.prefix);
+      const retryMessage = seedMessage(retrySession, "retry closes this attempt");
+      backend.enqueue(retryMessage, retrySession);
+      const retryJob = await claimOne("retry-worker", retrySession);
+      await backend.markDispatched(retryJob);
+      await expect(backend.retry(retryJob, "spawn failed")).resolves.toBe(true);
+      expect(jobRow(backend.table, retryJob.id).cliTurnEndedAt).not.toBeNull();
+      expect(jobRow(backend.table, retryJob.id).status).toBe("retrying");
+      expect(await getSessionWorkStatus(retrySession)).toBe("pending");
     });
 
     it("still reclaims a job that was claimed but never dispatched", async () => {

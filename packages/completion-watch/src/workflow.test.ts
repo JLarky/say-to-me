@@ -1,4 +1,4 @@
-import { Cause, Duration, Effect, Exit, Layer, TestClock, TestContext } from "effect";
+import { Cause, Clock, Duration, Effect, Exit, Layer, TestClock, TestContext } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 import {
   CompletionWatchEffects,
@@ -7,6 +7,8 @@ import {
   CompletionWatchStore,
   CompletionWatchStoreError,
   type CompletionWatchStoreService,
+  DEFAULT_COMPLETION_WATCH_QUIET_MS,
+  EXTERNAL_CLI_JOB_LEASE_MS,
   type WatchedMessage,
   runCompletionWatchTickEffect,
 } from "./workflow.ts";
@@ -368,7 +370,7 @@ describe("completion-watch workflow (in-memory, no DB)", () => {
       (row) => row.sessionId === sourceSessionId && row.text.includes("is now idle"),
     );
     expect(notice).toMatchObject({ opencodeDeliveryStatus: "queued" });
-    expect(enqueued).toEqual([]);
+    expect(enqueued).toEqual([notice!.id]);
   });
 
   it("handles a typed store failure instead of dying the tick", async () => {
@@ -497,5 +499,104 @@ describe("completion-watch workflow (in-memory, no DB)", () => {
     expect(
       [...store.rows.values()].filter((row) => row.text === "Session is now idle."),
     ).toHaveLength(0);
+  });
+
+  it("does not emit a source idle notice during a 5x job-lease turn with no mid-turn output", async () => {
+    const turnMs = 5 * EXTERNAL_CLI_JOB_LEASE_MS;
+    const quietMs = DEFAULT_COMPLETION_WATCH_QUIET_MS;
+    const sourceSessionId = "ses_longTurnOwner";
+    const targetSessionId = "cur_longTurnTarget";
+    const store = inMemoryCompletionStore([
+      baseMessage({
+        id: 50,
+        sessionId: targetSessionId,
+        text: "please investigate",
+        author: "user",
+        opencodeDeliveryStatus: "sent",
+        completionWatchStatus: "watching",
+        completionSourceSessionId: sourceSessionId,
+        completionSourceMessageId: 49,
+        forwardSourceMessageId: 49,
+        forwardTargetSessionId: targetSessionId,
+        forwardTargetMessageId: 50,
+      }),
+      baseMessage({
+        id: 49,
+        sessionId: sourceSessionId,
+        text: "original forward",
+        completionWatchStatus: null,
+      }),
+    ]);
+    const fakeOpenCode = Layer.succeed(CompletionWatchOpenCode, {
+      getStatus: () =>
+        Clock.currentTimeMillis.pipe(
+          Effect.map((now) => (now < turnMs ? ("pending" as const) : ("idle" as const))),
+        ),
+    });
+    const effects = Layer.succeed(CompletionWatchEffects, {
+      broadcastQueue: () => Effect.void,
+      getSessionWorkStatus: () => Effect.succeed("idle"),
+      enqueueSourceCompletionNotice: (input) =>
+        Effect.sync(() => {
+          const row = store.rows.get(input.messageId);
+          if (row) store.rows.set(input.messageId, { ...row, opencodeDeliveryStatus: "sent" });
+        }),
+      stopWatch: () => Effect.void,
+      getActiveBaseUrl: () => Effect.succeed(undefined),
+      getSessionIdleGate: () => Effect.succeed("continue"),
+      completeSessionIdle: () => Effect.void,
+    } satisfies CompletionWatchEffectsService);
+
+    function sourceNotices() {
+      return [...store.rows.values()].filter(
+        (row) => row.sessionId === sourceSessionId && row.text.includes("is now idle."),
+      );
+    }
+
+    const tickAt = (ms: number) =>
+      Effect.gen(function* () {
+        yield* TestClock.setTime(ms);
+        yield* runCompletionWatchTickEffect(50, { quietWindowMs: quietMs });
+      });
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* tickAt(0);
+        expect(store.rows.get(50)).toMatchObject({
+          completionWatchStatus: "watching",
+          completionWatchWorkSeen: 1,
+        });
+        expect(sourceNotices()).toHaveLength(0);
+
+        yield* tickAt(EXTERNAL_CLI_JOB_LEASE_MS);
+        expect(sourceNotices()).toHaveLength(0);
+        expect(store.rows.get(50)?.completionWatchStatus).toBe("watching");
+
+        yield* tickAt(2 * EXTERNAL_CLI_JOB_LEASE_MS);
+        yield* tickAt(3 * EXTERNAL_CLI_JOB_LEASE_MS);
+        yield* tickAt(4 * EXTERNAL_CLI_JOB_LEASE_MS);
+        expect(sourceNotices()).toHaveLength(0);
+        expect(store.rows.get(50)?.completionWatchStatus).toBe("watching");
+
+        // Do not tick at turnMs-1: that would schedule nextCheckAt just after
+        // turnMs and skip the idle observation that starts the quiet window.
+        yield* tickAt(turnMs);
+        expect(sourceNotices()).toHaveLength(0);
+        expect(store.rows.get(50)?.completionWatchStatus).toBe("debouncing");
+
+        yield* tickAt(turnMs + quietMs - 1);
+        expect(sourceNotices()).toHaveLength(0);
+
+        yield* tickAt(turnMs + quietMs);
+      }).pipe(
+        Effect.provide(fakeOpenCode),
+        Effect.provide(store.layer),
+        Effect.provide(effects),
+        Effect.provide(TestContext.TestContext),
+      ),
+    );
+
+    expect(store.rows.get(50)).toMatchObject({ completionWatchStatus: "completed" });
+    expect(sourceNotices()).toHaveLength(1);
   });
 });

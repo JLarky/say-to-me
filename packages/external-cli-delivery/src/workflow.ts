@@ -131,6 +131,13 @@ export type DeliveryQueueService = {
   markDispatched: (
     job: ExternalCliDeliveryJob,
   ) => Effect.Effect<boolean, ExternalCliDeliveryQueueError>;
+  /**
+   * Record that the worker observed the CLI turn end. Not gated on the lease:
+   * process-exit is the signal even if renewal already lost the row.
+   */
+  markCliTurnEnded: (
+    job: ExternalCliDeliveryJob,
+  ) => Effect.Effect<boolean, ExternalCliDeliveryQueueError>;
   complete: (
     job: ExternalCliDeliveryJob,
     outcome: DeliveryOutcome,
@@ -210,6 +217,10 @@ export type ExternalCliDeliveryEnv =
   | MessageStoreService
   | DeliveryEffectsService;
 
+function isLiveCompletionWatchStatus(status: string | null): boolean {
+  return status === "watching" || status === "debouncing";
+}
+
 export function makeExternalCliDeliveryWorkflow(
   tagNs: string,
   { failureMessage = "External CLI delivery failed." }: { failureMessage?: string } = {},
@@ -238,7 +249,7 @@ export function makeExternalCliDeliveryWorkflow(
       }
 
       if (job.kind === "forward_target_message") {
-        if (message.completionWatchStatus === "watching") {
+        if (isLiveCompletionWatchStatus(message.completionWatchStatus)) {
           yield* fx.startForwardCompletionNotificationWatch({
             sourceMessageId:
               message.completionSourceMessageId ?? message.forwardSourceMessageId ?? message.id,
@@ -306,7 +317,7 @@ export function makeExternalCliDeliveryWorkflow(
       }
 
       yield* store.updateOpencodeDelivery(message.id, "pending", null, null);
-      if (message.completionWatchStatus === "watching") {
+      if (isLiveCompletionWatchStatus(message.completionWatchStatus)) {
         yield* store.markCompletionWorkSeen(message.id);
       }
       yield* fx.broadcastQueue(message.sessionId);
@@ -320,6 +331,9 @@ export function makeExternalCliDeliveryWorkflow(
       }
 
       const outcome = yield* Effect.either(prompt.sendPrompt(job, message));
+      // Prompt was handed to the provider: this attempt's turn has settled from
+      // the worker's point of view, including spawn failure (retry stays owed).
+      yield* queue.markCliTurnEnded(job);
 
       if (Either.isRight(outcome)) {
         yield* fx.insertAgentReply(job.externalSessionId, outcome.right);

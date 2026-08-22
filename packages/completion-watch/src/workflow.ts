@@ -1,6 +1,26 @@
 import { Clock, Context, Data, Effect } from "effect";
 
 export const DEFAULT_COMPLETION_WATCH_POLL_MS = 250;
+/** Quiet window after idle before notify. Tens of seconds, not another 30s lease. */
+export const DEFAULT_COMPLETION_WATCH_QUIET_MS = 20_000;
+/**
+ * Matches server/external-cli/durable-delivery.ts `JOB_LEASE_MS`.
+ * Not a turn-end signal — a ~100s CLI turn outlives this.
+ */
+export const EXTERNAL_CLI_JOB_LEASE_MS = 30_000;
+
+/** Live watches, including the quiet-window pause. Restart must still resume these. */
+export const LIVE_COMPLETION_WATCH_STATUSES = ["watching", "debouncing"] as const;
+/** `listActiveCompletionWatches` / disarm: live plus source_failed retries. */
+export const RESUMABLE_COMPLETION_WATCH_STATUSES = [
+  "watching",
+  "debouncing",
+  "source_failed",
+] as const;
+
+export function isLiveCompletionWatchStatus(status: string | null | undefined): boolean {
+  return status === "watching" || status === "debouncing";
+}
 
 export type OpenCodeSessionStatus =
   | "pending"
@@ -333,6 +353,11 @@ function deliverSourceNotification(
     if (status === "pending") {
       if (notification.opencodeDeliveryStatus !== "queued") {
         yield* store.updateOpencodeDelivery(notification.id, "queued", null, null);
+        yield* effects.enqueueSourceCompletionNotice({
+          messageId: notification.id,
+          messageSessionId: sourceSessionId,
+          sessionId: sourceSessionId,
+        });
         yield* effects.broadcastQueue(sourceSessionId);
       }
       return true;
@@ -354,7 +379,10 @@ function deliverSourceNotification(
 
 export function runCompletionWatchTickEffect(
   messageId: number,
-  { pollMs = DEFAULT_COMPLETION_WATCH_POLL_MS }: { pollMs?: number } = {},
+  {
+    pollMs = DEFAULT_COMPLETION_WATCH_POLL_MS,
+    quietWindowMs = 0,
+  }: { pollMs?: number; quietWindowMs?: number } = {},
 ): Effect.Effect<void, never, CompletionWatchEnv> {
   return Effect.gen(function* () {
     const store = yield* CompletionWatchStore;
@@ -382,6 +410,9 @@ export function runCompletionWatchTickEffect(
     const openCode = yield* CompletionWatchOpenCode;
     const status = yield* openCode.getStatus(watched.sessionId, { baseUrl });
     if (isWorking(status)) {
+      if (watched.completionWatchStatus === "debouncing") {
+        yield* store.setCompletionWatchStatus(watched.id, "watching");
+      }
       if (!watched.completionWatchWorkSeen) {
         yield* store.markCompletionWorkSeen(watched.id);
       }
@@ -394,6 +425,11 @@ export function runCompletionWatchTickEffect(
     }
     if (!promptReachedTarget(watched.opencodeDeliveryStatus)) {
       yield* scheduleNextCheck();
+      return;
+    }
+    if (quietWindowMs > 0 && watched.completionWatchStatus !== "debouncing") {
+      const decisionTime = yield* Clock.currentTimeMillis;
+      yield* store.setCompletionWatchStatus(watched.id, "debouncing", decisionTime + quietWindowMs);
       return;
     }
 
