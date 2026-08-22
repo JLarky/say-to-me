@@ -19,7 +19,11 @@ describe("HomePage", () => {
   afterEach(() => {
     if (root) act(() => root!.unmount());
     container?.remove();
-    localStorage.clear();
+    try {
+      globalThis.localStorage?.clear();
+    } catch {
+      // Node 24+/jsdom may leave localStorage unavailable in this runner.
+    }
     vi.useRealTimers();
     container = undefined;
     root = undefined;
@@ -274,5 +278,69 @@ describe("HomePage", () => {
     });
 
     expect(container.textContent).not.toContain("Recent links");
+  });
+
+  it("shows multi-tab realtime capacity guidance near the session list", async () => {
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    const originalFetch = globalThis.fetch;
+    const originalEventSource = globalThis.EventSource;
+
+    globalThis.EventSource = class {
+      constructor(_url: string) {}
+      addEventListener() {}
+      removeEventListener() {}
+      close() {}
+      onmessage = null;
+      onerror = null;
+      onopen = null;
+      readyState = 0;
+      url = "";
+      withCredentials = false;
+      CONNECTING = 0 as const;
+      OPEN = 1 as const;
+      CLOSED = 2 as const;
+      dispatchEvent() {
+        return false;
+      }
+    } as unknown as typeof EventSource;
+
+    globalThis.fetch = ((input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (url.startsWith("/api/sessions")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ sessions: [] }), {
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }
+      if (url.startsWith("/api/notifications")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ notifications: [] }), {
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }
+      return Promise.reject(new Error(`Unexpected fetch ${url}`));
+    }) as typeof fetch;
+
+    try {
+      await act(async () => {
+        root!.render(
+          <MemoryRouter>
+            <HomePage />
+          </MemoryRouter>,
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      const notice = container.querySelector("[data-multi-tab-capacity-notice]");
+      expect(notice?.textContent).toContain("realtime connections are busy");
+      expect(notice?.textContent).toContain("close an unused Say To Me tab");
+    } finally {
+      globalThis.fetch = originalFetch;
+      globalThis.EventSource = originalEventSource;
+    }
   });
 });
