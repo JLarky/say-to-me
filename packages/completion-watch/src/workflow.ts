@@ -168,6 +168,25 @@ function isWorking(status: OpenCodeSessionStatus): boolean {
   return status === "pending";
 }
 
+/**
+ * Whether the relayed prompt was ever handed to the target agent.
+ *
+ * `queued` and no status are the two states that mean it was not: the message
+ * is still waiting for a delivery slot (target busy, or a delivery backing off
+ * between attempts). Notifying the source there reports a relay complete that
+ * the target has not even read yet — and `completionWatchWorkSeen` cannot rule
+ * it out, since an earlier attempt may have set that flag before the message
+ * went back to the queue.
+ *
+ * `failed` deliberately counts as reached: an external CLI marks a dispatched
+ * delivery failed when it could not confirm the outcome, and the agent may well
+ * have done the work, so those watches still resolve on idle rather than
+ * stranding the source.
+ */
+export function promptReachedTarget(deliveryStatus: string | null): boolean {
+  return deliveryStatus != null && deliveryStatus !== "queued";
+}
+
 function targetNoticeText(_targetSessionId: string): string {
   return "Session is now idle.";
 }
@@ -370,6 +389,10 @@ export function runCompletionWatchTickEffect(
       return;
     }
     if (status !== "idle" || !watched.completionWatchWorkSeen) {
+      yield* scheduleNextCheck();
+      return;
+    }
+    if (!promptReachedTarget(watched.opencodeDeliveryStatus)) {
       yield* scheduleNextCheck();
       return;
     }

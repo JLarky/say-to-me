@@ -67,6 +67,15 @@ export type ExternalCliDeliveryJobRow = {
 const RETRYABLE_JOB_STATUSES = ["failed", "cancelled"] as const;
 
 /**
+ * Delivery a session still owes an agent: claimed (`running`), waiting for a
+ * worker (`pending`), or backing off between attempts (`retrying`). Only
+ * `running` means a prompt is in front of the agent right now, but none of the
+ * three mean the session is done with the relay, so completion watches must not
+ * read any of them as idle.
+ */
+const OWED_JOB_STATUSES = ["pending", "retrying", "running"] as const;
+
+/**
  * Why a human retry did or did not resend. `in_flight` and `already_delivered`
  * are refusals: the route turns them into a 409 rather than a silent success,
  * because the caller asked us to send something we deliberately did not send.
@@ -302,6 +311,12 @@ export function createExternalCliDurableDelivery<
     }
     const job = loadLatestJobForMessage(messageId);
     if (job == null || job.promptDispatchedAt == null) return false;
+    // A `running` job is a turn still in flight: the agent posting a progress
+    // message is not the end of it. Completing the job here would drop the
+    // worker's real reply on the lease compare-and-set and make the session read
+    // idle mid-turn, which notifies a relay source before the work is done.
+    // Expired leases are swept to retrying/failed first and confirm from there.
+    if (job.status === "running") return false;
     if (!sessionHasLaterAgentReply(message)) return false;
     markJobConfirmedWithoutReprompt(job);
     afterDelivery(job, message);
@@ -496,11 +511,23 @@ export function createExternalCliDurableDelivery<
     return result;
   }
 
+  /** True while this session has delivery work owed — see `OWED_JOB_STATUSES`. */
+  function hasOwedDeliveryWork(sessionId: string): boolean {
+    const row = drizzleDb
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(config.jobsTable)
+      .where(
+        and(eq(sessionIdColumn, sessionId), inArray(config.jobsTable.status, OWED_JOB_STATUSES)),
+      )
+      .get();
+    return (row?.count ?? 0) > 0;
+  }
+
   function resumePendingDeliveryWorkers(): void {
     const rows = drizzleDb
       .select({ sessionId: sessionIdColumn })
       .from(config.jobsTable)
-      .where(inArray(config.jobsTable.status, ["pending", "retrying", "running"]))
+      .where(inArray(config.jobsTable.status, OWED_JOB_STATUSES))
       .all();
     const sessionIds = new Set(
       rows.flatMap((row) => (typeof row.sessionId === "string" ? [row.sessionId] : [])),
@@ -1057,6 +1084,7 @@ export function createExternalCliDurableDelivery<
   return {
     enqueueDeliveryJob,
     retryDeliveryJob,
+    hasOwedDeliveryWork,
     resumePendingDeliveryWorkers,
     claimDeliveryJobForWorker,
     completeDeliveryJobFromWorker,

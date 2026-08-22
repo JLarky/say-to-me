@@ -161,6 +161,7 @@ describe("completion-watch workflow (in-memory, no DB)", () => {
         id: 10,
         sessionId,
         text: "persist watch delay",
+        opencodeDeliveryStatus: "sent",
         completionWatchNextCheckAt: 1_000,
       }),
     ]);
@@ -192,6 +193,98 @@ describe("completion-watch workflow (in-memory, no DB)", () => {
       completionWatchNextCheckAt: 0,
       completionWatchStatus: "completed",
     });
+    expect(
+      [...store.rows.values()].filter((row) => row.text === "Session is now idle."),
+    ).toHaveLength(1);
+  });
+
+  it.each(["queued", null] as const)(
+    "keeps watching instead of notifying when the target delivery is %s",
+    async (deliveryStatus) => {
+      const store = inMemoryCompletionStore([
+        baseMessage({
+          id: 12,
+          sessionId: "ses_undeliveredTarget",
+          text: "never reached the agent",
+          opencodeDeliveryStatus: deliveryStatus,
+          // Stale from an earlier attempt: on its own it must not imply completion.
+          completionWatchWorkSeen: 1,
+          completionSourceSessionId: "ses_undeliveredOwner",
+          completionSourceMessageId: 3,
+        }),
+      ]);
+      const fakeOpenCode = Layer.succeed(CompletionWatchOpenCode, {
+        getStatus: () => Effect.succeed("idle" as const),
+      });
+      let idleGateCalls = 0;
+      const effects = Layer.succeed(CompletionWatchEffects, {
+        broadcastQueue: () => Effect.void,
+        getSessionWorkStatus: () => Effect.succeed("idle"),
+        enqueueSourceCompletionNotice: () => Effect.void,
+        stopWatch: () => Effect.void,
+        getActiveBaseUrl: () => Effect.succeed(undefined),
+        getSessionIdleGate: () =>
+          Effect.sync(() => {
+            idleGateCalls += 1;
+            return "continue" as const;
+          }),
+        completeSessionIdle: () => Effect.void,
+      } satisfies CompletionWatchEffectsService);
+
+      await Effect.runPromise(
+        runCompletionWatchTickEffect(12).pipe(
+          Effect.provide(fakeOpenCode),
+          Effect.provide(store.layer),
+          Effect.provide(effects),
+          Effect.provide(TestContext.TestContext),
+        ),
+      );
+
+      expect(idleGateCalls).toBe(0);
+      expect(store.rows.get(12)).toMatchObject({
+        completionWatchStatus: "watching",
+        completionWatchNextCheckAt: 250,
+      });
+      expect([...store.rows.values()].filter((row) => row.text.includes("is now idle."))).toEqual(
+        [],
+      );
+    },
+  );
+
+  it("notifies once the same target delivery reaches the agent", async () => {
+    const store = inMemoryCompletionStore([
+      baseMessage({
+        id: 13,
+        sessionId: "ses_deliveredTarget",
+        text: "reached the agent",
+        opencodeDeliveryStatus: "queued",
+        completionWatchWorkSeen: 1,
+      }),
+    ]);
+    const fakeOpenCode = Layer.succeed(CompletionWatchOpenCode, {
+      getStatus: () => Effect.succeed("idle" as const),
+    });
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* runCompletionWatchTickEffect(13);
+        expect(store.rows.get(13)).toMatchObject({ completionWatchStatus: "watching" });
+
+        store.rows.set(13, {
+          ...store.rows.get(13)!,
+          opencodeDeliveryStatus: "sent",
+          completionWatchNextCheckAt: 0,
+        });
+        yield* runCompletionWatchTickEffect(13);
+      }).pipe(
+        Effect.provide(fakeOpenCode),
+        Effect.provide(store.layer),
+        Effect.provide(silentEffects()),
+        Effect.provide(TestContext.TestContext),
+      ),
+    );
+
+    expect(store.rows.get(13)).toMatchObject({ completionWatchStatus: "completed" });
     expect(
       [...store.rows.values()].filter((row) => row.text === "Session is now idle."),
     ).toHaveLength(1);
@@ -229,6 +322,7 @@ describe("completion-watch workflow (in-memory, no DB)", () => {
         id: 20,
         sessionId: targetSessionId,
         text: "please continue",
+        opencodeDeliveryStatus: "sent",
         completionWatchWorkSeen: 1,
         completionSourceSessionId: sourceSessionId,
         completionSourceMessageId: 99,
@@ -363,6 +457,7 @@ describe("completion-watch workflow (in-memory, no DB)", () => {
         id: 41,
         sessionId: "ses_midTickCancel",
         text: "cancel mid tick",
+        opencodeDeliveryStatus: "sent",
         completionWatchStatus: "watching",
         completionWatchWorkSeen: 1,
         completionSourceMessageId: 7,

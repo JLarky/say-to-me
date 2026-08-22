@@ -327,7 +327,10 @@ describe("say API: session_idle routines (phase 2)", () => {
 
       stopAllCompletionWatches();
       resumeCompletionWatches(targetSessionId);
+      // The relay reached the target before the stop; only then may an idle
+      // read stand for "the forwarded work is done".
       markCompletionWorkSeen(forward.targetMessage.id);
+      updateOpencodeDelivery(forward.targetMessage.id, "sent", null, null);
       targetStatus = "idle";
       opencodeStatusCache.clear();
       await runCompletionWatchTick(forward.targetMessage.id);

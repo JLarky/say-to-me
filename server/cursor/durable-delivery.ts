@@ -72,6 +72,7 @@ export type EnqueueCursorDeliveryInput = {
 
 export const enqueueCursorDeliveryJob = cursorDelivery.enqueueDeliveryJob;
 export const retryCursorDeliveryJob = cursorDelivery.retryDeliveryJob;
+export const hasCursorOwedDeliveryWork = cursorDelivery.hasOwedDeliveryWork;
 export const resumeCursorDeliveryWorkers = cursorDelivery.resumePendingDeliveryWorkers;
 
 export type CursorDeliveryQueueService = {
