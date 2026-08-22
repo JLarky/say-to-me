@@ -95,7 +95,11 @@ function subscribeDirect(handlers: NotificationsRealtimeHandlers): () => void {
   };
 
   return () => {
-    events.removeEventListener("snapshot", onSnapshot);
+    // Some test doubles only stub addEventListener/close; real EventSource
+    // always exposes removeEventListener via EventTarget.
+    if (typeof events.removeEventListener === "function") {
+      events.removeEventListener("snapshot", onSnapshot);
+    }
     events.onmessage = null;
     events.onerror = null;
     events.close();

@@ -42,7 +42,9 @@ function subscribeDirect(sessionId: string, handlers: Handlers): () => void {
   events.addEventListener("ping", () => {});
   events.onerror = () => handlers.onError?.();
   return () => {
-    events.removeEventListener("snapshot", onSnapshot);
+    if (typeof events.removeEventListener === "function") {
+      events.removeEventListener("snapshot", onSnapshot);
+    }
     events.onmessage = null;
     events.onerror = null;
     events.close();
