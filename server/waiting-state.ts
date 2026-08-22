@@ -96,12 +96,10 @@ export function getWaitingStateEffect(
         : "";
       return refineWithJinx(sessionId, input, heuristic, cacheKey);
     }),
-    Effect.orElseSucceed(
-      (): WaitingStatePayload => ({
-        state: "unknown",
-        reason: "Could not gather session context.",
-      }),
-    ),
+    Effect.orElseSucceed((): WaitingStatePayload => ({
+      state: "unknown",
+      reason: "Could not gather session context.",
+    })),
   );
   return program;
 }
