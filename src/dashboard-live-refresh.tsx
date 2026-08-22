@@ -12,7 +12,6 @@ import type { ReactNode } from "react";
 import { parseJson, safeResponseJson } from "@say-to-me/runtime-validation";
 import { NotificationsPayload, type AppNotification } from "./types.ts";
 import { subscribeNotificationsRealtime } from "./notifications-realtime.ts";
-import { isSessionListLiveSseEnabled, SESSION_LIST_POLL_MS } from "./session-list-live.ts";
 
 type LiveRefreshContextValue = {
   notifications: AppNotification[];
@@ -114,8 +113,11 @@ export function DashboardLiveRefreshProvider({
       return;
     }
 
-    // Notifications use the shared-worker tracer. Session-list live defaults to
-    // polling so the list/dashboard tab does not hold an EventSource slot.
+    // Signal-only for sessions: snapshot bodies are ignored (we bump refreshToken
+    // and refetch /api/spaces). Omit includeCachedStatus / jarvisOverviewDetails
+    // so list broadcasts stay cheap. Notifications use the shared-worker tracer.
+    const sessionEvents = new EventSource("/api/sessions/events");
+
     function applyNotificationSnapshot(data: string) {
       try {
         const payload = parseJson(NotificationsPayload, data);
@@ -138,22 +140,13 @@ export function DashboardLiveRefreshProvider({
       },
     });
 
-    let sessionEvents: EventSource | null = null;
-    let pollTimer: number | null = null;
-    if (isSessionListLiveSseEnabled()) {
-      // Signal-only: snapshot bodies are ignored (bump refreshToken / refetch spaces).
-      sessionEvents = new EventSource("/api/sessions/events");
-      sessionEvents.addEventListener("snapshot", () => scheduleRefreshBump());
-      sessionEvents.onmessage = () => scheduleRefreshBump();
-      sessionEvents.onerror = () => scheduleRefreshBump();
-    } else {
-      pollTimer = window.setInterval(() => scheduleRefreshBump(), SESSION_LIST_POLL_MS);
-    }
+    sessionEvents.addEventListener("snapshot", () => scheduleRefreshBump());
+    sessionEvents.onmessage = () => scheduleRefreshBump();
+    sessionEvents.onerror = () => scheduleRefreshBump();
 
     return () => {
       stopNotifications();
-      sessionEvents?.close();
-      if (pollTimer !== null) window.clearInterval(pollTimer);
+      sessionEvents.close();
       if (sessionRefreshTimer.current !== null) {
         window.clearTimeout(sessionRefreshTimer.current);
       }
