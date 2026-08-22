@@ -10,6 +10,7 @@ import {
 } from "./types.ts";
 import { safeJsonParse, safeResponseJson } from "@say-to-me/runtime-validation";
 import { sessionListLabel } from "./session-label.ts";
+import { isSessionListLiveSseEnabled, SESSION_LIST_POLL_MS } from "./session-list-live.ts";
 
 const SessionsPayload = type({
   "sessions?": Session.array(),
@@ -49,6 +50,7 @@ export function useSessions({
     if (!live) return;
     let events: EventSource | null = null;
     let refreshTimer: number | null = null;
+    let pollTimer: number | null = null;
 
     function scheduleRefresh() {
       if (refreshTimer !== null) return;
@@ -69,6 +71,16 @@ export function useSessions({
         setError("Live session list update was malformed. Refreshing current state.");
         scheduleRefresh();
       }
+    }
+
+    if (!isSessionListLiveSseEnabled()) {
+      pollTimer = window.setInterval(() => {
+        void refreshSessions();
+      }, SESSION_LIST_POLL_MS);
+      return () => {
+        if (pollTimer !== null) window.clearInterval(pollTimer);
+        if (refreshTimer !== null) window.clearTimeout(refreshTimer);
+      };
     }
 
     const params = new URLSearchParams();
