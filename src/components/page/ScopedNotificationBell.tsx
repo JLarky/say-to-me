@@ -8,6 +8,7 @@ import { NotificationsPayload, type AppNotification } from "../../types.ts";
 import { formatMessageTime } from "../../utils.ts";
 import { Icon } from "./chrome-icons.tsx";
 import { bell } from "./ScopedNotificationBell.stylex.ts";
+import { subscribeNotificationsRealtime } from "../../notifications-realtime.ts";
 
 export type NotificationScope = "space" | "all";
 
@@ -100,11 +101,9 @@ export function ScopedNotificationBell({
       return;
     }
 
-    const events = new EventSource("/api/notifications/events");
-
-    function applySnapshot(event: MessageEvent) {
+    function applySnapshot(data: string) {
       try {
-        const payload = parseJson(NotificationsPayload, event.data);
+        const payload = parseJson(NotificationsPayload, data);
         setLocalNotifications(payload.notifications);
         setLocalLoaded(true);
         setLocalError("");
@@ -113,14 +112,15 @@ export function ScopedNotificationBell({
       }
     }
 
-    events.addEventListener("snapshot", applySnapshot);
-    events.onmessage = applySnapshot;
-    events.onerror = () => {
-      setLocalError("Live notifications disconnected.");
-      void loadNotifications();
-    };
-
-    return () => events.close();
+    return subscribeNotificationsRealtime({
+      onEvent: (_eventType, data) => {
+        applySnapshot(data);
+      },
+      onError: () => {
+        setLocalError("Live notifications disconnected.");
+        void loadNotifications();
+      },
+    });
   }, [ownsLocalStream, localStreamArmed]);
 
   useEffect(() => {

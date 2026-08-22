@@ -326,4 +326,15 @@ export const misc = stylex.create({
   empty: {
     color: "#667085",
   },
+  notice: {
+    marginTop: "0.75rem",
+    marginBottom: "0.75rem",
+    borderRadius: "16px",
+    backgroundColor: "rgba(23, 32, 42, 0.06)",
+    color: "#344054",
+    paddingBlock: "0.75rem",
+    paddingInline: "1rem",
+    fontSize: "0.95rem",
+    lineHeight: 1.45,
+  },
 });
