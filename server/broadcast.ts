@@ -113,7 +113,12 @@ export async function queuePayload(sessionId = "default", { forceRefresh = false
 export { sseSnapshotFrame };
 
 export async function writeQueueSnapshot(client: SseClient, sessionId = "default"): Promise<void> {
-  await client.write(sseSnapshotFrame(await queuePayload(sessionId)));
+  await client.write(
+    sseSnapshotFrame({
+      ...(await queuePayload(sessionId)),
+      targetSessionId: sessionId,
+    }),
+  );
 }
 
 export function sessionsPayload({

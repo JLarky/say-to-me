@@ -11,6 +11,7 @@ import {
 } from "./types.ts";
 import { safeJsonParse, safeResponseJson } from "@say-to-me/runtime-validation";
 import { mergeMessagesWithPending } from "./utils.ts";
+import { subscribeSessionQueueRealtime } from "./session-queue-realtime.ts";
 
 export type LiveStatus = "connecting" | "connected" | "quiet" | "reconnecting";
 
@@ -21,6 +22,7 @@ export const SessionSyncPayloadSchema = type({
   "sessions?": Session.array(),
   "lastNoteFirstLine?": "string | null",
   "externalCliActivity?": ExternalCliActivitySnapshot.or("null"),
+  "targetSessionId?": "string",
 });
 
 export type SessionSyncPayload = typeof SessionSyncPayloadSchema.infer;
@@ -117,14 +119,15 @@ export function useSessionSync({
 
   useEffect(() => {
     if (!sessionId) return;
-    let events: EventSource | null = null;
+    const activeSessionId = sessionId;
     let closed = false;
     let lastSeenAt = Date.now();
     let sseCount = 0;
+    let stopRealtime: (() => void) | null = null;
 
     async function refreshSessionMessages() {
       try {
-        const response = await fetch(`/api/sessions/${sessionId}/messages`);
+        const response = await fetch(`/api/sessions/${activeSessionId}/messages`);
         if (!response.ok) return;
         applyPayload(await safeResponseJson(response, SessionSyncPayloadSchema));
       } catch (err) {
@@ -132,12 +135,13 @@ export function useSessionSync({
       }
     }
 
-    function handleSnapshot(event: MessageEvent) {
+    function handleSnapshotData(data: string) {
       try {
         lastSeenAt = Date.now();
         sseCount += 1;
-        const payload = safeJsonParse(SessionSyncPayloadSchema, event.data);
+        const payload = safeJsonParse(SessionSyncPayloadSchema, data);
         if (!payload) throw new Error("malformed session sync payload");
+        if (payload.targetSessionId && payload.targetSessionId !== activeSessionId) return;
         applyPayload(payload);
         setLiveStatus("connected");
         onError("");
@@ -150,31 +154,25 @@ export function useSessionSync({
     }
 
     function connect() {
-      events?.close();
-      events = new EventSource(`/api/sessions/${sessionId}/events`);
+      stopRealtime?.();
       setLiveStatus("connecting");
-      events.onopen = () => {
-        lastSeenAt = Date.now();
-        setLiveStatus("connected");
-      };
-      events.addEventListener("ping", () => {
-        lastSeenAt = Date.now();
-        setLiveStatus("connected");
+      stopRealtime = subscribeSessionQueueRealtime(activeSessionId, {
+        onEvent: (_eventType, data) => {
+          handleSnapshotData(data);
+        },
+        onError: () => {
+          setLiveStatus("reconnecting");
+          onError("Lost live session updates. Reconnecting and refreshing periodically.");
+          void refreshSessionMessages();
+        },
       });
-      events.addEventListener("snapshot", handleSnapshot);
-      events.onmessage = handleSnapshot;
-      events.onerror = () => {
-        setLiveStatus("reconnecting");
-        onError("Lost live session updates. Reconnecting and refreshing periodically.");
-        void refreshSessionMessages();
-      };
     }
 
     connect();
     const sseTimer = setInterval(() => {
       if (sseCount > 0) {
         console.log(
-          `[sse] ${sessionId}: ${sseCount} events in last 5s (${(sseCount / 5).toFixed(1)}/s)`,
+          `[sse] ${activeSessionId}: ${sseCount} events in last 5s (${(sseCount / 5).toFixed(1)}/s)`,
         );
         sseCount = 0;
       }
@@ -191,7 +189,7 @@ export function useSessionSync({
     }, 5000);
     return () => {
       closed = true;
-      events?.close();
+      stopRealtime?.();
       clearInterval(sseTimer);
     };
   }, [onError, sessionId]);

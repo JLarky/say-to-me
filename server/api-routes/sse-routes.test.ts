@@ -46,6 +46,11 @@ describe("dispatchSseApiRequest", () => {
     ).toBeInstanceOf(Response);
     expect(
       await dispatchSseApiRequest(
+        new Request("http://say.local/api/session-queues/events?ids=vo_voice-a,vo_voice-b"),
+      ),
+    ).toBeInstanceOf(Response);
+    expect(
+      await dispatchSseApiRequest(
         new Request("http://say.local/api/sessions/ses_9a996d7dfb9881WALflfJllWuP/events"),
       ),
     ).toBeInstanceOf(Response);
@@ -72,6 +77,13 @@ describe("dispatchSseApiRequest", () => {
         new Request("http://say.local/api/sessions/ses_9a996d7dfb9881WALflfJllWuP/events"),
       ),
     ).toBeNull();
+  });
+
+  it("returns 400 when multiplex queue SSE has no session ids", async () => {
+    const response = await dispatchSseApiRequest(
+      new Request("http://say.local/api/session-queues/events?ids="),
+    );
+    expect(response?.status).toBe(400);
   });
 
   it("returns 400 for malformed session ids on session SSE routes", async () => {

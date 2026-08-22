@@ -7,6 +7,11 @@ import { controls } from "../styles/controls.stylex.ts";
 import { NotificationsPayload, type AppNotification } from "../types.ts";
 import { parseJson, safeResponseJson } from "@say-to-me/runtime-validation";
 import { formatMessageTime, projectThemeStyle } from "../utils.ts";
+import {
+  formatNotificationsRealtimeHint,
+  subscribeNotificationsRealtime,
+  useNotificationsRealtimeStatus,
+} from "../notifications-realtime.ts";
 
 type Identity = { color: string; icon: string };
 
@@ -61,17 +66,12 @@ export function PageShell({
     return () => document.removeEventListener("pointerdown", closeNotifications);
   }, []);
 
+  const realtimeStatus = useNotificationsRealtimeStatus();
+
   useEffect(() => {
-    if (typeof EventSource !== "function") {
-      void loadNotifications();
-      return;
-    }
-
-    const events = new EventSource("/api/notifications/events");
-
-    function applyNotificationSnapshot(event: MessageEvent) {
+    function applyNotificationSnapshot(data: string) {
       try {
-        const payload = parseJson(NotificationsPayload, event.data);
+        const payload = parseJson(NotificationsPayload, data);
         const newest = payload.notifications[0]?.id ?? null;
         if (
           newest != null &&
@@ -92,14 +92,20 @@ export function PageShell({
       }
     }
 
-    events.addEventListener("snapshot", applyNotificationSnapshot);
-    events.onmessage = applyNotificationSnapshot;
-    events.onerror = () => {
-      setNotificationsError("Live notifications disconnected.");
+    if (typeof EventSource !== "function") {
       void loadNotifications();
-    };
+      return;
+    }
 
-    return () => events.close();
+    return subscribeNotificationsRealtime({
+      onEvent: (_eventType, data) => {
+        applyNotificationSnapshot(data);
+      },
+      onError: () => {
+        setNotificationsError("Live notifications disconnected.");
+        void loadNotifications();
+      },
+    });
   }, [currentSessionId]);
 
   useEffect(() => {
@@ -182,6 +188,9 @@ export function PageShell({
             <p {...stylex.props(textStyles.eyebrow)}>{eyebrow}</p>
           ) : null}
           {heroContent}
+          <p {...stylex.props(textStyles.lede)} data-realtime-notifications-status>
+            {formatNotificationsRealtimeHint(realtimeStatus)}
+          </p>
         </div>
         <div ref={notificationsRef} {...stylex.props(hero.notifications)}>
           <button

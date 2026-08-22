@@ -76,6 +76,35 @@ function sessionListEventsResponse(url: URL): Response {
   );
 }
 
+function multiSessionQueueEventsResponse(url: URL): Response {
+  const rawIds = (url.searchParams.get("ids") || "").split(",");
+  const sessionIds: string[] = [];
+  for (const raw of rawIds) {
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    const sessionId = normalizeSessionId(trimmed);
+    if (sessionId && !sessionIds.includes(sessionId)) sessionIds.push(sessionId);
+    if (sessionIds.length >= 24) break;
+  }
+  if (sessionIds.length === 0) {
+    return Response.json({ error: "At least one session id is required." }, { status: 400 });
+  }
+
+  return createSseWebResponse(
+    (client) => {
+      const stops = sessionIds.map((sessionId, index) =>
+        startQueueSseClient(client, sessionId, {
+          heartbeat: index === 0,
+        }),
+      );
+      return () => {
+        for (const stop of stops) stop();
+      };
+    },
+    { kind: "queue" },
+  );
+}
+
 function notificationEventsResponse(): Response {
   return createSseWebResponse(
     (client) => {
@@ -129,6 +158,7 @@ export async function dispatchSseApiRequest(request: Request): Promise<Response 
   const { pathname } = url;
 
   if (pathname === "/api/sessions/events") return sessionListEventsResponse(url);
+  if (pathname === "/api/session-queues/events") return multiSessionQueueEventsResponse(url);
   if (pathname === "/api/notifications/events") return notificationEventsResponse();
   if (pathname === "/api/events") {
     return createSseWebResponse(
