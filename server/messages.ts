@@ -37,6 +37,7 @@ import { getCachedOpenCodeStatus } from "./opencode/cache.ts";
 import { inspectOpenCodeActivityRuntime } from "./opencode/activity-routes.ts";
 import { listSessions } from "./sessions.ts";
 import { extraMarkdownHtmlField } from "./markdown/extra-markdown-html.ts";
+import { hasExternalCliSessionWork } from "./external-cli/cli-session-busy.ts";
 
 export const messageSelectColumns = {
   id: messagesTable.id,
@@ -193,6 +194,14 @@ function summarizeSessionCard(
       summary: line ? `Needs you: ${line}` : "Needs your answer.",
       summaryUpdatedAt: latest.createdAt,
       waitingState: "needs_answer",
+      ...latestFields,
+    };
+  }
+  if (hasExternalCliSessionWork(session.id)) {
+    return {
+      summary: line ? `Working: ${line}` : "The agent is still working.",
+      summaryUpdatedAt: latest.createdAt,
+      waitingState: "working",
       ...latestFields,
     };
   }

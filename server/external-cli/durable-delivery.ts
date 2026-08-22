@@ -48,6 +48,7 @@ import {
 } from "../messages.ts";
 import { getSession } from "../sessions.ts";
 import {
+  checkIdleNotification,
   startForwardCompletionNotificationWatch,
   startIdleNotificationWatch,
 } from "../notifications.ts";
@@ -102,6 +103,17 @@ export type RetryDeliveryJobResult<TJob> = {
 };
 
 const WORKER_POLL_MS = Number(process.env.SAY_TO_ME_EXTERNAL_CLI_DELIVERY_POLL_MS || 250);
+
+/**
+ * How long a dispatched job's open-turn marker may sit untouched before a
+ * sweeper closes it. Generous by design: real CLI turns renew their lease and
+ * bump `updated_at` throughout, so only abandoned/legacy rows go quiet this
+ * long. Override exists for tests.
+ */
+export function cliTurnStaleMs(): number {
+  const raw = Number(process.env.SAY_TO_ME_CLI_TURN_STALE_MS);
+  return Number.isFinite(raw) && raw >= 0 ? raw : 15 * 60_000;
+}
 /** Lease for in-flight delivery jobs. Not a turn-end signal — a ~100s CLI turn outlives this. */
 export const JOB_LEASE_MS = 30_000;
 const DEFAULT_MAX_ATTEMPTS = 3;
@@ -674,7 +686,39 @@ export function createExternalCliDurableDelivery<
    * provider: re-queueing those would prompt the agent a second time, so they go
    * terminal-unconfirmed instead.
    */
+  /**
+   * Close open-turn markers that nobody will ever close: jobs dispatched
+   * before a server upgrade (pre-`cli_turn_ended_at` rows have no end stamp),
+   * or a worker crash on a terminal job. Without this, one stale row keeps
+   * `hasOpenCliTurn` true forever and the session can never report idle.
+   * Active turns are safe: lease renewals keep bumping `updated_at`, so only
+   * rows quiet for the whole stale bound get closed. Failure mode LATE.
+   */
+  function closeStaleOpenTurns(now: number): void {
+    const staleBefore = now - cliTurnStaleMs();
+    drizzleDb
+      .update(config.jobsTable)
+      .set({
+        cliTurnEndedAt: sql`COALESCE(${config.jobsTable.cliTurnEndedAt}, ${now})`,
+        updatedAt: nowSql(),
+      })
+      .where(
+        and(
+          isNotNull(config.jobsTable.promptDispatchedAt),
+          isNull(config.jobsTable.cliTurnEndedAt),
+          // updatedAt is TEXT CURRENT_TIMESTAMP ("YYYY-MM-DD HH:MM:SS", UTC);
+          // match that exact shape so the comparison stays lexicographic-safe.
+          lte(
+            config.jobsTable.updatedAt,
+            new Date(staleBefore).toISOString().slice(0, 19).replace("T", " "),
+          ),
+        ),
+      )
+      .run();
+  }
+
   function reclaimExpiredLeases(staleBefore: number): void {
+    closeStaleOpenTurns(Date.now());
     const expired = drizzleDb
       .select({
         id: config.jobsTable.id,
@@ -807,6 +851,7 @@ export function createExternalCliDurableDelivery<
           })
           .where(leaseHeld(job))
           .run();
+        if (result.changes > 0) startIdleWatchForDispatchedJob(job);
         return result.changes > 0;
       }),
     markCliTurnEnded: (job) =>
@@ -928,6 +973,28 @@ export function createExternalCliDurableDelivery<
     return Effect.runPromise(effect.pipe(Effect.provide(DeliveryQueueLive)));
   }
 
+  /**
+   * Direct typed prompts (and unwatched forwards) must watch from dispatch, not
+   * only from a successful complete CAS. A finished CLI turn with a lost lease
+   * still records turn-end; without this watch there is no idle notice.
+   */
+  function startIdleWatchForDispatchedJob(job: ExternalCliDeliveryJob): void {
+    const message = getMessage(job.messageId);
+    if (!message) return;
+    if (
+      job.kind === "forward_target_message" &&
+      isLiveCompletionWatchStatus(message.completionWatchStatus)
+    ) {
+      return;
+    }
+    if (job.kind !== "direct_user_message" && job.kind !== "forward_target_message") return;
+    startIdleNotificationWatch({
+      sessionId: job.externalSessionId,
+      triggerMessageId: message.id,
+      seenWorking: true,
+    });
+  }
+
   function afterDelivery(job: TJob, message: DbMessage): void {
     if (message.forwardRole === "target" && message.forwardSourceMessageId != null) {
       updateForwardTarget(message.forwardSourceMessageId, message.id, "sent");
@@ -938,32 +1005,21 @@ export function createExternalCliDurableDelivery<
     const externalSessionId = getSessionId(job);
     if (message.sessionId !== externalSessionId) broadcastQueue(externalSessionId);
 
-    if (job.kind === "forward_target_message") {
-      if (isLiveCompletionWatchStatus(message.completionWatchStatus)) {
-        startForwardCompletionNotificationWatch({
-          sourceMessageId:
-            message.completionSourceMessageId ?? message.forwardSourceMessageId ?? message.id,
-          sourceSessionId:
-            message.completionSourceSessionId ??
-            message.forwardSourceSessionId ??
-            message.sessionId,
-          targetMessageId: message.id,
-          targetSessionId: externalSessionId,
-          seenWorking: true,
-        });
-      } else {
-        startIdleNotificationWatch({
-          sessionId: externalSessionId,
-          triggerMessageId: message.id,
-          seenWorking: true,
-        });
-      }
-    } else if (job.kind === "direct_user_message") {
-      startIdleNotificationWatch({
-        sessionId: externalSessionId,
-        triggerMessageId: message.id,
+    if (
+      job.kind === "forward_target_message" &&
+      isLiveCompletionWatchStatus(message.completionWatchStatus)
+    ) {
+      startForwardCompletionNotificationWatch({
+        sourceMessageId:
+          message.completionSourceMessageId ?? message.forwardSourceMessageId ?? message.id,
+        sourceSessionId:
+          message.completionSourceSessionId ?? message.forwardSourceSessionId ?? message.sessionId,
+        targetMessageId: message.id,
+        targetSessionId: externalSessionId,
         seenWorking: true,
       });
+    } else {
+      startIdleWatchForDispatchedJob(toWorkflowJob(job));
     }
   }
 
@@ -1027,9 +1083,13 @@ export function createExternalCliDurableDelivery<
         return yield* queue.complete(toWorkflowJob(job), "sent");
       }),
     );
-    if (!completed || !message) return completed;
+    if (!completed || !message) {
+      if (!completed) await checkIdleNotification(job.messageId);
+      return completed;
+    }
     if (reply != null) insertExternalAgentReply(getSessionId(job), reply);
     afterDelivery(job, message);
+    await checkIdleNotification(job.messageId);
     return true;
   }
 

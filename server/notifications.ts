@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray } from "drizzle-orm";
 import { Context, Effect, Layer } from "effect";
 import { broadcastQueue } from "./broadcast.ts";
 import { drizzleDb } from "./db/index.ts";
@@ -6,8 +6,11 @@ import {
   claudeDeliveryJobs,
   codexDeliveryJobs,
   cursorDeliveryJobs,
+  grokDeliveryJobs,
+  messages as messagesTable,
   opencodeDeliveryJobs,
 } from "./db/drizzle-schema.ts";
+import { TARGET_IDLE_NOTICE_TEXT } from "@say-to-me/session-utils/idle-notices";
 import {
   enqueueSourceCompletionNotice,
   getSessionWorkStatus,
@@ -51,6 +54,29 @@ function externalCliQuietWindowMs(): number {
 
 function quietWindowMsForSession(sessionId: string): number {
   return detectSessionBackend(sessionId) === "opencode" ? 0 : externalCliQuietWindowMs();
+}
+
+/**
+ * True when the delivery worker already posted the spoken idle ding for this
+ * trigger (complete-with-reply inserts it directly). The in-memory watch then
+ * stands down instead of posting a second "Session is now idle.".
+ */
+function hasAgentIdleNoticeSince(sessionId: string, afterMessageId: number): boolean {
+  const row = drizzleDb
+    .select({ id: messagesTable.id })
+    .from(messagesTable)
+    .where(
+      and(
+        eq(messagesTable.sessionId, sessionId),
+        eq(messagesTable.author, "agent"),
+        eq(messagesTable.text, TARGET_IDLE_NOTICE_TEXT),
+        gt(messagesTable.id, afterMessageId),
+      ),
+    )
+    .orderBy(desc(messagesTable.id))
+    .limit(1)
+    .get();
+  return row != null;
 }
 
 type ForwardCompletionWatch = {
@@ -189,6 +215,12 @@ export async function checkIdleNotification(triggerMessageId: number): Promise<b
     return false;
   }
   if (status !== "idle" || !watch.seenWorking) return false;
+  // The worker's own reply ding counts as the idle notice; never post twice.
+  if (hasAgentIdleNoticeSince(watch.sessionId, watch.triggerMessageId)) {
+    stopIdleNotificationWatch(triggerMessageId);
+    broadcastQueue(watch.sessionId);
+    return true;
+  }
   const quietMs = quietWindowMsForSession(watch.sessionId);
   if (quietMs > 0) {
     const now = Date.now();
@@ -445,6 +477,10 @@ function resumableWatchForDeliveryJob(
     if (getMessageByClientId(job.sessionId, "user", `target-idle-${message.id}`)) {
       return null;
     }
+    // A worker-posted reply ding already served as this message's idle notice.
+    if (hasAgentIdleNoticeSince(job.sessionId, message.id)) {
+      return null;
+    }
     return {
       kind: "idle",
       sessionId: job.sessionId,
@@ -467,6 +503,9 @@ function resumableWatchForDeliveryJob(
 
   const sourceMessageId = message.forwardSourceMessageId ?? message.id;
   if (getMessageByClientId(job.sessionId, "user", `target-idle-${sourceMessageId}`)) {
+    return null;
+  }
+  if (hasAgentIdleNoticeSince(job.sessionId, message.id)) {
     return null;
   }
   return {
@@ -539,8 +578,20 @@ function listResumableNotificationWatches(): ResumableNotificationWatch[] {
     )
     .orderBy(asc(codexDeliveryJobs.id))
     .all();
+  const grokJobs = drizzleDb
+    .select({
+      kind: grokDeliveryJobs.kind,
+      messageId: grokDeliveryJobs.messageId,
+      sessionId: grokDeliveryJobs.grokSessionId,
+    })
+    .from(grokDeliveryJobs)
+    .where(
+      and(eq(grokDeliveryJobs.status, "succeeded"), inArray(grokDeliveryJobs.kind, [...jobKinds])),
+    )
+    .orderBy(asc(grokDeliveryJobs.id))
+    .all();
 
-  for (const job of [...opencodeJobs, ...claudeJobs, ...cursorJobs, ...codexJobs]) {
+  for (const job of [...opencodeJobs, ...claudeJobs, ...cursorJobs, ...codexJobs, ...grokJobs]) {
     if (job.kind !== "direct_user_message" && job.kind !== "forward_target_message") continue;
     const watch = resumableWatchForDeliveryJob({
       kind: job.kind,

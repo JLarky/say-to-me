@@ -1,3 +1,5 @@
+import { isIdleNoticeText } from "./idle-notices.ts";
+
 export type WaitingStateClassifyStatus = string | null;
 
 export type WaitingStateClassifyMessage = {
@@ -10,6 +12,12 @@ export type WaitingStateClassifyInput = {
   opencodeStatus: WaitingStateClassifyStatus;
   /** Finer-grained activity status from the activity preview (e.g. "awaiting-input"). */
   activityStatus?: string | null;
+  /**
+   * External CLI backends have no OpenCode status. While a delivery job is owed
+   * or a CLI turn is open, the session is working even if the latest row is an
+   * agent progress message.
+   */
+  sessionWorkPending?: boolean;
   messages: WaitingStateClassifyMessage[];
 };
 
@@ -34,6 +42,14 @@ export function classifyWaitingState(
     return { state: "unknown", reason: "No messages in this session yet." };
   }
 
+  if (isIdleNoticeText(latest.text) && !input.sessionWorkPending) {
+    return {
+      state: "can_continue",
+      reason: "The agent reported back and is now idle.",
+      action: "Send please continue",
+    };
+  }
+
   if (latest.author === "user") {
     const delivery = latest.opencodeDeliveryStatus;
     const userMsgStatus = (input.opencodeStatus ?? "").toLowerCase();
@@ -51,6 +67,10 @@ export function classifyWaitingState(
       return { state: "working", reason: "The agent is working on the last message." };
     }
     return { state: "working", reason: "The agent is working on the last message." };
+  }
+
+  if (input.sessionWorkPending) {
+    return { state: "working", reason: "The agent is still working." };
   }
 
   if (input.opencodeStatus === "pending") {
