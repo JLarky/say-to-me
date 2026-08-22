@@ -10,6 +10,12 @@ Stopping is stronger than changing the UI to idle or marking the user message
 failed. The provider command for that delivery must stop, and output from the
 cancelled turn must never be added to the session afterward.
 
+When Stop is **visible** is a busy-versus-idle question. Use
+[Busy vs Idle (User Experience)](./busy-vs-idle.md): if the session is
+working, people must see it as busy and be able to Stop from the Say To Me
+UI. This spec describes what Stop does once you can click it. It does not
+invent a second definition of busy.
+
 ## User-visible behavior
 
 - Show `Stop <Provider>` while the provider is busy.
