@@ -1,5 +1,7 @@
 import { spawn } from "node:child_process";
 import { Effect } from "effect";
+import { type as arktype } from "arktype";
+import { isIdleNoticeText } from "@say-to-me/session-utils/idle-notices";
 import { buildAgentVoicePrompt } from "../agent-voice-prompt.ts";
 import type { DbCursorDeliveryJob, DbMessage } from "../db/schemas.ts";
 import {
@@ -8,6 +10,7 @@ import {
   type ProviderPromptError,
 } from "@say-to-me/external-cli-delivery/workflow";
 import { createExternalCliRestDeliveryWorker } from "../external-cli/rest-delivery-worker.ts";
+import { postInternalJson } from "../external-cli/internal-http.ts";
 import { workerBin, workerVersion } from "../external-cli/worker-env.ts";
 import { safeJsonParse, UnknownJson } from "@say-to-me/runtime-validation";
 
@@ -19,14 +22,33 @@ type ClaimedJob = {
 
 type ClaimedJobWithMessage = ClaimedJob & { message: DbMessage };
 
+const OkResponse = arktype({ ok: "boolean" });
+
 function deliveryPrompt(job: DbCursorDeliveryJob, message: DbMessage): string {
   return buildAgentVoicePrompt(job.cursorSessionId, message.text);
 }
 
+function isJsonRecord(value: unknown): value is Record<string, unknown> {
+  return value != null && typeof value === "object" && !Array.isArray(value);
+}
+
+/** Assistant text from a `stream-json` event. Tool-only assistant events are ignored. */
+export function cursorAssistantText(event: unknown): string | null {
+  if (!isJsonRecord(event) || event.type !== "assistant") return null;
+  const message = event.message;
+  if (!isJsonRecord(message) || !Array.isArray(message.content)) return null;
+  const text = message.content
+    .filter(isJsonRecord)
+    .filter((part) => part.type === "text" && typeof part.text === "string")
+    .map((part) => part.text)
+    .join("");
+  return text.trim() ? text : null;
+}
+
 export function parseCursorJsonOutput(stdout: string): { isError?: boolean; text?: string } {
-  // `--output-format json` has shipped as a bare result object, an array of
-  // events, or NDJSON depending on version. Accept all three; dropping the
-  // reply here loses the agent's final text and skips the idle notice.
+  // `--output-format stream-json` is NDJSON. Older `--output-format json` shipped
+  // as a bare result object or an array. Accept all three; dropping the reply
+  // here loses the agent's final text and skips the idle notice.
   const trimmed = stdout.trim();
   if (!trimmed) return {};
   const candidates: unknown[] = [];
@@ -44,11 +66,9 @@ export function parseCursorJsonOutput(stdout: string): { isError?: boolean; text
   for (const entry of candidates) {
     const records = Array.isArray(entry) ? entry : [entry];
     for (const record of records.reverse()) {
-      if (!record || typeof record !== "object") continue;
-      const typed = record as Record<string, unknown>;
-      if (typed.type !== "result") continue;
-      isError = typed.is_error === true;
-      if (typeof typed.result === "string" && typed.result.trim()) text = typed.result;
+      if (!isJsonRecord(record) || record.type !== "result") continue;
+      isError = record.is_error === true;
+      if (typeof record.result === "string" && record.result.trim()) text = record.result;
       break;
     }
     if (text != null || isError) break;
@@ -57,9 +77,21 @@ export function parseCursorJsonOutput(stdout: string): { isError?: boolean; text
 }
 
 export function cursorCommandArgs(resumeId: string, prompt: string, model?: string): string[] {
-  const args = ["-p", "--output-format", "json", "--resume", resumeId, "--force", prompt];
+  const args = ["-p", "--output-format", "stream-json", "--resume", resumeId, "--force", prompt];
   if (model) args.push("--model", model);
   return args;
+}
+
+function postCursorStreamProgress(sessionId: string, text: string): void {
+  const trimmed = text.trim();
+  if (!trimmed || isIdleNoticeText(trimmed)) return;
+  void postInternalJson(
+    "/api/internal/cursor-delivery/progress",
+    { cursorSessionId: sessionId, text: trimmed },
+    OkResponse,
+  ).catch((error: unknown) => {
+    console.error("[cursor-delivery-worker] stream progress post failed:", error);
+  });
 }
 
 function runCursorPrompt(
@@ -68,7 +100,9 @@ function runCursorPrompt(
 ): Effect.Effect<string | null, ProviderPromptError> {
   return Effect.async<string | null, ProviderPromptError>((resume) => {
     const child = spawn(
-      workerBin("CURSOR", "agent"),
+      // `agent` is ambiguous — Grok installs one under that name too, and PATH
+      // order decides the winner. `cursor-agent` only ever means Cursor.
+      workerBin("CURSOR", "cursor-agent"),
       cursorCommandArgs(
         claimed.cursor.resumeId,
         deliveryPrompt(job, claimed.message),
@@ -80,6 +114,8 @@ function runCursorPrompt(
     let settled = false;
     let stdout = "";
     let stderr = "";
+    let pending = "";
+    let lastAssistant = "";
 
     const settle = (effect: Effect.Effect<string | null, ProviderPromptError>) => {
       if (settled) return;
@@ -87,8 +123,25 @@ function runCursorPrompt(
       resume(effect);
     };
 
+    const consumeLine = (line: string) => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+      const event = safeJsonParse(UnknownJson, trimmed);
+      if (event === null) return;
+      // Stream `result` is not idle. Idle is `child.close` only.
+      const text = cursorAssistantText(event);
+      if (text == null || text === lastAssistant) return;
+      lastAssistant = text;
+      postCursorStreamProgress(job.cursorSessionId, text);
+    };
+
     child.stdout.on("data", (chunk: Buffer) => {
-      stdout += chunk.toString("utf8");
+      const piece = chunk.toString("utf8");
+      stdout += piece;
+      pending += piece;
+      const lines = pending.split(/\r?\n/);
+      pending = lines.pop() ?? "";
+      for (const line of lines) consumeLine(line);
     });
     child.stderr.on("data", (chunk: Buffer) => {
       stderr += chunk.toString("utf8");
@@ -106,6 +159,7 @@ function runCursorPrompt(
       ),
     );
     child.on("close", (code) => {
+      if (pending.trim()) consumeLine(pending);
       if (code !== 0) {
         settle(
           Effect.fail(
@@ -125,7 +179,7 @@ function runCursorPrompt(
         );
         return;
       }
-      const reply = parsed.text?.trim() ?? "";
+      const reply = (parsed.text ?? lastAssistant).trim();
       settle(Effect.succeed(reply || null));
     });
   });

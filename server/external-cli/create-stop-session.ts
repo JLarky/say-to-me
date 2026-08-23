@@ -57,6 +57,7 @@ export function createStopSession(config: CreateStopSessionConfig) {
         lockedAt: null,
         lockedBy: null,
         lastError: "Stopped by user.",
+        cliTurnEndedAt: sql`COALESCE(${deliveryJobsTable.cliTurnEndedAt}, ${Date.now()})`,
         updatedAt: nowSql(),
       })
       .where(

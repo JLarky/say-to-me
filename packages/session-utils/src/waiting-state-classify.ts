@@ -42,7 +42,11 @@ export function classifyWaitingState(
     return { state: "unknown", reason: "No messages in this session yet." };
   }
 
-  if (isIdleNoticeText(latest.text) && !input.sessionWorkPending) {
+  if (input.sessionWorkPending) {
+    return { state: "working", reason: "The agent is still working." };
+  }
+
+  if (isIdleNoticeText(latest.text)) {
     return {
       state: "can_continue",
       reason: "The agent reported back and is now idle.",
@@ -67,10 +71,6 @@ export function classifyWaitingState(
       return { state: "working", reason: "The agent is working on the last message." };
     }
     return { state: "working", reason: "The agent is working on the last message." };
-  }
-
-  if (input.sessionWorkPending) {
-    return { state: "working", reason: "The agent is still working." };
   }
 
   if (input.opencodeStatus === "pending") {

@@ -11,8 +11,13 @@ process.env.SAY_TO_ME_CURSOR_WORKER_AUTOSTART = "0";
 const { getMessage, insertMessageRow, updateOpencodeDelivery } = await import("../messages.ts");
 const { setSessionCwd } = await import("../sessions.ts");
 const { drizzleSqlite } = await import("../db/index.ts");
-const { CursorDeliveryQueueLive, CursorDeliveryQueue, enqueueCursorDeliveryJob } =
-  await import("./durable-delivery.ts");
+const {
+  CursorDeliveryQueueLive,
+  CursorDeliveryQueue,
+  enqueueCursorDeliveryJob,
+  claimCursorDeliveryJobForWorker,
+  markCursorDeliveryJobDispatchedFromWorker,
+} = await import("./durable-delivery.ts");
 const { stopCursorSession } = await import("./stop.ts");
 const { isCursorSessionBusy } = await import("./delivery.ts");
 
@@ -59,6 +64,35 @@ describe("stopCursorSession", () => {
       opencodeDeliveryStatus: "failed",
       opencodeDeliveryError: "Stopped by user.",
     });
+  });
+
+  it("clears busy after stop even when the prompt was already dispatched", async () => {
+    const sessionId = "cur_e6ca1259-5b7f-4de3-afd5-a877811435cb";
+    setSessionCwd(sessionId, "/tmp/cursor-stop-dispatched-test");
+    const message = insertMessageRow({
+      sessionId,
+      text: "stop after dispatch",
+      extraMarkdown: null,
+      author: "user",
+      status: "received",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+    enqueueCursorDeliveryJob({
+      messageId: message.id,
+      messageSessionId: sessionId,
+      cursorSessionId: sessionId,
+      kind: "direct_user_message",
+    });
+
+    const claimed = await claimCursorDeliveryJobForWorker("stop-dispatched-worker", sessionId);
+    expect(claimed).not.toBeNull();
+    expect(await markCursorDeliveryJobDispatchedFromWorker(claimed!.job)).toBe(true);
+
+    expect(isCursorSessionBusy(sessionId)).toBe(true);
+    expect(await stopCursorSession(sessionId)).toEqual({ ok: true });
+    expect(isCursorSessionBusy(sessionId)).toBe(false);
   });
 
   it("does not mark a message failed when delivery already completed", async () => {
