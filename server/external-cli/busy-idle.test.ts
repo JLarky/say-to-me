@@ -19,6 +19,8 @@ const { getMessage, getMessageByClientId, insertMessageRow, listMessages } =
 const { getSessionWorkStatus } = await import("./session-work-status.ts");
 const { getWaitingState } = await import("../waiting-state.ts");
 const { setSessionCwd } = await import("../sessions.ts");
+const { isCursorSessionBusy } = await import("../cursor/delivery.ts");
+const { createMessageResult } = await import("../create-message.ts");
 const {
   checkIdleNotification,
   checkForwardCompletionNotification,
@@ -125,6 +127,7 @@ describe("busy during the turn, one idle notice after process end", () => {
     expect(await getSessionWorkStatus(sessionId)).toBe("pending");
     const waiting = await getWaitingState(sessionId);
     expect(waiting.state).toBe("working");
+    expect(isCursorSessionBusy(sessionId)).toBe(true);
 
     const observerId = nextSessionId();
     insertMessageRow({
@@ -178,9 +181,9 @@ describe("busy during the turn, one idle notice after process end", () => {
 
     startIdleNotificationWatch({ sessionId, triggerMessageId: message.id, seenWorking: true });
     expect(await completeCursorDeliveryJobFromWorker(job, null)).toBe(true);
-
-    process.env.SAY_TO_ME_COMPLETION_WATCH_QUIET_MS = "0";
-    expect(await checkIdleNotification(message.id)).toBe(true);
+    // Cursor idle is process-end: complete() already posted with no extra quiet
+    // window, so a later poll must not create a second notice.
+    expect(await checkIdleNotification(message.id)).toBe(false);
 
     const notices = listMessages(sessionId).filter((m) => m.text.includes("is now idle."));
     expect(notices).toHaveLength(1);
@@ -240,7 +243,6 @@ describe("busy during the turn, one idle notice after process end", () => {
     // The queue already drained (job terminal), so the worker's completion
     // CAS cannot hold — record the observed turn end directly instead.
     expect(await markCursorDeliveryJobCliTurnEndedFromWorker(job)).toBe(true);
-    process.env.SAY_TO_ME_COMPLETION_WATCH_QUIET_MS = "0";
     expect(await checkForwardCompletionNotification(sourceMessage.id)).toBe(true);
     expect(await checkForwardCompletionNotification(sourceMessage.id)).toBe(false);
 
@@ -277,5 +279,77 @@ describe("busy during the turn, one idle notice after process end", () => {
       .get();
     expect(row?.endedAt).not.toBeNull();
     expect(await getSessionWorkStatus(sessionId)).toBe("idle");
+  });
+
+  it("keeps busy and Stop on a starting ping or question while the child turn is open", async () => {
+    const sessionId = nextSessionId();
+    const message = dispatchTypedMessage(sessionId, "run the rounds");
+    const job = await dispatchTurn(sessionId, message.id);
+    drainQueueKeepTurnOpen(job.id);
+
+    insertMessageRow({
+      sessionId,
+      text: "STARTING",
+      extraMarkdown: null,
+      author: "agent",
+      status: "received",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+    insertMessageRow({
+      sessionId,
+      text: "Should I keep going?",
+      extraMarkdown: null,
+      author: "agent",
+      status: "received",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+
+    expect(isCursorSessionBusy(sessionId)).toBe(true);
+    expect(await getSessionWorkStatus(sessionId)).toBe("pending");
+    expect((await getWaitingState(sessionId)).state).toBe("working");
+    const observerId = nextSessionId();
+    insertMessageRow({
+      sessionId: observerId,
+      text: "watching",
+      extraMarkdown: null,
+      author: "user",
+      status: "received",
+      links: null,
+      sessionRefs: JSON.stringify([{ id: sessionId }]),
+      clientMessageId: null,
+    });
+    expect(listMessages(observerId)[0]?.sessions[0]).toMatchObject({
+      id: sessionId,
+      waitingState: "working",
+    });
+  });
+
+  it("goes idle on process end; a later agent HTTP post does not reopen the turn", async () => {
+    const sessionId = nextSessionId();
+    const message = dispatchTypedMessage(sessionId, "sleep then nohup");
+    const job = await dispatchTurn(sessionId, message.id);
+
+    expect(await completeCursorDeliveryJobFromWorker(job, "STARTING")).toBe(true);
+    expect(isCursorSessionBusy(sessionId)).toBe(false);
+    expect(await getSessionWorkStatus(sessionId)).toBe("idle");
+    expect((await getWaitingState(sessionId)).state).toBe("can_continue");
+
+    const posted = await createMessageResult({
+      sessionId,
+      text: "DONE_AFTER_SLEEP",
+      author: "agent",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+      extractInlineImages: false,
+    });
+    expect(posted.status).toBe(201);
+    expect(isCursorSessionBusy(sessionId)).toBe(false);
+    expect(await getSessionWorkStatus(sessionId)).toBe("idle");
+    expect((await getWaitingState(sessionId)).state).toBe("can_continue");
   });
 });

@@ -152,6 +152,16 @@ function summarizeSessionCard(
     latestMessageAuthor: latest.author,
     latestMessageText: line || latest.text,
   };
+  // CLI busy/idle is the open child turn, not last-message text (a "starting"
+  // ping, a question, or an idle notice must not hide a still-running process).
+  if (hasExternalCliSessionWork(session.id)) {
+    return {
+      summary: line ? `Working: ${line}` : "The agent is still working.",
+      summaryUpdatedAt: latest.createdAt,
+      waitingState: "working",
+      ...latestFields,
+    };
+  }
   if (isIdleSystemMessage(latest.text)) {
     return {
       summary: line ? `Idle notification: ${line}` : "Idle after the last notification.",
@@ -194,14 +204,6 @@ function summarizeSessionCard(
       summary: line ? `Needs you: ${line}` : "Needs your answer.",
       summaryUpdatedAt: latest.createdAt,
       waitingState: "needs_answer",
-      ...latestFields,
-    };
-  }
-  if (hasExternalCliSessionWork(session.id)) {
-    return {
-      summary: line ? `Working: ${line}` : "The agent is still working.",
-      summaryUpdatedAt: latest.createdAt,
-      waitingState: "working",
       ...latestFields,
     };
   }

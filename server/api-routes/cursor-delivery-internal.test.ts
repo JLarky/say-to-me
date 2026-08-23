@@ -6,6 +6,9 @@ process.env.SAY_TO_ME_INTERNAL_API_TOKEN = "test-internal-api-token";
 const { teardownApi } = await import("../api.harness.ts");
 const { workerVersion } = await import("../external-cli/worker-env.ts");
 const { dispatchCursorDeliveryInternalRequest } = await import("./cursor-delivery-internal.ts");
+const { listMessages } = await import("../messages.ts");
+const { getSessionWorkStatus } = await import("../external-cli/session-work-status.ts");
+const { isCursorSessionBusy } = await import("../cursor/delivery.ts");
 
 const base = "http://127.0.0.1/api/internal/cursor-delivery";
 
@@ -55,5 +58,35 @@ describe("Cursor delivery internal API auth", () => {
     await expect(response?.json()).resolves.toMatchObject({
       error: `Stale Cursor delivery worker. Expected ${workerVersion("CURSOR")}.`,
     });
+  });
+
+  it("posts stream progress without ending the turn or posting idle", async () => {
+    const sessionId = "cur_e6ca1259-5b7f-4de3-afd5-a877811435cb";
+    const response = await post(
+      "/progress",
+      { cursorSessionId: sessionId, text: "STARTING" },
+      "test-internal-api-token",
+    );
+    expect(response?.status).toBe(200);
+    await expect(response?.json()).resolves.toMatchObject({ ok: true });
+    expect(listMessages(sessionId).at(-1)).toMatchObject({
+      author: "agent",
+      text: "STARTING",
+      status: "received",
+    });
+    expect(isCursorSessionBusy(sessionId)).toBe(false);
+    expect(await getSessionWorkStatus(sessionId)).toBe("idle");
+  });
+
+  it("does not treat an idle-notice progress payload as a spoken idle ding", async () => {
+    const sessionId = "cur_e6ca1259-5b7f-4de3-afd5-a877811435cb";
+    const before = listMessages(sessionId).length;
+    const response = await post(
+      "/progress",
+      { cursorSessionId: sessionId, text: "Session is now idle." },
+      "test-internal-api-token",
+    );
+    expect(response?.status).toBe(200);
+    expect(listMessages(sessionId)).toHaveLength(before);
   });
 });

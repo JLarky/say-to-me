@@ -1,7 +1,5 @@
 import path from "node:path";
-import { and, eq, sql } from "drizzle-orm";
-import { cursorDeliveryJobs } from "../db/drizzle-schema.ts";
-import { drizzleDb } from "../db/index.ts";
+import { hasExternalCliSessionWork } from "../external-cli/cli-session-busy.ts";
 import { externalCliStateRoot } from "../external-cli/state-root.ts";
 import { cursorSessionUuid } from "../session-id.ts";
 import { getSession } from "../sessions.ts";
@@ -34,16 +32,7 @@ export function resolveCursorModel(_cwd: string, sessionId: string): string | nu
   return session?.opencodeSelectedModel || null;
 }
 
+/** Busy + Stop while `cursor-agent -p` is still the open CLI turn, not leftover shells. */
 export function isCursorSessionBusy(sessionId: string): boolean {
-  const row = drizzleDb
-    .select({ count: sql<number>`COUNT(*)` })
-    .from(cursorDeliveryJobs)
-    .where(
-      and(
-        eq(cursorDeliveryJobs.cursorSessionId, sessionId),
-        eq(cursorDeliveryJobs.status, "running"),
-      ),
-    )
-    .get();
-  return (row?.count ?? 0) > 0;
+  return hasExternalCliSessionWork(sessionId);
 }

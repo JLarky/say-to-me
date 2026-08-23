@@ -88,6 +88,23 @@ describe("classifyWaitingState", () => {
     ).toMatchObject({ state: "working" });
   });
 
+  it("does not guess idle from a starting ping or question while CLI work is pending", () => {
+    expect(
+      classifyWaitingState({
+        opencodeStatus: null,
+        sessionWorkPending: true,
+        messages: [user("do the rounds"), agent("STARTING")],
+      }),
+    ).toMatchObject({ state: "working" });
+    expect(
+      classifyWaitingState({
+        opencodeStatus: null,
+        sessionWorkPending: true,
+        messages: [user("do the rounds"), agent("Should I keep going?")],
+      }),
+    ).toMatchObject({ state: "working" });
+  });
+
   it("returns can_continue after an idle notice once CLI work is done", () => {
     expect(
       classifyWaitingState({

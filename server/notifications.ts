@@ -53,7 +53,10 @@ function externalCliQuietWindowMs(): number {
 }
 
 function quietWindowMsForSession(sessionId: string): number {
-  return detectSessionBackend(sessionId) === "opencode" ? 0 : externalCliQuietWindowMs();
+  const backend = detectSessionBackend(sessionId);
+  // Cursor idle is `cursor-agent -p` process-end, not a second clock after close.
+  if (backend === "opencode" || backend === "cursor") return 0;
+  return externalCliQuietWindowMs();
 }
 
 /**

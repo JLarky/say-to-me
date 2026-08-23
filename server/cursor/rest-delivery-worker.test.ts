@@ -11,7 +11,7 @@ const { closeTestServer, createApiMiddleware, listen, teardownApi } =
 const { getMessage, insertMessageRow } = await import("../messages.ts");
 const { setSessionCwd } = await import("../sessions.ts");
 const { enqueueCursorDeliveryJob } = await import("./durable-delivery.ts");
-const { cursorCommandArgs, parseCursorJsonOutput, runCursorRestDeliveryOnce } =
+const { cursorAssistantText, cursorCommandArgs, parseCursorJsonOutput, runCursorRestDeliveryOnce } =
   await import("./rest-delivery-worker.ts");
 
 describe("Cursor REST delivery worker", () => {
@@ -94,7 +94,7 @@ describe("Cursor REST delivery worker", () => {
     expect(cursorCommandArgs("1234", "1+1?")).toEqual([
       "-p",
       "--output-format",
-      "json",
+      "stream-json",
       "--resume",
       "1234",
       "--force",
@@ -112,5 +112,32 @@ describe("Cursor REST delivery worker", () => {
         }),
       ),
     ).toEqual({ isError: false, text: "2 + 2 = **4**" });
+  });
+
+  it("reads assistant text from stream-json without treating result as done", () => {
+    expect(
+      cursorAssistantText({
+        type: "assistant",
+        message: { content: [{ type: "text", text: "STARTING" }] },
+      }),
+    ).toBe("STARTING");
+    expect(
+      cursorAssistantText({
+        type: "result",
+        is_error: false,
+        result: "done text is not idle",
+      }),
+    ).toBeNull();
+    expect(
+      parseCursorJsonOutput(
+        [
+          JSON.stringify({
+            type: "assistant",
+            message: { content: [{ type: "text", text: "STARTING" }] },
+          }),
+          JSON.stringify({ type: "result", is_error: false, result: "pirate ahoy" }),
+        ].join("\n"),
+      ),
+    ).toEqual({ isError: false, text: "pirate ahoy" });
   });
 });
