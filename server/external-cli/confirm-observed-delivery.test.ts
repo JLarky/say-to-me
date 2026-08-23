@@ -198,4 +198,127 @@ describe("confirm delivery from observed agent work", () => {
     expect(confirmCursorDeliveriesForSessionFromObservedWork(sessionId)).toBe(1);
     expect(getMessage(user.id)?.opencodeDeliveryStatus).toBe("sent");
   });
+
+  it("does not confirm a running job from a later agent reply", async () => {
+    const sessionId = "cur_00000000-0000-4000-8000-000000000005";
+    const user = seedUser(sessionId, "still running");
+    enqueueCursorDeliveryJob({
+      messageId: user.id,
+      messageSessionId: sessionId,
+      cursorSessionId: sessionId,
+      kind: "direct_user_message",
+    });
+    const claimed = await claimCursorDeliveryJobForWorker("worker-running", sessionId);
+    expect(claimed).not.toBeNull();
+    await markCursorDeliveryJobDispatchedFromWorker(claimed!.job);
+    insertMessageRow({
+      sessionId,
+      text: "progress",
+      extraMarkdown: null,
+      author: "agent",
+      status: "queued",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+    expect(confirmCursorDeliveryFromObservedWork(user.id)).toBe(false);
+    expect(getMessage(user.id)?.opencodeDeliveryStatus).toBe("pending");
+  });
+
+  it("does not confirm a failed job from an unrelated later agent message", async () => {
+    const sessionId = "cur_00000000-0000-4000-8000-000000000006";
+    const first = seedUser(sessionId, "first prompt failed");
+    enqueueCursorDeliveryJob({
+      messageId: first.id,
+      messageSessionId: sessionId,
+      cursorSessionId: sessionId,
+      kind: "direct_user_message",
+    });
+    const claimed = await claimCursorDeliveryJobForWorker("worker-unrelated", sessionId);
+    await markCursorDeliveryJobDispatchedFromWorker(claimed!.job);
+    await markCursorDeliveryJobUnconfirmedFromWorker(claimed!.job, UNCONFIRMED);
+    expect(getMessage(first.id)?.opencodeDeliveryStatus).toBe("failed");
+
+    const second = seedUser(sessionId, "second prompt");
+    insertMessageRow({
+      sessionId,
+      text: "answer for the second prompt",
+      extraMarkdown: null,
+      author: "agent",
+      status: "queued",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+
+    expect(confirmCursorDeliveryFromObservedWork(first.id)).toBe(false);
+    expect(getMessage(first.id)?.opencodeDeliveryStatus).toBe("failed");
+    expect(getMessage(second.id)?.opencodeDeliveryStatus).toBeNull();
+  });
+
+  it("does not confirm a failed job from a later idle notice or ui_only watch row", async () => {
+    const sessionId = "cur_00000000-0000-4000-8000-000000000007";
+    const user = seedUser(sessionId, "failed then watch ding");
+    enqueueCursorDeliveryJob({
+      messageId: user.id,
+      messageSessionId: sessionId,
+      cursorSessionId: sessionId,
+      kind: "direct_user_message",
+    });
+    const claimed = await claimCursorDeliveryJobForWorker("worker-idle-notice", sessionId);
+    await markCursorDeliveryJobDispatchedFromWorker(claimed!.job);
+    await markCursorDeliveryJobUnconfirmedFromWorker(claimed!.job, UNCONFIRMED);
+
+    insertMessageRow({
+      sessionId,
+      text: "Session is now idle.",
+      extraMarkdown: null,
+      author: "agent",
+      status: "received",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+    const watchRow = insertMessageRow({
+      sessionId,
+      text: "watch marker",
+      extraMarkdown: null,
+      author: "agent",
+      status: "received",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+    updateOpencodeDelivery(watchRow.id, "ui_only", null, null);
+
+    expect(confirmCursorDeliveryFromObservedWork(user.id)).toBe(false);
+    expect(getMessage(user.id)?.opencodeDeliveryStatus).toBe("failed");
+  });
+
+  it("confirms a failed job when a later agent reply is linked to this prompt", async () => {
+    const sessionId = "cur_00000000-0000-4000-8000-000000000008";
+    const user = seedUser(sessionId, "linked reply");
+    enqueueCursorDeliveryJob({
+      messageId: user.id,
+      messageSessionId: sessionId,
+      cursorSessionId: sessionId,
+      kind: "direct_user_message",
+    });
+    const claimed = await claimCursorDeliveryJobForWorker("worker-linked", sessionId);
+    await markCursorDeliveryJobDispatchedFromWorker(claimed!.job);
+    await markCursorDeliveryJobUnconfirmedFromWorker(claimed!.job, UNCONFIRMED);
+    insertMessageRow({
+      sessionId,
+      text: "answer to this prompt",
+      extraMarkdown: null,
+      author: "agent",
+      status: "queued",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+      parentId: user.id,
+    });
+    expect(confirmCursorDeliveryFromObservedWork(user.id)).toBe(true);
+    expect(getMessage(user.id)?.opencodeDeliveryStatus).toBe("sent");
+  });
 });

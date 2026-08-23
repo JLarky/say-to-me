@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { drizzleDb } from "../db/index.ts";
 import {
   claudeDeliveryJobs,
@@ -76,4 +76,29 @@ function isBusy(table: CliJobsTable, sessionColumn: CliSessionColumn, sessionId:
     )
     .get();
   return (openTurn?.count ?? 0) > 0;
+}
+
+/**
+ * Latest CLI delivery job's dispatch marker for this message.
+ * `undefined` — no CLI job (OpenCode / unknown).
+ * `null` — job exists but the prompt never reached the CLI.
+ * `number` — `cursor-agent -p` (or sibling) was spawned.
+ */
+export function getExternalCliPromptDispatchedAt(messageId: number): number | null | undefined {
+  for (const table of [
+    cursorDeliveryJobs,
+    claudeDeliveryJobs,
+    codexDeliveryJobs,
+    grokDeliveryJobs,
+  ]) {
+    const row = drizzleDb
+      .select({ promptDispatchedAt: table.promptDispatchedAt })
+      .from(table)
+      .where(eq(table.messageId, messageId))
+      .orderBy(desc(table.id))
+      .limit(1)
+      .get();
+    if (row) return row.promptDispatchedAt;
+  }
+  return undefined;
 }

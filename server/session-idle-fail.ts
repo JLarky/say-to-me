@@ -31,7 +31,6 @@ export function failSessionIdleForWatchedMessage(messageId: number): void {
   const routine =
     findActiveSessionIdleRoutineBySourceMessageId(sourceMessageId) ??
     findSessionIdleRoutineBySourceMessageId(sourceMessageId);
-  if (!routine) return;
 
   const noticeText = "Your relay could not be delivered.";
   const notification = insertForwardMessageRow({
@@ -55,14 +54,16 @@ export function failSessionIdleForWatchedMessage(messageId: number): void {
     sessionId: sourceSessionId,
   });
 
-  completeSessionIdleRoutine({
-    routineId: routine.id,
-    messageId: notification.id,
-    targetSessionId: message.sessionId,
-    targetMessageId: message.id,
-    sourceMessageId,
-    reason: "failed",
-  });
+  if (routine) {
+    completeSessionIdleRoutine({
+      routineId: routine.id,
+      messageId: notification.id,
+      targetSessionId: message.sessionId,
+      targetMessageId: message.id,
+      sourceMessageId,
+      reason: "failed",
+    });
+  }
 
   setCompletionWatchStatus(message.id, "completed");
   stopCompletionWatch(message.id);
