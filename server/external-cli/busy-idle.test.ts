@@ -102,7 +102,6 @@ describe("busy during the turn, one idle notice after process end", () => {
   beforeEach(() => {
     clearForwardCompletionNotificationWatches();
     drizzleDb.delete(cursorDeliveryJobs).run();
-    delete process.env.SAY_TO_ME_COMPLETION_WATCH_QUIET_MS;
   });
 
   it("typed direct message: busy at 1x and 5x lease with a drained queue (card + work status)", async () => {
