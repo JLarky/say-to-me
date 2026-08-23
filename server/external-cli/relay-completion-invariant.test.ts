@@ -6,7 +6,6 @@ import { afterAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
 const testDbDir = mkdtempSync(path.join(tmpdir(), "say-to-me-test-relay-invariant-"));
 process.env.SAY_TO_ME_DB = path.join(testDbDir, "queue.sqlite");
-process.env.SAY_TO_ME_COMPLETION_WATCH_QUIET_MS = "0";
 process.env.SAY_TO_ME_CURSOR_WORKER_AUTOSTART = "0";
 process.env.SAY_TO_ME_CLAUDE_WORKER_AUTOSTART = "0";
 process.env.SAY_TO_ME_CODEX_WORKER_AUTOSTART = "0";
@@ -245,7 +244,7 @@ describe("relay completion invariant", () => {
     expect(getMessage(targetMessage.id)?.opencodeDeliveryStatus).toBeNull();
   });
 
-  it("still lists a mid-quiet-window watch so a restart can resume it", () => {
+  it("still lists a leftover debouncing watch so a restart can resume it", () => {
     const targetSessionId = nextSessionId("cur_");
     const sourceSessionId = nextSessionId("cur_");
     const { sourceMessage, targetMessage } = relayToTarget(sourceSessionId, targetSessionId);

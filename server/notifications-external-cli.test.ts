@@ -7,7 +7,6 @@ import { Effect, Layer } from "effect";
 
 const testDbDir = mkdtempSync(path.join(tmpdir(), "say-to-me-notify-external-cli-test-"));
 process.env.SAY_TO_ME_DB = path.join(testDbDir, "queue.sqlite");
-process.env.SAY_TO_ME_COMPLETION_WATCH_QUIET_MS = "0";
 process.env.SAY_TO_ME_CLAUDE_WORKER_AUTOSTART = "0";
 
 const { claudeDeliveryJobs } = await import("./db/drizzle-schema.ts");

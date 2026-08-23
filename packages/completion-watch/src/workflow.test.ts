@@ -7,7 +7,6 @@ import {
   CompletionWatchStore,
   CompletionWatchStoreError,
   type CompletionWatchStoreService,
-  DEFAULT_COMPLETION_WATCH_QUIET_MS,
   EXTERNAL_CLI_JOB_LEASE_MS,
   type WatchedMessage,
   runCompletionWatchTickEffect,
@@ -332,7 +331,7 @@ describe("completion-watch workflow (in-memory, no DB)", () => {
     });
 
     await Effect.runPromise(
-      runCompletionWatchTickEffect(15, { quietWindowMs: 0 }).pipe(
+      runCompletionWatchTickEffect(15).pipe(
         Effect.provide(fakeOpenCode),
         Effect.provide(store.layer),
         Effect.provide(silentEffects()),
@@ -597,7 +596,6 @@ describe("completion-watch workflow (in-memory, no DB)", () => {
 
   it("does not emit a source idle notice during a 5x job-lease turn with no mid-turn output", async () => {
     const turnMs = 5 * EXTERNAL_CLI_JOB_LEASE_MS;
-    const quietMs = DEFAULT_COMPLETION_WATCH_QUIET_MS;
     const sourceSessionId = "ses_longTurnOwner";
     const targetSessionId = "cur_longTurnTarget";
     const store = inMemoryCompletionStore([
@@ -650,7 +648,7 @@ describe("completion-watch workflow (in-memory, no DB)", () => {
     const tickAt = (ms: number) =>
       Effect.gen(function* () {
         yield* TestClock.setTime(ms);
-        yield* runCompletionWatchTickEffect(50, { quietWindowMs: quietMs });
+        yield* runCompletionWatchTickEffect(50);
       });
 
     await Effect.runPromise(
@@ -673,15 +671,8 @@ describe("completion-watch workflow (in-memory, no DB)", () => {
         expect(store.rows.get(50)?.completionWatchStatus).toBe("watching");
 
         // Do not tick at turnMs-1: that would schedule nextCheckAt just after
-        // turnMs and skip the idle observation that starts the quiet window.
+        // turnMs and skip the idle observation.
         yield* tickAt(turnMs);
-        expect(sourceNotices()).toHaveLength(0);
-        expect(store.rows.get(50)?.completionWatchStatus).toBe("debouncing");
-
-        yield* tickAt(turnMs + quietMs - 1);
-        expect(sourceNotices()).toHaveLength(0);
-
-        yield* tickAt(turnMs + quietMs);
       }).pipe(
         Effect.provide(fakeOpenCode),
         Effect.provide(store.layer),
@@ -692,5 +683,39 @@ describe("completion-watch workflow (in-memory, no DB)", () => {
 
     expect(store.rows.get(50)).toMatchObject({ completionWatchStatus: "completed" });
     expect(sourceNotices()).toHaveLength(1);
+  });
+
+  it("completes a leftover debouncing row on idle instead of waiting", async () => {
+    const store = inMemoryCompletionStore([
+      baseMessage({
+        id: 51,
+        sessionId: "cur_legacyDebounceTarget",
+        text: "please investigate",
+        opencodeDeliveryStatus: "sent",
+        completionWatchStatus: "debouncing",
+        completionWatchWorkSeen: 1,
+        completionWatchNextCheckAt: 20_000,
+      }),
+    ]);
+    const fakeOpenCode = Layer.succeed(CompletionWatchOpenCode, {
+      getStatus: () => Effect.succeed("idle" as const),
+    });
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(20_000);
+        yield* runCompletionWatchTickEffect(51);
+      }).pipe(
+        Effect.provide(fakeOpenCode),
+        Effect.provide(store.layer),
+        Effect.provide(silentEffects()),
+        Effect.provide(TestContext.TestContext),
+      ),
+    );
+
+    expect(store.rows.get(51)?.completionWatchStatus).toBe("completed");
+    expect(
+      [...store.rows.values()].filter((row) => row.text === "Session is now idle."),
+    ).toHaveLength(1);
   });
 });
