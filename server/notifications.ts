@@ -27,6 +27,7 @@ import {
   updateOpencodeDelivery,
 } from "./messages.ts";
 import { promptReachedTarget, stopCompletionWatch } from "./opencode/completion-watch.ts";
+import { getExternalCliPromptDispatchedAt } from "./external-cli/cli-session-busy.ts";
 import {
   DEFAULT_COMPLETION_WATCH_QUIET_MS,
   isLiveCompletionWatchStatus,
@@ -347,9 +348,21 @@ export async function checkForwardCompletionNotification(
   }
 
   if (status !== "idle" || !watch.seenWorking) return false;
+  const targetMessage = getMessage(watch.targetMessageId);
+  const promptDispatchedAt = getExternalCliPromptDispatchedAt(watch.targetMessageId);
+  if (
+    promptDispatchedAt === null &&
+    (targetMessage?.opencodeDeliveryStatus === "failed" ||
+      targetMessage?.opencodeDeliveryStatus === "cli_timed_out")
+  ) {
+    const { failSessionIdleForWatchedMessage } = await import("./session-idle-fail.ts");
+    failSessionIdleForWatchedMessage(watch.targetMessageId);
+    stopForwardCompletionNotificationWatch(sourceMessageId);
+    return true;
+  }
   // Same invariant as the completion-watch tick: an idle read only means the
   // relay finished if the prompt actually reached the target in the first place.
-  if (!promptReachedTarget(getMessage(watch.targetMessageId)?.opencodeDeliveryStatus ?? null)) {
+  if (!promptReachedTarget(targetMessage?.opencodeDeliveryStatus ?? null, promptDispatchedAt)) {
     return false;
   }
   const quietMs = quietWindowMsForSession(watch.targetSessionId);

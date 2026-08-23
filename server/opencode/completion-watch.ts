@@ -33,6 +33,7 @@ import {
   enqueueSourceCompletionNotice,
   getSessionWorkStatus,
 } from "../external-cli/session-work-status.ts";
+import { getExternalCliPromptDispatchedAt } from "../external-cli/cli-session-busy.ts";
 import { detectSessionBackend } from "../session-id.ts";
 import { getOpenCodeStatus } from "./client.ts";
 import { openCodeBaseUrl } from "./http.ts";
@@ -111,6 +112,7 @@ export const CompletionWatchStoreLive = Layer.succeed(CompletionWatchStore, {
   setCompletionWatchStatus: (id, status, nextCheckAt) =>
     tryWatchStore(() => setCompletionWatchStatus(id, status, nextCheckAt)),
   markCompletionWorkSeen: (id) => tryWatchStore(() => markCompletionWorkSeen(id)),
+  getPromptDispatchedAt: (id) => tryWatchStore(() => getExternalCliPromptDispatchedAt(id)),
 } satisfies CompletionWatchStoreService);
 
 export function stopCompletionWatch(messageId: number): void {

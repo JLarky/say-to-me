@@ -141,6 +141,15 @@ export type CompletionWatchStoreService = {
     nextCheckAt?: number,
   ) => Effect.Effect<void, CompletionWatchStoreError>;
   markCompletionWorkSeen: (id: number) => Effect.Effect<void, CompletionWatchStoreError>;
+  /**
+   * CLI dispatch marker for this watched message.
+   * `undefined` — no CLI job (OpenCode).
+   * `null` — a CLI job exists but never spawned.
+   * `number` — the prompt was handed to the CLI.
+   */
+  getPromptDispatchedAt: (
+    messageId: number,
+  ) => Effect.Effect<number | null | undefined, CompletionWatchStoreError>;
 };
 
 export const CompletionWatchStore = Context.GenericTag<CompletionWatchStoreService>(
@@ -198,13 +207,31 @@ function isWorking(status: OpenCodeSessionStatus): boolean {
  * it out, since an earlier attempt may have set that flag before the message
  * went back to the queue.
  *
- * `failed` deliberately counts as reached: an external CLI marks a dispatched
- * delivery failed when it could not confirm the outcome, and the agent may well
- * have done the work, so those watches still resolve on idle rather than
- * stranding the source.
+ * Prefer `promptDispatchedAt != null` when a CLI job exists. A never-dispatched
+ * `failed` row did not reach the CLI, so it must not idle the source.
+ *
+ * When dispatch is unknown (OpenCode, no CLI job), `failed` still counts as
+ * reached: an external CLI marks a *dispatched* delivery failed when it could
+ * not confirm the outcome, and the agent may well have done the work. That
+ * tradeoff is now scoped to dispatched-but-unconfirmed failures.
  */
-export function promptReachedTarget(deliveryStatus: string | null): boolean {
-  return deliveryStatus != null && deliveryStatus !== "queued";
+export function promptReachedTarget(
+  deliveryStatus: string | null,
+  promptDispatchedAt?: number | null,
+): boolean {
+  if (deliveryStatus == null || deliveryStatus === "queued") return false;
+  if (promptDispatchedAt === null) return false;
+  return true;
+}
+
+function isNeverDispatchedFailure(
+  deliveryStatus: string | null,
+  promptDispatchedAt: number | null | undefined,
+): boolean {
+  return (
+    promptDispatchedAt === null &&
+    (deliveryStatus === "failed" || deliveryStatus === "cli_timed_out")
+  );
 }
 
 function targetNoticeText(_targetSessionId: string): string {
@@ -219,6 +246,56 @@ function sourceCompletionEntry(watched: WatchedMessage): string {
   const targetMessage = watched.forwardTargetMessageId ?? watched.id;
   const prompt = systemTextFragment(watched.text);
   return prompt ? `target ${targetMessage}: ${prompt}` : `target ${targetMessage}`;
+}
+
+function sourceFailureNoticeText(): string {
+  return "Your relay could not be delivered.";
+}
+
+function notifyNeverDispatchedFailure(
+  store: CompletionWatchStoreService,
+  effects: CompletionWatchEffectsService,
+  watched: WatchedMessage,
+): Effect.Effect<void, CompletionWatchStoreError | CompletionWatchEffectsError> {
+  return Effect.gen(function* () {
+    const sourceSessionId = watched.completionSourceSessionId;
+    const sourceMessageId = watched.completionSourceMessageId ?? watched.forwardSourceMessageId;
+    let notificationId = watched.id;
+    if (sourceSessionId && sourceMessageId != null) {
+      const notification = yield* store.insertForwardMessageRow({
+        sessionId: sourceSessionId,
+        text: sourceFailureNoticeText(),
+        author: "user",
+        status: "received",
+        sessionRefs: JSON.stringify([{ id: watched.sessionId }]),
+        clientMessageId: `session-idle-failed-${sourceMessageId}`,
+        forwardRole: "source",
+        forwardSourceSessionId: sourceSessionId,
+        forwardSourceMessageId: sourceMessageId,
+        forwardTargetSessionId: watched.sessionId,
+        forwardTargetMessageId: watched.forwardTargetMessageId ?? watched.id,
+        forwardStatus: "completed",
+      });
+      notificationId = notification.id;
+      yield* store.updateOpencodeDelivery(notification.id, "queued", null, null);
+      yield* effects.enqueueSourceCompletionNotice({
+        messageId: notification.id,
+        messageSessionId: sourceSessionId,
+        sessionId: sourceSessionId,
+      });
+      yield* effects.broadcastQueue(sourceSessionId);
+    }
+    yield* store.setCompletionWatchStatus(watched.id, "completed");
+    yield* effects.completeSessionIdle({
+      sourceMessageId,
+      notificationMessageId: notificationId,
+      targetSessionId: watched.sessionId,
+      targetMessageId: watched.id,
+      reason: "failed",
+    });
+    yield* effects.stopWatch(watched.id);
+    yield* effects.broadcastQueue(watched.sessionId);
+  });
 }
 
 function sourceNoticeText(
@@ -419,11 +496,16 @@ export function runCompletionWatchTickEffect(
       yield* scheduleNextCheck();
       return;
     }
+    const promptDispatchedAt = yield* store.getPromptDispatchedAt(watched.id);
+    if (isNeverDispatchedFailure(watched.opencodeDeliveryStatus, promptDispatchedAt)) {
+      yield* notifyNeverDispatchedFailure(store, effects, watched);
+      return;
+    }
     if (status !== "idle" || !watched.completionWatchWorkSeen) {
       yield* scheduleNextCheck();
       return;
     }
-    if (!promptReachedTarget(watched.opencodeDeliveryStatus)) {
+    if (!promptReachedTarget(watched.opencodeDeliveryStatus, promptDispatchedAt)) {
       yield* scheduleNextCheck();
       return;
     }

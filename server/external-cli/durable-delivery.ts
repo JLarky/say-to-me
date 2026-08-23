@@ -7,6 +7,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  lt,
   lte,
   sql,
   type SQL,
@@ -53,6 +54,7 @@ import {
   startIdleNotificationWatch,
 } from "../notifications.ts";
 import { echoReplyDelayMs, workerMode, type ExternalCliWorkerEnvPrefix } from "./worker-env.ts";
+import { isIdleNoticeText } from "@say-to-me/session-utils/idle-notices";
 import { isLiveCompletionWatchStatus } from "@say-to-me/completion-watch/workflow";
 
 export type { ExternalCliDeliveryJobKind } from "@say-to-me/external-cli-delivery/workflow";
@@ -286,9 +288,25 @@ export function createExternalCliDurableDelivery<
     return job[config.sessionIdField];
   }
 
-  function sessionHasLaterAgentReply(message: DbMessage): boolean {
-    const later = drizzleDb
-      .select({ id: messagesTable.id })
+  function sqliteUtcFromUnixMs(ms: number): string {
+    return new Date(ms).toISOString().slice(0, 19).replace("T", " ");
+  }
+
+  /**
+   * True when this delivery, not some later turn in the same session, produced
+   * an agent reply. A higher message id is not proof: leftover HTTP, an idle
+   * watch row, or the next prompt's answer must not mark a failed job sent.
+   */
+  function sessionHasLaterAgentReply(message: DbMessage, promptDispatchedAt: number): boolean {
+    const dispatchedAt = sqliteUtcFromUnixMs(promptDispatchedAt);
+    const laterAgents = drizzleDb
+      .select({
+        id: messagesTable.id,
+        text: messagesTable.text,
+        parentId: messagesTable.parentId,
+        createdAt: messagesTable.createdAt,
+        opencodeDeliveryStatus: messagesTable.opencodeDeliveryStatus,
+      })
       .from(messagesTable)
       .where(
         and(
@@ -297,9 +315,31 @@ export function createExternalCliDurableDelivery<
           gt(messagesTable.id, message.id),
         ),
       )
-      .limit(1)
-      .get();
-    return later != null;
+      .orderBy(asc(messagesTable.id))
+      .all();
+
+    for (const row of laterAgents) {
+      if (row.opencodeDeliveryStatus === "ui_only") continue;
+      if (isIdleNoticeText(row.text)) continue;
+      if (row.parentId === message.id) return true;
+      if (row.createdAt < dispatchedAt) continue;
+      const interveningUser = drizzleDb
+        .select({ id: messagesTable.id })
+        .from(messagesTable)
+        .where(
+          and(
+            eq(messagesTable.sessionId, message.sessionId),
+            eq(messagesTable.author, "user"),
+            gt(messagesTable.id, message.id),
+            lt(messagesTable.id, row.id),
+          ),
+        )
+        .limit(1)
+        .get();
+      if (interveningUser) continue;
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -348,7 +388,7 @@ export function createExternalCliDurableDelivery<
     // idle mid-turn, which notifies a relay source before the work is done.
     // Expired leases are swept to retrying/failed first and confirm from there.
     if (job.status === "running") return false;
-    if (!sessionHasLaterAgentReply(message)) return false;
+    if (!sessionHasLaterAgentReply(message, job.promptDispatchedAt)) return false;
     markJobConfirmedWithoutReprompt(job);
     afterDelivery(job, message);
     return true;
@@ -1027,7 +1067,13 @@ export function createExternalCliDurableDelivery<
     const job = loadLatestJobForMessage(message.id);
     // Dispatched + later agent reply means the prompt landed; confirm instead of
     // leaving a false-failed delivery that skips completion watches.
-    if (job?.promptDispatchedAt != null && sessionHasLaterAgentReply(message)) {
+    // Running jobs must not confirm here either — expired leases sweep to
+    // failed/retrying first (PRs 32 and 34).
+    if (
+      job?.promptDispatchedAt != null &&
+      job.status !== "running" &&
+      sessionHasLaterAgentReply(message, job.promptDispatchedAt)
+    ) {
       markJobConfirmedWithoutReprompt(job);
       afterDelivery(job, message);
       return;
@@ -1038,6 +1084,14 @@ export function createExternalCliDurableDelivery<
       updateForwardTarget(message.forwardSourceMessageId, message.id, "failed");
     }
     broadcastQueue(message.sessionId);
+    if (
+      isLiveCompletionWatchStatus(message.completionWatchStatus) &&
+      (job == null || job.promptDispatchedAt == null)
+    ) {
+      void import("../session-idle-fail.ts").then((mod) => {
+        mod.failSessionIdleForWatchedMessage(message.id);
+      });
+    }
   }
 
   function claimDeliveryJobForWorker(

@@ -47,8 +47,10 @@ function baseMessage(
 function inMemoryCompletionStore(seed: WatchedMessage[]): {
   layer: Layer.Layer<CompletionWatchStoreService>;
   rows: Map<number, WatchedMessage>;
+  dispatchAt: Map<number, number | null>;
 } {
   const rows = new Map<number, WatchedMessage>(seed.map((row) => [row.id, { ...row }]));
+  const dispatchAt = new Map<number, number | null>();
   let seq = Math.max(0, ...seed.map((row) => row.id)) + 1;
   const patch = (id: number, fields: Partial<WatchedMessage>) => {
     const current = rows.get(id);
@@ -138,8 +140,9 @@ function inMemoryCompletionStore(seed: WatchedMessage[]): {
       Effect.sync(() => {
         patch(id, { completionWatchWorkSeen: 1 });
       }),
+    getPromptDispatchedAt: (id) => Effect.succeed(dispatchAt.get(id)),
   };
-  return { layer: Layer.succeed(CompletionWatchStore, service), rows };
+  return { layer: Layer.succeed(CompletionWatchStore, service), rows, dispatchAt };
 }
 
 function silentEffects(): Layer.Layer<CompletionWatchEffectsService> {
@@ -252,6 +255,96 @@ describe("completion-watch workflow (in-memory, no DB)", () => {
       );
     },
   );
+
+  it("posts a failure notice when a CLI delivery failed without ever dispatching", async () => {
+    const sourceSessionId = "ses_neverDispatchOwner";
+    const store = inMemoryCompletionStore([
+      baseMessage({
+        id: 14,
+        sessionId: "cur_neverDispatchTarget",
+        text: "please investigate",
+        opencodeDeliveryStatus: "failed",
+        completionWatchWorkSeen: 0,
+        completionSourceSessionId: sourceSessionId,
+        completionSourceMessageId: 4,
+        forwardSourceMessageId: 4,
+      }),
+      baseMessage({
+        id: 4,
+        sessionId: sourceSessionId,
+        text: "original forward",
+        completionWatchStatus: null,
+      }),
+    ]);
+    store.dispatchAt.set(14, null);
+    const fakeOpenCode = Layer.succeed(CompletionWatchOpenCode, {
+      getStatus: () => Effect.succeed("idle" as const),
+    });
+    let failedReason: string | null = null;
+    const effects = Layer.succeed(CompletionWatchEffects, {
+      broadcastQueue: () => Effect.void,
+      getSessionWorkStatus: () => Effect.succeed("idle"),
+      enqueueSourceCompletionNotice: () => Effect.void,
+      stopWatch: () => Effect.void,
+      getActiveBaseUrl: () => Effect.succeed(undefined),
+      getSessionIdleGate: () => Effect.succeed("continue"),
+      completeSessionIdle: (input) =>
+        Effect.sync(() => {
+          failedReason = input.reason;
+        }),
+    } satisfies CompletionWatchEffectsService);
+
+    await Effect.runPromise(
+      runCompletionWatchTickEffect(14).pipe(
+        Effect.provide(fakeOpenCode),
+        Effect.provide(store.layer),
+        Effect.provide(effects),
+        Effect.provide(TestContext.TestContext),
+      ),
+    );
+
+    expect(failedReason).toBe("failed");
+    expect(store.rows.get(14)?.completionWatchStatus).toBe("completed");
+    expect(
+      [...store.rows.values()].filter((row) => row.text === "Session is now idle."),
+    ).toHaveLength(0);
+    expect(
+      [...store.rows.values()].filter(
+        (row) =>
+          row.sessionId === sourceSessionId && row.text === "Your relay could not be delivered.",
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("still idles a dispatched-but-unconfirmed failed delivery", async () => {
+    const store = inMemoryCompletionStore([
+      baseMessage({
+        id: 15,
+        sessionId: "cur_unconfirmedTarget",
+        text: "please investigate",
+        opencodeDeliveryStatus: "failed",
+        completionWatchWorkSeen: 1,
+      }),
+    ]);
+    store.dispatchAt.set(15, Date.now());
+    const fakeOpenCode = Layer.succeed(CompletionWatchOpenCode, {
+      getStatus: () => Effect.succeed("idle" as const),
+    });
+
+    await Effect.runPromise(
+      runCompletionWatchTickEffect(15, { quietWindowMs: 0 }).pipe(
+        Effect.provide(fakeOpenCode),
+        Effect.provide(store.layer),
+        Effect.provide(silentEffects()),
+        Effect.provide(TestContext.TestContext),
+      ),
+    );
+
+    expect(store.rows.get(15)?.completionWatchStatus).toBe("completed");
+    expect(
+      [...store.rows.values()].filter((row) => row.text === "Session is now idle."),
+    ).toHaveLength(1);
+  });
 
   it("notifies once the same target delivery reaches the agent", async () => {
     const store = inMemoryCompletionStore([
@@ -393,6 +486,7 @@ describe("completion-watch workflow (in-memory, no DB)", () => {
       setCompletionWatchNextCheckAt: () => Effect.die("unused"),
       setCompletionWatchStatus: () => Effect.die("unused"),
       markCompletionWorkSeen: () => Effect.die("unused"),
+      getPromptDispatchedAt: () => Effect.die("unused"),
     } satisfies CompletionWatchStoreService);
     const fakeOpenCode = Layer.succeed(CompletionWatchOpenCode, {
       getStatus: () => Effect.die("should not status"),
