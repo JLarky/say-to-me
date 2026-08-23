@@ -170,7 +170,8 @@ curl -S -X POST -k https://say.local:1355/api/sessions/<source-session-id>/messa
 
 By default, Say To Me watches for the target to begin work and return to idle, then posts a
 completion notice back to the source. Use `"notifyOnCompletion": false` only for
-fire-and-forget forwarding.
+fire-and-forget forwarding. Workers should reply in their own session; return
+relays duplicate chat and watch the coordinator instead.
 
 For efficient polling from another agent:
 

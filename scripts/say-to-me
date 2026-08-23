@@ -175,6 +175,10 @@ current/source session's /messages endpoint with targetSessionId set. This keeps
 a visible source/provenance message in the current chat while the target receives
 the delivered user message.
 
+Workers should reply with author "agent" in their own session; return relays
+duplicate chat and watch the coordinator. If required, set
+"notifyOnCompletion": false.
+
 Reference other sessions with cards:
 
 Use this when Jarvis or another agent needs to talk about other Say To Me
@@ -222,6 +226,8 @@ Rules:
 - Failure mode to avoid: posting directly to the target session may make the
   target agent act, but the source/current chat will not show that the relay
   happened.
+- Workers should reply in their own session; return relays duplicate chat and
+  create a reverse idle watch.
 - Cards show alias/title, freshness, status, summary, and collapsed details.
 - "Insert mention" writes a stable token like say-to-me(ses_abc123, Morgan).
 - The API also accepts say-to-me(ses_abc123) and say-to-me(ses_abc123, Morgan)
@@ -412,7 +418,9 @@ Relay rule (critical):
 
 Idle notifications instead of polling:
   After relaying, wait for idle system notices / completion watches rather than
-  tight-looping jarvis-status. When you do need status:
+  tight-looping jarvis-status. Workers should voice reports in their own
+  session; return relays duplicate chat and reverse the idle watch. When you do
+  need status:
 
   say-to-me api GET '/api/sessions/<session-id>/jarvis-status?wait=5sec'
 
