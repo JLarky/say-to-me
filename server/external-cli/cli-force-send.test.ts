@@ -1,7 +1,7 @@
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { Effect } from "effect";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
@@ -20,8 +20,13 @@ const {
 } = await import("../api.harness.ts");
 const { dispatchEffectApiRequest } = await import("../api-routes/effect-api.ts");
 const { drizzleDb } = await import("../db/index.ts");
-const { claudeDeliveryJobs, codexDeliveryJobs, cursorDeliveryJobs, grokDeliveryJobs } =
-  await import("../db/drizzle-schema.ts");
+const {
+  claudeDeliveryJobs,
+  codexDeliveryJobs,
+  cursorDeliveryJobs,
+  grokDeliveryJobs,
+  messages: messagesTable,
+} = await import("../db/drizzle-schema.ts");
 const { getMessage, insertMessageRow } = await import("../messages.ts");
 const { setSessionCwd } = await import("../sessions.ts");
 const claude = await import("../claude/durable-delivery.ts");
@@ -81,6 +86,145 @@ function invocationCount(): number {
   }
 }
 
+const busyPidFile = path.join(scriptDir, "busy-provider.pid");
+
+/**
+ * Provider stand-in for interrupt tests: records its PID, then sleeps for
+ * DONE_SLEEP <seconds> found anywhere in its arguments (the prompt carries it).
+ * On TERM it removes the PID file and exits non-zero — the killed-turn shape
+ * the Stop flow is supposed to produce.
+ */
+function writeSleepingProvider(name: string): string {
+  const script = path.join(scriptDir, `${name}-sleep.sh`);
+  writeFileSync(
+    script,
+    [
+      "#!/bin/sh",
+      `printf 'invoked %s\\n' "$(date +%s%N)" >> ${JSON.stringify(invocationLog)}`,
+      `pidfile=${JSON.stringify(busyPidFile)}`,
+      'printf \'%s\\n\' "$$" >> "$pidfile"',
+      "n=0",
+      "sleep_pid=",
+      'for a in "$@"; do',
+      '  case "$a" in',
+      "    *DONE_SLEEP*)",
+      '      n=$(printf \'%s\' "$a" | sed -n "s/.*DONE_SLEEP \\([0-9][0-9]*\\).*/\\1/p")',
+      "      ;;",
+      "  esac",
+      "done",
+      "case \"$n\" in ''|*[!0-9]*) n=0;; esac",
+      'if [ "$n" -gt 0 ]; then',
+      '  trap \'rm -f "$pidfile"; [ -n "$sleep_pid" ] && kill "$sleep_pid" 2>/dev/null; exit 42\' TERM',
+      '  sleep "$n" &',
+      "  sleep_pid=$!",
+      '  wait "$!"',
+      "fi",
+      'out=""',
+      'prev=""',
+      'for arg in "$@"; do',
+      '  if [ "$prev" = "-o" ]; then out="$arg"; fi',
+      '  prev="$arg"',
+      "done",
+      'if [ -n "$out" ]; then printf ok > "$out"; fi',
+      "exit 0",
+      "",
+    ].join("\n"),
+  );
+  chmodSync(script, 0o755);
+  return script;
+}
+
+/**
+ * Minimal boo: `kill <name>` TERMs whatever PID the current busy provider
+ * recorded. This is the process-teardown leg of the real Stop flow; the test
+ * asserts against actual OS process state through it.
+ */
+function writeFakeBoo(): string {
+  const script = path.join(scriptDir, "fake-boo.sh");
+  writeFileSync(
+    script,
+    [
+      "#!/bin/sh",
+      `pidStateFile=${JSON.stringify(busyPidFile)}`,
+      'if [ "$1" = "kill" ] && [ -f "$pidStateFile" ]; then',
+      '  kill "$(tail -n 1 "$pidStateFile")" 2>/dev/null || true',
+      "fi",
+      "exit 0",
+      "",
+    ].join("\n"),
+  );
+  chmodSync(script, 0o755);
+  return script;
+}
+
+function trackedBusyPid(): number | null {
+  try {
+    const raw = readFileSync(busyPidFile, "utf8").trim().split("\n").pop();
+    const pid = Number(raw);
+    return Number.isInteger(pid) && pid > 0 ? pid : null;
+  } catch {
+    return null;
+  }
+}
+
+function processAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A single REST iteration returns false when the claim found nothing to do.
+ * Under CI load that can happen transiently, so the handover steps poll
+ * briefly before concluding the queue lost the forced job.
+ */
+async function runUntilHandedOver(
+  backend: { runOnce: (workerId: string, sessionId: string) => Promise<boolean | "stale-worker"> },
+  workerId: string,
+  sessionId: string,
+): Promise<boolean | "stale-worker"> {
+  const deadline = Date.now() + 5_000;
+  let result = await backend.runOnce(workerId, sessionId);
+  while (result !== true && result !== "stale-worker" && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    result = await backend.runOnce(workerId, sessionId);
+  }
+  return result;
+}
+
+async function waitForPredicate(description: string, predicate: () => boolean): Promise<void> {
+  const deadline = Date.now() + 10_000;
+  for (;;) {
+    if (predicate()) return;
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${description}`);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
+/** Latest user message id for a session (the composer-force probe). */
+function latestUserMessageId(sessionId: string): number {
+  const row = drizzleDb
+    .select({ id: messagesTable.id })
+    .from(messagesTable)
+    .where(and(eq(messagesTable.sessionId, sessionId), eq(messagesTable.author, "user")))
+    .orderBy(desc(messagesTable.id))
+    .limit(1)
+    .get();
+  if (!row) throw new Error(`No user message found for ${sessionId}.`);
+  return row.id;
+}
+
+function agentReplyCount(sessionId: string): number {
+  return drizzleDb
+    .select({ id: messagesTable.id })
+    .from(messagesTable)
+    .where(and(eq(messagesTable.sessionId, sessionId), eq(messagesTable.author, "agent")))
+    .all().length;
+}
+
 let sessionCounter = 0;
 
 function nextSessionId(prefix: string): string {
@@ -114,6 +258,7 @@ function jobRow(table: DeliveryJobsTable, jobId: number) {
       status: table.status,
       force: table.force,
       lockedBy: table.lockedBy,
+      lastError: table.lastError,
       promptDispatchedAt: table.promptDispatchedAt,
       cliTurnEndedAt: table.cliTurnEndedAt,
     })
@@ -190,12 +335,16 @@ async function seedBusyTurn<TJob extends Lease>(
 function describeBackend<TJob extends Lease>(backend: BackendSuite<TJob>): void {
   describe(backend.label, () => {
     let server: Awaited<ReturnType<typeof listen>>["server"] | null = null;
+    let origin = "";
 
     beforeEach(async () => {
       writeFileSync(invocationLog, "");
+      rmSync(busyPidFile, { force: true });
+      process.env.BOO_BIN = writeFakeBoo();
       drizzleDb.delete(backend.table).run();
       const started = await listen(createApiMiddleware());
       server = started.server;
+      origin = started.origin;
       process.env.SAY_TO_ME_INTERNAL_URL = started.origin;
       process.env.SAY_TO_ME_INTERNAL_API_TOKEN = "test-internal-api-token";
       process.env[backend.modeEnv] = backend.realMode;
@@ -205,6 +354,7 @@ function describeBackend<TJob extends Lease>(backend: BackendSuite<TJob>): void 
     afterEach(async () => {
       if (server) await closeTestServer(server);
       server = null;
+      delete process.env.BOO_BIN;
       delete process.env.SAY_TO_ME_INTERNAL_URL;
       delete process.env[backend.modeEnv];
       delete process.env[backend.binEnv];
@@ -412,6 +562,115 @@ function describeBackend<TJob extends Lease>(backend: BackendSuite<TJob>): void 
       const second = await backend.claim("worker-order", sessionId);
       expect(second?.job.messageId).toBe(olderId);
     });
+
+    /**
+     * The regression PR 42 shipped: force send used to be timing-only, so a
+     * "forced" prompt waited behind the running provider anyway. Force send on
+     * CLI backends must stop that provider through the Stop flow first — the
+     * process must actually die — fence the killed turn, and only then spawn
+     * the forced prompt.
+     */
+    it("force send via retry-delivery stops the running provider, then hands over", async () => {
+      const sessionId = nextSessionId(backend.prefix);
+      // The busy turn runs a provider that actually stays alive until stopped.
+      process.env[backend.binEnv] = writeSleepingProvider(backend.fakeProviderName);
+
+      const busyId = seedMessage(sessionId, "DONE_SLEEP 30");
+      backend.enqueue(busyId, sessionId);
+      const busyRun = backend.runOnce("worker-busy", sessionId);
+      const busyPid = await waitForPredicate("provider to spawn", () => {
+        const pid = trackedBusyPid();
+        return pid != null && processAlive(pid);
+      }).then(() => trackedBusyPid());
+      if (busyPid == null) throw new Error(`${backend.label} provider pid missing.`);
+
+      const queuedId = seedMessage(sessionId, "DONE_SLEEP 0");
+      backend.enqueue(queuedId, sessionId);
+
+      const response = await fetch(`${origin}/api/messages/${queuedId}/retry-delivery`, {
+        method: "POST",
+      });
+      expect(response.status).toBe(200);
+
+      // Stop happened first: the running CLI process is gone, and no second
+      // prompt has been spawned yet.
+      await waitForPredicate("killed provider to exit", () => !processAlive(busyPid));
+      expect(invocationCount()).toBe(1);
+
+      // The killed turn looks exactly like an explicit Stop fenced it.
+      expect(jobRow(backend.table, getQueuedJobId(backend.table, busyId))).toMatchObject({
+        status: "cancelled",
+        lastError: "Stopped by user.",
+        cliTurnEndedAt: expect.any(Number),
+      });
+      expect(getMessage(busyId)?.opencodeDeliveryStatus).toBe("failed");
+      expect(getMessage(busyId)?.opencodeDeliveryError).toBe("Stopped by user.");
+
+      // The forced message was promoted, not cancelled by its own interrupt.
+      expect(jobRowForMessage(backend.table, queuedId)).toMatchObject({
+        status: "pending",
+        force: 1,
+        promptDispatchedAt: null,
+      });
+
+      // Nothing spoke for the session between Stop and the forced handover.
+      expect(agentReplyCount(sessionId)).toBe(0);
+
+      // Only now does the forced prompt get handed over.
+      const handedOver = await runUntilHandedOver(backend, "worker-force", sessionId);
+      if (handedOver !== true) {
+        throw new Error(
+          `${backend.label} forced handover returned ${String(handedOver)}; queued row: ${JSON.stringify(
+            jobRowForMessage(backend.table, queuedId),
+          )}, busy row: ${JSON.stringify(jobRow(backend.table, getQueuedJobId(backend.table, busyId)))}`,
+        );
+      }
+      expect(invocationCount()).toBe(2);
+      expect(getMessage(queuedId)?.opencodeDeliveryStatus).toBe("sent");
+      const repliesAfterForced = agentReplyCount(sessionId);
+
+      // No late reply from the killed turn: once everything has settled, the
+      // killed turn's cancellation still fences its output.
+      await expect(busyRun).resolves.toBe(true);
+      expect(agentReplyCount(sessionId)).toBe(repliesAfterForced);
+    }, 20_000);
+
+    it("composer force variant stops the running provider, then hands over", async () => {
+      const sessionId = nextSessionId(backend.prefix);
+      process.env[backend.binEnv] = writeSleepingProvider(backend.fakeProviderName);
+
+      const busyId = seedMessage(sessionId, "DONE_SLEEP 30");
+      backend.enqueue(busyId, sessionId);
+      const busyRun = backend.runOnce("worker-busy", sessionId);
+      await waitForPredicate("provider to spawn", () => {
+        const pid = trackedBusyPid();
+        return pid != null && processAlive(pid);
+      });
+      const busyPid = trackedBusyPid();
+      if (busyPid == null) throw new Error(`${backend.label} provider pid missing.`);
+
+      const created = await fetch(`${origin}/api/sessions/${sessionId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ author: "user", text: "DONE_SLEEP 0", forceOpencode: true }),
+      });
+      expect(created.status).toBe(201);
+      const forcedId = latestUserMessageId(sessionId);
+      expect(forcedId).not.toBe(busyId);
+
+      await waitForPredicate("killed provider to exit", () => !processAlive(busyPid));
+      expect(invocationCount()).toBe(1);
+      expect(jobRowForMessage(backend.table, busyId)).toMatchObject({ status: "cancelled" });
+
+      await expect(runUntilHandedOver(backend, "worker-force", sessionId)).resolves.toBe(true);
+      expect(invocationCount()).toBe(2);
+      expect(getMessage(forcedId)?.opencodeDeliveryStatus).toBe("sent");
+      const repliesAfterForced = agentReplyCount(sessionId);
+
+      // No late reply from the killed turn once everything has settled.
+      await expect(busyRun).resolves.toBe(true);
+      expect(agentReplyCount(sessionId)).toBe(repliesAfterForced);
+    }, 20_000);
   });
 }
 

@@ -26,11 +26,16 @@ import { createSessionActivityAdapter } from "./activity-adapter.ts";
 import { createSessionStopperAdapter } from "./stop-adapter.ts";
 import { makeCachedTitleLayer } from "./cached-titles.ts";
 import {
+  interruptBusyCliTurnForForceSend,
+  type CliForceInterruptBackend,
+} from "../external-cli/cli-force-interrupt.ts";
+import {
   SessionActivity,
   SessionCurrentModel,
   SessionDelivery,
   SessionStopper,
   SessionTitle,
+  type DeliveryEnqueueInput,
   type SessionActivityService,
   type SessionDeliveryService,
   type SessionCurrentModelService,
@@ -43,6 +48,31 @@ function deliveryEnqueueError(cause: unknown): SessionRouterError {
     _tag: "SessionRouterError",
     message: cause instanceof Error ? cause.message : String(cause),
   };
+}
+
+/**
+ * Shared body of every external-CLI enqueue. A composer force variant is
+ * Stop-then-deliver on CLI backends (docs/spec/force-send.md): whatever
+ * provider turn holds the session goes through the Stop flow first, then the
+ * forced prompt enqueues with its force flag so it claims immediately.
+ */
+function cliDeliveryEnqueue(
+  backend: CliForceInterruptBackend,
+  targetSessionId: string,
+  input: DeliveryEnqueueInput,
+  enqueueJob: () => void,
+): Effect.Effect<void, SessionRouterError> {
+  return Effect.gen(function* () {
+    if (input.forceOpencode) {
+      yield* Effect.promise(() =>
+        interruptBusyCliTurnForForceSend(backend, targetSessionId, input.messageId),
+      );
+    }
+    yield* Effect.try({
+      try: enqueueJob,
+      catch: deliveryEnqueueError,
+    });
+  });
 }
 
 const ClaudeActivityLive: SessionActivityService = createSessionActivityAdapter({
@@ -61,17 +91,14 @@ const ClaudeTitleLive = makeCachedTitleLayer(
 
 const ClaudeDeliveryLive: SessionDeliveryService = {
   enqueue: (input, targetSessionId) =>
-    Effect.try({
-      try: () => {
-        enqueueClaudeDeliveryJob({
-          messageId: input.messageId,
-          messageSessionId: input.messageSessionId,
-          claudeSessionId: targetSessionId,
-          kind: input.kind,
-          force: input.forceOpencode,
-        });
-      },
-      catch: deliveryEnqueueError,
+    cliDeliveryEnqueue("claude", targetSessionId, input, () => {
+      enqueueClaudeDeliveryJob({
+        messageId: input.messageId,
+        messageSessionId: input.messageSessionId,
+        claudeSessionId: targetSessionId,
+        kind: input.kind,
+        force: input.forceOpencode,
+      });
     }),
 };
 
@@ -99,17 +126,14 @@ const CodexTitleLive = makeCachedTitleLayer(
 
 const CodexDeliveryLive: SessionDeliveryService = {
   enqueue: (input, targetSessionId) =>
-    Effect.try({
-      try: () => {
-        enqueueCodexDeliveryJob({
-          messageId: input.messageId,
-          messageSessionId: input.messageSessionId,
-          codexSessionId: targetSessionId,
-          kind: input.kind,
-          force: input.forceOpencode,
-        });
-      },
-      catch: deliveryEnqueueError,
+    cliDeliveryEnqueue("codex", targetSessionId, input, () => {
+      enqueueCodexDeliveryJob({
+        messageId: input.messageId,
+        messageSessionId: input.messageSessionId,
+        codexSessionId: targetSessionId,
+        kind: input.kind,
+        force: input.forceOpencode,
+      });
     }),
 };
 
@@ -137,17 +161,14 @@ const GrokTitleLive = makeCachedTitleLayer(
 
 const GrokDeliveryLive: SessionDeliveryService = {
   enqueue: (input, targetSessionId) =>
-    Effect.try({
-      try: () => {
-        enqueueGrokDeliveryJob({
-          messageId: input.messageId,
-          messageSessionId: input.messageSessionId,
-          grokSessionId: targetSessionId,
-          kind: input.kind,
-          force: input.forceOpencode,
-        });
-      },
-      catch: deliveryEnqueueError,
+    cliDeliveryEnqueue("grok", targetSessionId, input, () => {
+      enqueueGrokDeliveryJob({
+        messageId: input.messageId,
+        messageSessionId: input.messageSessionId,
+        grokSessionId: targetSessionId,
+        kind: input.kind,
+        force: input.forceOpencode,
+      });
     }),
 };
 
@@ -175,17 +196,14 @@ const CursorTitleLive = makeCachedTitleLayer(
 
 const CursorDeliveryLive: SessionDeliveryService = {
   enqueue: (input, targetSessionId) =>
-    Effect.try({
-      try: () => {
-        enqueueCursorDeliveryJob({
-          messageId: input.messageId,
-          messageSessionId: input.messageSessionId,
-          cursorSessionId: targetSessionId,
-          kind: input.kind,
-          force: input.forceOpencode,
-        });
-      },
-      catch: deliveryEnqueueError,
+    cliDeliveryEnqueue("cursor", targetSessionId, input, () => {
+      enqueueCursorDeliveryJob({
+        messageId: input.messageId,
+        messageSessionId: input.messageSessionId,
+        cursorSessionId: targetSessionId,
+        kind: input.kind,
+        force: input.forceOpencode,
+      });
     }),
 };
 
