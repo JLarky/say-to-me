@@ -8,6 +8,8 @@ export type StopExternalCliResult = { ok: true } | { ok: false; status: number; 
 export type ActiveDeliveryJob = {
   id: number;
   messageId: number;
+  /** Present when the caller's listActiveJobs selects it; `busyOnly` needs it. */
+  status?: string;
 };
 
 export type StopExternalCliSessionConfig = {
@@ -17,6 +19,16 @@ export type StopExternalCliSessionConfig = {
   listActiveJobs: (sessionId: string) => ActiveDeliveryJob[];
   cancelJob: (jobId: number) => number;
   killWorker: (sessionId: string) => Promise<void>;
+  /**
+   * Jobs for these messages survive the stop. Force send reuses this flow to
+   * clear the busy turn without cancelling its own delivery.
+   */
+  keepMessageIds?: readonly number[];
+  /**
+   * Cancel only claimed jobs (a provider turn actually in flight). Plain Stop
+   * leaves this unset and cancels every active job, queued ones included.
+   */
+  busyOnly?: boolean;
 };
 
 /**
@@ -35,6 +47,8 @@ export async function stopExternalCliSession(
 
   const broadcastSessionIds = new Set<string>([config.sessionId]);
   for (const job of config.listActiveJobs(config.sessionId)) {
+    if (config.keepMessageIds?.includes(job.messageId)) continue;
+    if (config.busyOnly && job.status !== "running") continue;
     const cancelled = config.cancelJob(job.id);
     if (cancelled === 0) continue;
     const message = getMessage(job.messageId);

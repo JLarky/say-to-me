@@ -21,6 +21,7 @@ import { enqueueCodexDeliveryJob, retryCodexDeliveryJob } from "../codex/durable
 import { enqueueCursorDeliveryJob, retryCursorDeliveryJob } from "../cursor/durable-delivery.ts";
 import { enqueueGrokDeliveryJob, retryGrokDeliveryJob } from "../grok/durable-delivery.ts";
 import type { RetryDeliveryOutcome } from "../external-cli/durable-delivery.ts";
+import { interruptBusyCliTurnForForceSend } from "../external-cli/cli-force-interrupt.ts";
 import {
   enqueueOpenCodeDeliveryJob,
   retryOpenCodeDeliveryJob,
@@ -277,6 +278,10 @@ export function retryDeliveryEffect(
       case "claude":
       case "codex":
       case "grok": {
+        // CLI Force send is Stop-then-deliver: clear whatever provider turn
+        // holds the session through the same flow as the Stop endpoints, then
+        // hand this message over. No-op when nothing is actually running.
+        yield* Effect.promise(() => interruptBusyCliTurnForForceSend(backend, targetSessionId, id));
         yield* retryCliDelivery(cliDeliveryRetries[backend], {
           messageId: id,
           messageSessionId: reply.sessionId,

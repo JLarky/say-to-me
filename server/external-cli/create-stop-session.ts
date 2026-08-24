@@ -15,6 +15,17 @@ import {
 
 export type { StopExternalCliResult };
 
+/** Options for the Stop-flow reuse behind CLI Force send (see force-send.md). */
+export type StopSessionOptions = {
+  /** The forced message's own delivery is not cancelled by its own force send. */
+  keepMessageId?: number;
+  /**
+   * Cancel only jobs whose provider turn is in flight. Queued-but-idle
+   * messages keep waiting; only what actually holds the CLI gets stopped.
+   */
+  busyOnly?: boolean;
+};
+
 type DeliveryJobsTable =
   | typeof claudeDeliveryJobs
   | typeof cursorDeliveryJobs
@@ -70,9 +81,13 @@ export function createStopSession(config: CreateStopSessionConfig) {
     return result.changes;
   }
 
-  function listActiveJobs(sessionId: string): ActiveDeliveryJob[] {
+  function listActiveJobs(sessionId: string, busyOnly = false): ActiveDeliveryJob[] {
     return drizzleDb
-      .select({ id: deliveryJobsTable.id, messageId: deliveryJobsTable.messageId })
+      .select({
+        id: deliveryJobsTable.id,
+        messageId: deliveryJobsTable.messageId,
+        status: deliveryJobsTable.status,
+      })
       .from(deliveryJobsTable)
       .where(
         and(
@@ -80,16 +95,22 @@ export function createStopSession(config: CreateStopSessionConfig) {
           inArray(deliveryJobsTable.status, ["running", "pending", "retrying"]),
         ),
       )
-      .all();
+      .all()
+      .filter((row) => !busyOnly || row.status === "running");
   }
 
-  return function stopSession(sessionId: string): Promise<StopExternalCliResult> {
+  return function stopSession(
+    sessionId: string,
+    options: StopSessionOptions = {},
+  ): Promise<StopExternalCliResult> {
     return stopExternalCliSession({
       sessionId,
       isValidSessionId,
       invalidSessionIdError,
-      listActiveJobs,
+      listActiveJobs: () => listActiveJobs(sessionId, options.busyOnly === true),
       cancelJob: cancelActiveJob,
+      keepMessageIds: options.keepMessageId != null ? [options.keepMessageId] : undefined,
+      busyOnly: options.busyOnly === true,
       killWorker: async (activeSessionId) => {
         await new BooDriver().killSession(workerName(activeSessionId));
       },
