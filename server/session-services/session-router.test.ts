@@ -6,9 +6,11 @@ import { afterAll, describe, expect, it } from "vite-plus/test";
 
 const testDbDir = mkdtempSync(path.join(tmpdir(), "say-to-me-session-router-"));
 process.env.SAY_TO_ME_DB = path.join(testDbDir, "queue.sqlite");
+process.env.SAY_TO_ME_CURSOR_WORKER_AUTOSTART = "0";
 
 const { drizzleDb, drizzleSqlite } = await import("../db/index.ts");
-const { paseoDeliveryJobs, t3DeliveryJobs } = await import("../db/drizzle-schema.ts");
+const { cursorDeliveryJobs, paseoDeliveryJobs, t3DeliveryJobs } =
+  await import("../db/drizzle-schema.ts");
 const { insertMessageRow } = await import("../messages.ts");
 const { enqueueDelivery } = await import("./session-router.ts");
 
@@ -72,5 +74,38 @@ describe("enqueueDelivery", () => {
         paseoSessionId: "pa_11111111-1111-4111-8111-111111111111",
       }),
     );
+  });
+
+  it("routes the composer force variant into the CLI queue's force flag", async () => {
+    const message = insertMessageRow({
+      sessionId: "ses_e7629ddd9064axVSyjejHALLdN",
+      text: "Force this to Cursor",
+      extraMarkdown: null,
+      author: "user",
+      status: "received",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+
+    await Effect.runPromise(
+      enqueueDelivery("cur_11111111-1111-4111-8111-111111111111", {
+        messageId: message.id,
+        messageSessionId: "ses_e7629ddd9064axVSyjejHALLdN",
+        kind: "direct_user_message",
+        forceOpencode: true,
+      }),
+    );
+
+    const jobs = drizzleDb.select().from(cursorDeliveryJobs).all();
+    expect(jobs).toHaveLength(1);
+    // forceOpencode is the composer's wire name, but the flag is not
+    // OpenCode-specific anymore: CLI queues honor it as their force-send skip.
+    expect(jobs[0]).toMatchObject({
+      messageId: message.id,
+      cursorSessionId: "cur_11111111-1111-4111-8111-111111111111",
+      kind: "direct_user_message",
+      force: 1,
+    });
   });
 });

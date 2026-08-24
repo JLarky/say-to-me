@@ -186,6 +186,8 @@ export const DbClaudeDeliveryJob = arktype({
   claudeSessionId: "string",
   kind: "string",
   status: "string",
+  /** 1 when an explicit user force-send skipped the wait-for-idle hold. */
+  force: "number",
   attemptCount: "number",
   maxAttempts: "number",
   nextAttemptAt: "number",
@@ -208,6 +210,8 @@ export const DbCursorDeliveryJob = arktype({
   cursorSessionId: "string",
   kind: "string",
   status: "string",
+  /** 1 when an explicit user force-send skipped the wait-for-idle hold. */
+  force: "number",
   attemptCount: "number",
   maxAttempts: "number",
   nextAttemptAt: "number",
@@ -230,6 +234,8 @@ export const DbCodexDeliveryJob = arktype({
   codexSessionId: "string",
   kind: "string",
   status: "string",
+  /** 1 when an explicit user force-send skipped the wait-for-idle hold. */
+  force: "number",
   attemptCount: "number",
   maxAttempts: "number",
   nextAttemptAt: "number",
@@ -252,6 +258,8 @@ export const DbGrokDeliveryJob = arktype({
   grokSessionId: "string",
   kind: "string",
   status: "string",
+  /** 1 when an explicit user force-send skipped the wait-for-idle hold. */
+  force: "number",
   attemptCount: "number",
   maxAttempts: "number",
   nextAttemptAt: "number",

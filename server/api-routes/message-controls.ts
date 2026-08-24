@@ -147,21 +147,31 @@ const deliveryAlreadySent = {
 
 /** The four CLI backends differ only in which session-id field they enqueue. */
 type CliDeliveryRetry = {
-  retry: (messageId: number) => { outcome: RetryDeliveryOutcome } | null;
+  retry: (
+    messageId: number,
+    options: { force?: boolean },
+  ) => { outcome: RetryDeliveryOutcome } | null;
   enqueue: (input: {
     messageId: number;
     messageSessionId: string;
     sessionId: string;
     kind: DeliveryKind;
+    force?: boolean;
   }) => void;
 };
 
 function retryCliDelivery(
   handler: CliDeliveryRetry,
-  input: { messageId: number; messageSessionId: string; sessionId: string; kind: DeliveryKind },
+  input: {
+    messageId: number;
+    messageSessionId: string;
+    sessionId: string;
+    kind: DeliveryKind;
+    force?: boolean;
+  },
 ): Effect.Effect<void, MessageControlError> {
   return Effect.gen(function* () {
-    const result = yield* Effect.sync(() => handler.retry(input.messageId));
+    const result = yield* Effect.sync(() => handler.retry(input.messageId, { force: input.force }));
     if (!result) {
       // No job row at all: mirror the OpenCode branch and queue a fresh one.
       yield* Effect.sync(() => handler.enqueue(input));
@@ -175,29 +185,55 @@ function retryCliDelivery(
 const cliDeliveryRetries = {
   cursor: {
     retry: retryCursorDeliveryJob,
-    enqueue: ({ messageId, messageSessionId, sessionId, kind }) =>
-      enqueueCursorDeliveryJob({ messageId, messageSessionId, cursorSessionId: sessionId, kind }),
+    enqueue: ({ messageId, messageSessionId, sessionId, kind, force }) =>
+      enqueueCursorDeliveryJob({
+        messageId,
+        messageSessionId,
+        cursorSessionId: sessionId,
+        kind,
+        force,
+      }),
   },
   claude: {
     retry: retryClaudeDeliveryJob,
-    enqueue: ({ messageId, messageSessionId, sessionId, kind }) =>
-      enqueueClaudeDeliveryJob({ messageId, messageSessionId, claudeSessionId: sessionId, kind }),
+    enqueue: ({ messageId, messageSessionId, sessionId, kind, force }) =>
+      enqueueClaudeDeliveryJob({
+        messageId,
+        messageSessionId,
+        claudeSessionId: sessionId,
+        kind,
+        force,
+      }),
   },
   codex: {
     retry: retryCodexDeliveryJob,
-    enqueue: ({ messageId, messageSessionId, sessionId, kind }) =>
-      enqueueCodexDeliveryJob({ messageId, messageSessionId, codexSessionId: sessionId, kind }),
+    enqueue: ({ messageId, messageSessionId, sessionId, kind, force }) =>
+      enqueueCodexDeliveryJob({
+        messageId,
+        messageSessionId,
+        codexSessionId: sessionId,
+        kind,
+        force,
+      }),
   },
   grok: {
     retry: retryGrokDeliveryJob,
-    enqueue: ({ messageId, messageSessionId, sessionId, kind }) =>
-      enqueueGrokDeliveryJob({ messageId, messageSessionId, grokSessionId: sessionId, kind }),
+    enqueue: ({ messageId, messageSessionId, sessionId, kind, force }) =>
+      enqueueGrokDeliveryJob({
+        messageId,
+        messageSessionId,
+        grokSessionId: sessionId,
+        kind,
+        force,
+      }),
   },
 } satisfies Record<"cursor" | "claude" | "codex" | "grok", CliDeliveryRetry>;
 
 /**
  * Retry delivery for OpenCode or an external CLI backend. Explicit human retry
- * clears the CLI dispatch marker; automatic re-enqueue must not.
+ * clears the CLI dispatch marker; automatic re-enqueue must not. Like the
+ * OpenCode branch, the human path forces: on a queued row this is the Force
+ * send action and skips the wait-for-idle hold on the next claim.
  */
 export function retryDeliveryEffect(
   rawId: string,
@@ -246,6 +282,7 @@ export function retryDeliveryEffect(
           messageSessionId: reply.sessionId,
           sessionId: targetSessionId,
           kind,
+          force: true,
         });
         break;
       }

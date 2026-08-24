@@ -22,6 +22,10 @@ export type DeliveryEnqueueInput = {
   messageSessionId: string;
   kind: "direct_user_message" | "forward_target_message";
   useCli?: boolean;
+  /**
+   * Skip the wait-for-idle hold at delivery time. Named for its OpenCode origin
+   * (the composer's force variant); every delivery-backed backend honors it.
+   */
   forceOpencode?: boolean;
 };
 

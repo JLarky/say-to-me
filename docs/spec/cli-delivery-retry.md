@@ -116,8 +116,9 @@ OpenCode-named path does.
 
 In `DeliveryStatus` (`src/components/MessageRow.tsx`), render `Retry` on `failed` for
 every provider. `Force send` on `queued` is a separate question: it exists because
-OpenCode delivery waits for the session to be idle. Only wire it for CLI providers if
-their queued state has the same meaning; otherwise leave it OpenCode-only and say so.
+delivery waits for the session to be idle. CLI queued rows now share that meaning —
+CLI claims hold while another prompt's turn is open (see docs/spec/force-send.md) —
+so Force send renders for them too, backed by the same retry-delivery endpoint.
 
 Rename the `onRetryOpenCodeDelivery` prop and the `retryOpenCodeDelivery` handler in
 `SessionPage.tsx` to drop the OpenCode-specific name, along with the error string

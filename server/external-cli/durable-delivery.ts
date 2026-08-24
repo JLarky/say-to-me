@@ -65,6 +65,7 @@ export type ExternalCliDeliveryJobRow = {
   messageSessionId: string;
   kind: string;
   status: string;
+  force: number;
   attemptCount: number;
   maxAttempts: number;
   nextAttemptAt: number;
@@ -126,6 +127,12 @@ type DeliveryJobsTable =
   | typeof codexDeliveryJobs
   | typeof grokDeliveryJobs;
 
+type ForceColumn =
+  | typeof claudeDeliveryJobs.force
+  | typeof cursorDeliveryJobs.force
+  | typeof codexDeliveryJobs.force
+  | typeof grokDeliveryJobs.force;
+
 type DeliveryJobSelectColumns =
   | {
       id: typeof claudeDeliveryJobs.id;
@@ -134,6 +141,7 @@ type DeliveryJobSelectColumns =
       claudeSessionId: typeof claudeDeliveryJobs.claudeSessionId;
       kind: typeof claudeDeliveryJobs.kind;
       status: typeof claudeDeliveryJobs.status;
+      force: typeof claudeDeliveryJobs.force;
       attemptCount: typeof claudeDeliveryJobs.attemptCount;
       maxAttempts: typeof claudeDeliveryJobs.maxAttempts;
       nextAttemptAt: typeof claudeDeliveryJobs.nextAttemptAt;
@@ -152,6 +160,7 @@ type DeliveryJobSelectColumns =
       cursorSessionId: typeof cursorDeliveryJobs.cursorSessionId;
       kind: typeof cursorDeliveryJobs.kind;
       status: typeof cursorDeliveryJobs.status;
+      force: typeof cursorDeliveryJobs.force;
       attemptCount: typeof cursorDeliveryJobs.attemptCount;
       maxAttempts: typeof cursorDeliveryJobs.maxAttempts;
       nextAttemptAt: typeof cursorDeliveryJobs.nextAttemptAt;
@@ -170,6 +179,7 @@ type DeliveryJobSelectColumns =
       codexSessionId: typeof codexDeliveryJobs.codexSessionId;
       kind: typeof codexDeliveryJobs.kind;
       status: typeof codexDeliveryJobs.status;
+      force: typeof codexDeliveryJobs.force;
       attemptCount: typeof codexDeliveryJobs.attemptCount;
       maxAttempts: typeof codexDeliveryJobs.maxAttempts;
       nextAttemptAt: typeof codexDeliveryJobs.nextAttemptAt;
@@ -188,6 +198,7 @@ type DeliveryJobSelectColumns =
       grokSessionId: typeof grokDeliveryJobs.grokSessionId;
       kind: typeof grokDeliveryJobs.kind;
       status: typeof grokDeliveryJobs.status;
+      force: typeof grokDeliveryJobs.force;
       attemptCount: typeof grokDeliveryJobs.attemptCount;
       maxAttempts: typeof grokDeliveryJobs.maxAttempts;
       nextAttemptAt: typeof grokDeliveryJobs.nextAttemptAt;
@@ -226,6 +237,7 @@ export type ExternalCliDurableDeliveryConfig<
   noCwdMessage: string;
   jobsTable: DeliveryJobsTable;
   sessionIdColumn: SessionIdColumn;
+  forceColumn: ForceColumn;
   jobSelectColumns: DeliveryJobSelectColumns;
   validateJob: (row: unknown, context: string) => TJob;
   resolveRuntime: (cwd: string, sessionId: string) => TRuntime;
@@ -246,6 +258,12 @@ export function createExternalCliDurableDelivery<
     messageSessionId: string;
     kind: ExternalCliDeliveryJobKind;
     maxAttempts?: number;
+    /**
+     * Skip the wait-for-idle hold for this delivery (composer force variant or
+     * an explicit user Force send). Timing only: durability, the dispatch
+     * marker, and failure reporting are unchanged.
+     */
+    force?: boolean;
   } & Record<TSessionIdField, string>;
 
   type ClaimedJob = {
@@ -423,6 +441,7 @@ export function createExternalCliDurableDelivery<
           [config.sessionIdField]: sessionId,
           kind: input.kind,
           status: "pending",
+          force: input.force ? 1 : 0,
           maxAttempts: input.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
           nextAttemptAt: Date.now(),
         })
@@ -510,8 +529,15 @@ export function createExternalCliDurableDelivery<
    * the duplicate turn the marker exists to forbid. Two retries racing on a
    * `failed` job hit the same hazard, which is why the status is re-read and
    * gated inside the transaction rather than trusted from the caller.
+   *
+   * `force` marks the user's explicit Force send: a queued-but-held message is
+   * flipped to forcing so its next claim skips the wait-for-idle hold, and a
+   * reset keeps forcing like OpenCode's retry does.
    */
-  function retryDeliveryJob(messageId: number): RetryDeliveryJobResult<TJob> | null {
+  function retryDeliveryJob(
+    messageId: number,
+    { force = false }: { force?: boolean } = {},
+  ): RetryDeliveryJobResult<TJob> | null {
     const context = `retry${config.backendLabel}DeliveryJob`;
     const result = drizzleDb.transaction((tx) => {
       const row = tx
@@ -522,15 +548,38 @@ export function createExternalCliDurableDelivery<
         .limit(1)
         .get();
       if (!row) return null;
-      const job = config.validateJob(row, context);
+      let job = config.validateJob(row, context);
 
       // A worker is mid-flight, or the prompt already landed: leave both the row
       // and the marker exactly as they are.
       if (job.status === "running") return { outcome: "in_flight" as const, job };
       if (job.status === "succeeded") return { outcome: "already_delivered" as const, job };
       // Another attempt is already coming. Idempotent: never clear a marker we
-      // cannot prove is unowned.
+      // cannot prove is unowned. A forced request upgrades the hold to a
+      // force-send so the next claim hands over immediately.
       if (job.status === "pending" || job.status === "retrying") {
+        if (!force || job.force === 1) return { outcome: "already_queued" as const, job };
+        const flipped = tx
+          .update(config.jobsTable)
+          .set({ force: 1, updatedAt: nowSql() })
+          .where(
+            and(
+              eq(config.jobsTable.id, job.id),
+              inArray(config.jobsTable.status, ["pending", "retrying"]),
+            ),
+          )
+          .run();
+        if (flipped.changes === 0) return { outcome: "in_flight" as const, job };
+        const refreshedRow = tx
+          .select(config.jobSelectColumns)
+          .from(config.jobsTable)
+          .where(eq(config.jobsTable.id, job.id))
+          .limit(1)
+          .get();
+        if (!refreshedRow) {
+          throw new Error(`Failed to load ${config.backendLabel} delivery job after force.`);
+        }
+        job = config.validateJob(refreshedRow, context);
         return { outcome: "already_queued" as const, job };
       }
 
@@ -544,6 +593,8 @@ export function createExternalCliDurableDelivery<
           lastError: null,
           promptDispatchedAt: null,
           cliTurnEndedAt: null,
+          // A force-send retry keeps forcing; otherwise preserve the job's flag.
+          force: force ? 1 : job.force,
           updatedAt: nowSql(),
         })
         .where(
@@ -832,13 +883,33 @@ export function createExternalCliDurableDelivery<
             .select(config.jobSelectColumns)
             .from(config.jobsTable)
             .where(where)
-            .orderBy(asc(config.jobsTable.id))
+            // Forced jobs first (so a user force-send jumps ahead of a
+            // busy-deferred job monopolizing the queue), then oldest first.
+            .orderBy(desc(config.forceColumn), asc(config.jobsTable.id))
             .all();
           const row = rows.find((candidateRow) => {
             const candidateJob = config.validateJob(
               candidateRow,
               `claim${config.backendLabel}DeliveryJob`,
             );
+            // Wait-for-idle hold: while another delivery's CLI turn is still
+            // open, the agent is busy, so a normal send keeps waiting. A forced
+            // job skips this hold — that skip is what Force send means.
+            if (candidateJob.force !== 1) {
+              const openTurn = tx
+                .select({ count: sql<number>`COUNT(*)` })
+                .from(config.jobsTable)
+                .where(
+                  and(
+                    eq(sessionIdColumn, getSessionId(candidateJob)),
+                    isNotNull(config.jobsTable.promptDispatchedAt),
+                    isNull(config.jobsTable.cliTurnEndedAt),
+                    sql`${config.jobsTable.id} <> ${candidateJob.id}`,
+                  ),
+                )
+                .get();
+              if ((openTurn?.count ?? 0) > 0) return false;
+            }
             const running = tx
               .select({ count: sql<number>`COUNT(*)` })
               .from(config.jobsTable)
@@ -849,7 +920,9 @@ export function createExternalCliDurableDelivery<
                 ),
               )
               .get();
-            return (running?.count ?? 0) === 0;
+            // Forced deliveries hand over even mid-turn; everything else also
+            // waits out any claimed-but-not-yet-dispatched attempt.
+            return candidateJob.force === 1 || (running?.count ?? 0) === 0;
           });
           if (!row) return null;
           const job = config.validateJob(row, `claim${config.backendLabel}DeliveryJob`);

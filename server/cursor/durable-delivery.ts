@@ -20,6 +20,7 @@ const jobSelectColumns = {
   cursorSessionId: cursorDeliveryJobs.cursorSessionId,
   kind: cursorDeliveryJobs.kind,
   status: cursorDeliveryJobs.status,
+  force: cursorDeliveryJobs.force,
   attemptCount: cursorDeliveryJobs.attemptCount,
   maxAttempts: cursorDeliveryJobs.maxAttempts,
   nextAttemptAt: cursorDeliveryJobs.nextAttemptAt,
@@ -48,6 +49,7 @@ const cursorDelivery = createExternalCliDurableDelivery<
   noCwdMessage: "Cursor session has no working directory.",
   jobsTable: cursorDeliveryJobs,
   sessionIdColumn: cursorDeliveryJobs.cursorSessionId,
+  forceColumn: cursorDeliveryJobs.force,
   jobSelectColumns,
   validateJob: (row, context) => validateDb(DbCursorDeliveryJob, row, context),
   resolveRuntime: (cwd, sessionId) => ({
@@ -69,6 +71,8 @@ export type EnqueueCursorDeliveryInput = {
   cursorSessionId: string;
   kind: CursorDeliveryJobKind;
   maxAttempts?: number;
+  /** Skip the wait-for-idle hold (composer force variant / user Force send). */
+  force?: boolean;
 };
 
 export const enqueueCursorDeliveryJob = cursorDelivery.enqueueDeliveryJob;
