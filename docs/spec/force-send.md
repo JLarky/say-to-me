@@ -2,8 +2,8 @@
 
 ## Purpose
 
-Force send lets a user deliver a message to an OpenCode-backed session **even
-while that session is still busy**, instead of waiting for it to become idle.
+Force send lets a user deliver a message to an agent session **even while that
+session is still busy**, instead of waiting for it to become idle.
 
 It exists for the case where the user deliberately wants to interrupt or add to
 work already in progress — for example, to redirect the agent or answer a
@@ -11,15 +11,23 @@ question — rather than letting the message sit until the current work finishes
 
 ## Normal send vs. force send
 
-When a user message targets an OpenCode session, delivery depends on the
-session's current state:
+When a user message targets a session, delivery depends on the session's current
+state:
 
 - **Normal send.** If the session is idle, the message is delivered right away.
   If the session is busy, the message is held and delivered automatically once
   the session becomes idle. Until then it shows a waiting state ("waiting for
-  OpenCode to be idle").
+  <provider> to be idle").
 - **Force send.** The message is delivered immediately regardless of whether the
   session is idle or busy. The wait-for-idle hold is skipped.
+
+This applies to OpenCode sessions and to external CLI sessions (Cursor, Claude,
+Codex, Grok) alike:
+
+- **OpenCode busy** means the live OpenCode session reports it is working.
+- **CLI busy** means a prompt was handed to the provider and its turn has not
+  been observed to end yet. CLI delivery claims hold while another prompt's
+  turn is open, so a queued CLI row genuinely waits.
 
 Force send only changes the _timing_ gate (wait-for-idle). It does not change
 anything else about how the message is delivered.
@@ -30,9 +38,13 @@ Force send is always an explicit user action; a message is never force-sent on
 its own. It can be triggered:
 
 - From the composer when sending a new message (the send control offers a
-  force variant, e.g. a keyboard modifier or a press-and-hold gesture).
+  force variant, e.g. a keyboard modifier or a press-and-hold gesture). This
+  works for every delivery-backed provider.
 - From an already-queued message that is waiting for the session to become
   idle, via a per-message "Force send" action.
+
+Both paths reuse the retry-delivery endpoint with its force flag set; on a
+failed message that endpoint is simply Retry, not Force send.
 
 ## Durability
 

@@ -68,6 +68,7 @@ const ClaudeDeliveryLive: SessionDeliveryService = {
           messageSessionId: input.messageSessionId,
           claudeSessionId: targetSessionId,
           kind: input.kind,
+          force: input.forceOpencode,
         });
       },
       catch: deliveryEnqueueError,
@@ -105,6 +106,7 @@ const CodexDeliveryLive: SessionDeliveryService = {
           messageSessionId: input.messageSessionId,
           codexSessionId: targetSessionId,
           kind: input.kind,
+          force: input.forceOpencode,
         });
       },
       catch: deliveryEnqueueError,
@@ -142,6 +144,7 @@ const GrokDeliveryLive: SessionDeliveryService = {
           messageSessionId: input.messageSessionId,
           grokSessionId: targetSessionId,
           kind: input.kind,
+          force: input.forceOpencode,
         });
       },
       catch: deliveryEnqueueError,
@@ -179,6 +182,7 @@ const CursorDeliveryLive: SessionDeliveryService = {
           messageSessionId: input.messageSessionId,
           cursorSessionId: targetSessionId,
           kind: input.kind,
+          force: input.forceOpencode,
         });
       },
       catch: deliveryEnqueueError,

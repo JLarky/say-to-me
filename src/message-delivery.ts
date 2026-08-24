@@ -56,11 +56,14 @@ export function canRetryDelivery(message: Message): boolean {
 }
 
 /**
- * Force send only applies to OpenCode, which waits for the session to be idle
- * before delivering. CLI queued jobs do not share that meaning.
+ * Force send applies to every delivery-backed provider. Each one holds queued
+ * messages while its session is busy (OpenCode via live status, CLI via the
+ * open-turn gate), so a queued row always has a wait that Force send can skip.
+ * Derived from the session id, never from the display label.
  */
 export function canForceSendDelivery(message: Message): boolean {
-  return deliveryTargetSessionId(message).startsWith("ses_");
+  const target = deliveryTargetSessionId(message);
+  return DELIVERY_PROVIDER_PREFIXES.some(({ prefix }) => target.startsWith(prefix));
 }
 
 export function deliveryStatusLabel(

@@ -25,6 +25,7 @@ const jobSelectColumns = {
   codexSessionId: codexDeliveryJobs.codexSessionId,
   kind: codexDeliveryJobs.kind,
   status: codexDeliveryJobs.status,
+  force: codexDeliveryJobs.force,
   attemptCount: codexDeliveryJobs.attemptCount,
   maxAttempts: codexDeliveryJobs.maxAttempts,
   nextAttemptAt: codexDeliveryJobs.nextAttemptAt,
@@ -53,6 +54,7 @@ const codexDelivery = createExternalCliDurableDelivery<
   noCwdMessage: "Codex session has no working directory.",
   jobsTable: codexDeliveryJobs,
   sessionIdColumn: codexDeliveryJobs.codexSessionId,
+  forceColumn: codexDeliveryJobs.force,
   jobSelectColumns,
   validateJob: (row, context) => validateDb(DbCodexDeliveryJob, row, context),
   resolveRuntime: (cwd, sessionId) => ({
@@ -75,6 +77,8 @@ export type EnqueueCodexDeliveryInput = {
   codexSessionId: string;
   kind: CodexDeliveryJobKind;
   maxAttempts?: number;
+  /** Skip the wait-for-idle hold (composer force variant / user Force send). */
+  force?: boolean;
 };
 
 export const enqueueCodexDeliveryJob = codexDelivery.enqueueDeliveryJob;

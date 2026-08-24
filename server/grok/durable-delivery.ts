@@ -20,6 +20,7 @@ const jobSelectColumns = {
   grokSessionId: grokDeliveryJobs.grokSessionId,
   kind: grokDeliveryJobs.kind,
   status: grokDeliveryJobs.status,
+  force: grokDeliveryJobs.force,
   attemptCount: grokDeliveryJobs.attemptCount,
   maxAttempts: grokDeliveryJobs.maxAttempts,
   nextAttemptAt: grokDeliveryJobs.nextAttemptAt,
@@ -48,6 +49,7 @@ const grokDelivery = createExternalCliDurableDelivery<
   noCwdMessage: "Grok session has no working directory.",
   jobsTable: grokDeliveryJobs,
   sessionIdColumn: grokDeliveryJobs.grokSessionId,
+  forceColumn: grokDeliveryJobs.force,
   jobSelectColumns,
   validateJob: (row, context) => validateDb(DbGrokDeliveryJob, row, context),
   resolveRuntime: (cwd, sessionId) => ({
@@ -69,6 +71,8 @@ export type EnqueueGrokDeliveryInput = {
   grokSessionId: string;
   kind: GrokDeliveryJobKind;
   maxAttempts?: number;
+  /** Skip the wait-for-idle hold (composer force variant / user Force send). */
+  force?: boolean;
 };
 
 export const enqueueGrokDeliveryJob = grokDelivery.enqueueDeliveryJob;

@@ -71,12 +71,17 @@ describe("message-delivery", () => {
     ).toBe(false);
   });
 
-  it("offers force send only for ses_ targets, never via label fallthrough", () => {
+  it("offers force send for every delivery-backed provider, never via label fallthrough", () => {
     expect(canForceSendDelivery(message({ sessionId: "ses_82c41693cb14xpTRmGfTDe4Qs6" }))).toBe(
       true,
     );
-    expect(canForceSendDelivery(message({ sessionId: "gr_1" }))).toBe(false);
-    expect(canForceSendDelivery(message({ sessionId: "cur_1" }))).toBe(false);
+    // CLI sessions hold queued messages while busy, so their queued rows carry
+    // the same Force send action OpenCode queued rows always had.
+    expect(canForceSendDelivery(message({ sessionId: "gr_1" }))).toBe(true);
+    expect(canForceSendDelivery(message({ sessionId: "cur_1" }))).toBe(true);
+    expect(canForceSendDelivery(message({ sessionId: "cc_1" }))).toBe(true);
+    expect(canForceSendDelivery(message({ sessionId: "cx_1" }))).toBe(true);
+    // Not a delivery provider at all.
     expect(canForceSendDelivery(message({ sessionId: "t3_1" }))).toBe(false);
     expect(
       canForceSendDelivery(
@@ -91,6 +96,14 @@ describe("message-delivery", () => {
         message({
           sessionId: "ses_82c41693cb14xpTRmGfTDe4Qs6",
           forwardTargetSessionId: "gr_1",
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      canForceSendDelivery(
+        message({
+          sessionId: "ses_82c41693cb14xpTRmGfTDe4Qs6",
+          forwardTargetSessionId: "t3_1",
         }),
       ),
     ).toBe(false);

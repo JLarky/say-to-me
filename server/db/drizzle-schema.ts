@@ -395,6 +395,8 @@ export const cursorDeliveryJobs = sqliteTable(
     cursorSessionId: text("cursor_session_id").notNull(),
     kind: text("kind").notNull(),
     status: text("status").notNull().default("pending"),
+    /** Skip the wait-for-idle hold at claim time (explicit user force-send). */
+    force: integer("force").notNull().default(0),
     attemptCount: integer("attempt_count").notNull().default(0),
     maxAttempts: integer("max_attempts").notNull().default(3),
     nextAttemptAt: integer("next_attempt_at").notNull().default(0),
@@ -442,6 +444,8 @@ export const claudeDeliveryJobs = sqliteTable(
     claudeSessionId: text("claude_session_id").notNull(),
     kind: text("kind").notNull(),
     status: text("status").notNull().default("pending"),
+    /** Skip the wait-for-idle hold at claim time (explicit user force-send). */
+    force: integer("force").notNull().default(0),
     attemptCount: integer("attempt_count").notNull().default(0),
     maxAttempts: integer("max_attempts").notNull().default(3),
     nextAttemptAt: integer("next_attempt_at").notNull().default(0),
@@ -489,6 +493,8 @@ export const codexDeliveryJobs = sqliteTable(
     codexSessionId: text("codex_session_id").notNull(),
     kind: text("kind").notNull(),
     status: text("status").notNull().default("pending"),
+    /** Skip the wait-for-idle hold at claim time (explicit user force-send). */
+    force: integer("force").notNull().default(0),
     attemptCount: integer("attempt_count").notNull().default(0),
     maxAttempts: integer("max_attempts").notNull().default(3),
     nextAttemptAt: integer("next_attempt_at").notNull().default(0),
@@ -533,6 +539,8 @@ export const grokDeliveryJobs = sqliteTable(
     grokSessionId: text("grok_session_id").notNull(),
     kind: text("kind").notNull(),
     status: text("status").notNull().default("pending"),
+    /** Skip the wait-for-idle hold at claim time (explicit user force-send). */
+    force: integer("force").notNull().default(0),
     attemptCount: integer("attempt_count").notNull().default(0),
     maxAttempts: integer("max_attempts").notNull().default(3),
     nextAttemptAt: integer("next_attempt_at").notNull().default(0),

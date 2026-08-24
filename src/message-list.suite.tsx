@@ -663,6 +663,28 @@ describe("MessageList", () => {
     expect(container.textContent).toContain("Retry");
   });
 
+  it("offers Force send on a queued CLI row that is waiting for the provider to be idle", () => {
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+
+    renderMessages(root, [
+      message({
+        id: 1,
+        author: "user",
+        sessionId: "cur_9c7c8c5b-5666-42e9-b6a0-99d3a33a4431",
+        status: "received",
+        opencodeDeliveryStatus: "queued",
+      }),
+    ]);
+
+    expect(container.textContent).toContain("Waiting for Cursor to be idle");
+    // The queued hold is real (CLI delivery waits out an open turn), so the
+    // same Force send escape hatch OpenCode rows have applies here.
+    expect(container.textContent).toContain("Force send");
+    expect(container.textContent).not.toContain("Retry");
+  });
+
   it("shows a dispatched-but-unconfirmed CLI delivery as a retryable failure", () => {
     container = document.createElement("div");
     document.body.append(container);

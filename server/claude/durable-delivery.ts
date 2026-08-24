@@ -24,6 +24,7 @@ const jobSelectColumns = {
   claudeSessionId: claudeDeliveryJobs.claudeSessionId,
   kind: claudeDeliveryJobs.kind,
   status: claudeDeliveryJobs.status,
+  force: claudeDeliveryJobs.force,
   attemptCount: claudeDeliveryJobs.attemptCount,
   maxAttempts: claudeDeliveryJobs.maxAttempts,
   nextAttemptAt: claudeDeliveryJobs.nextAttemptAt,
@@ -52,6 +53,7 @@ const claudeDelivery = createExternalCliDurableDelivery<
   noCwdMessage: "Claude session has no working directory.",
   jobsTable: claudeDeliveryJobs,
   sessionIdColumn: claudeDeliveryJobs.claudeSessionId,
+  forceColumn: claudeDeliveryJobs.force,
   jobSelectColumns,
   validateJob: (row, context) => validateDb(DbClaudeDeliveryJob, row, context),
   resolveRuntime: (cwd, sessionId) => ({
@@ -73,6 +75,8 @@ export type EnqueueClaudeDeliveryInput = {
   claudeSessionId: string;
   kind: ClaudeDeliveryJobKind;
   maxAttempts?: number;
+  /** Skip the wait-for-idle hold (composer force variant / user Force send). */
+  force?: boolean;
 };
 
 export const enqueueClaudeDeliveryJob = claudeDelivery.enqueueDeliveryJob;
