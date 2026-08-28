@@ -90,6 +90,18 @@ describe("resolveAgentCliServerUrl", () => {
     ).toBe(null);
     expect(
       resolveAgentCliServerUrl({
+        env: {
+          SAY_TO_ME_URL: "http://localhost:5411",
+          SAY_TO_ME_INTERNAL_URL: "http://127.0.0.1:5412",
+        },
+        existsSync: () => false,
+        readFileSync: () => {
+          throw new Error("should not read");
+        },
+      }),
+    ).toBe(null);
+    expect(
+      resolveAgentCliServerUrl({
         env: { SAY_TO_ME_INTERNAL_URL: "http://127.0.0.1:5411" },
         existsSync: () => false,
         readFileSync: () => {

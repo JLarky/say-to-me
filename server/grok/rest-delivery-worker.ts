@@ -9,6 +9,7 @@ import {
 } from "@say-to-me/external-cli-delivery/workflow";
 import { createExternalCliRestDeliveryWorker } from "../external-cli/rest-delivery-worker.ts";
 import { workerBin, workerVersion } from "../external-cli/worker-env.ts";
+import type { ResolveWorkerInternalUrlOptions } from "../external-cli/worker-internal-url.ts";
 import { safeJsonParse, UnknownJson } from "@say-to-me/runtime-validation";
 
 type ClaimedJob = {
@@ -22,8 +23,9 @@ type ClaimedJobWithMessage = ClaimedJob & { message: DbMessage };
 export function grokDeliveryPrompt(
   job: Pick<DbGrokDeliveryJob, "grokSessionId">,
   message: Pick<DbMessage, "text">,
+  options?: ResolveWorkerInternalUrlOptions,
 ): string {
-  return buildAgentVoicePrompt(job.grokSessionId, message.text);
+  return buildAgentVoicePrompt(job.grokSessionId, message.text, options);
 }
 
 export function parseGrokJsonOutput(stdout: string): { isError?: boolean; text?: string } {

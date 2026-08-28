@@ -51,13 +51,17 @@ export function createExternalCliBooWorker(config: ExternalCliBooWorkerConfig) {
     const name = booWorkerName(sessionId);
     const sessions = await driver.listSessions();
     if (sessions.some((session) => session.name === name)) return false;
+    // Legacy names are machine-global and may belong to the live instance.
+    // An isolated server must never kill or coexist with one.
+    if (
+      name !== `stm-${sessionId}` &&
+      sessions.some((session) => session.name === `stm-${sessionId}`)
+    ) {
+      return false;
+    }
     const internalUrl = resolveWorkerInternalUrl();
     const mode = autostartWorkerMode(config.envPrefix, config.realWorkerMode);
     const internalApiToken = ensureInternalApiToken();
-    const legacyName = `stm-${sessionId}`;
-    if (legacyName !== name && sessions.some((session) => session.name === legacyName)) {
-      await driver.killSession(legacyName);
-    }
     await driver.startCommand({
       name,
       args: [

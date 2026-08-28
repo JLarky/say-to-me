@@ -13,7 +13,6 @@ function fakeDriver(name: string, staleFor: number) {
   const started: StartCommandOptions[] = [];
   return {
     started,
-    killSession: async (): Promise<string> => "killed",
     listSessions: async (): Promise<BooSession[]> => {
       calls += 1;
       return calls <= staleFor ? [{ name }] : [];
@@ -47,7 +46,6 @@ describe("scheduleClaudeBooWorkerReplacement", () => {
   it("autostarts with real claude mode and without disabling TLS verification", async () => {
     const started: StartCommandOptions[] = [];
     const driver = {
-      killSession: async (): Promise<string> => "killed",
       listSessions: async (): Promise<BooSession[]> => [],
       startCommand: async (options: StartCommandOptions): Promise<string> => {
         started.push(options);
@@ -63,28 +61,6 @@ describe("scheduleClaudeBooWorkerReplacement", () => {
     expect(started[0]?.args?.some((arg) => arg.startsWith("NODE_TLS_REJECT_UNAUTHORIZED="))).toBe(
       false,
     );
-  });
-
-  it("stops a legacy live-style worker before starting its isolated replacement", async () => {
-    process.env.SAY_TO_ME_INTERNAL_URL = "http://127.0.0.1:5412";
-    const killed: string[] = [];
-    const started: StartCommandOptions[] = [];
-    const driver = {
-      killSession: async (workerName: string): Promise<string> => {
-        killed.push(workerName);
-        return "killed";
-      },
-      listSessions: async (): Promise<BooSession[]> => [{ name: `stm-${sessionId}` }],
-      startCommand: async (options: StartCommandOptions): Promise<string> => {
-        started.push(options);
-        return "started";
-      },
-    };
-
-    await ensureClaudeBooWorker(sessionId, driver);
-
-    expect(killed).toEqual([`stm-${sessionId}`]);
-    expect(started[0]?.name).toBe(`stm_5412_${sessionId}`);
   });
 
   it("retries until the stale worker's name frees, then starts a fresh worker", async () => {

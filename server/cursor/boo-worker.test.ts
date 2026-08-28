@@ -24,7 +24,6 @@ describe("ensureCursorBooWorker", () => {
   it("autostarts with real cursor mode and without disabling TLS verification", async () => {
     const started: StartCommandOptions[] = [];
     const driver = {
-      killSession: async (): Promise<string> => "killed",
       listSessions: async (): Promise<BooSession[]> => [],
       startCommand: async (options: StartCommandOptions): Promise<string> => {
         started.push(options);

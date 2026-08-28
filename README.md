@@ -122,7 +122,7 @@ To boot a **second** process from a worktree (custom port, separate sqlite, neve
 
 ### `say-to-me api` CLI
 
-Call a **running** server without auto-start (default `https://say.local:1355`, or
+Call a **running** server without auto-start (default `http://localhost:5411`, or
 `SAY_TO_ME_URL` / `--server`). Response body goes to stdout (jq-friendly); non-2xx exits
 non-zero and still prints the body.
 

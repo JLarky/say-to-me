@@ -108,7 +108,7 @@ export function resolveAgentCliServerUrl(
 ): string | null {
   const env = options.env ?? process.env;
   const fromEnv = (env.SAY_TO_ME_URL ?? "").replace(/\/$/, "");
-  if (fromEnv && isNonLiveAgentCliOrigin(fromEnv)) return fromEnv;
+  if (fromEnv) return isNonLiveAgentCliOrigin(fromEnv) ? fromEnv : null;
   const internal = resolveWorkerInternalUrl({ ...options, env });
   if (internal && isNonLiveAgentCliOrigin(internal)) return internal;
   return null;

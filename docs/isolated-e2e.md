@@ -6,7 +6,7 @@ There is no product Playwright pack. Vitest (`vp run test`) plus `server/api.har
 
 ## Do not use the live instance
 
-The machine already has a shared app. Agents find it with `portless list` (`say.local` → some localhost port). `astro.config.mjs` also defaults the dev server to port **5411**. Bare `say-to-me api` / `SAY_TO_ME_URL` default to `https://say.local:1355`.
+The machine already has a shared app. Agents find it with `portless list` (`say.local` → some localhost port). `astro.config.mjs` also defaults the dev server to port **5411**. Bare `say-to-me api` / `SAY_TO_ME_URL` default to `http://localhost:5411`.
 
 Isolated e2e must **not**:
 
