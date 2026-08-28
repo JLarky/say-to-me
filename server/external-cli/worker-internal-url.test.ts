@@ -111,6 +111,46 @@ describe("resolveAgentCliServerUrl", () => {
     ).toBe(null);
   });
 
+  it("uses explicit INTERNAL_URL as the isolated opt-in without SAY_TO_ME_URL", () => {
+    expect(
+      resolveAgentCliServerUrl({
+        env: { SAY_TO_ME_INTERNAL_URL: "http://127.0.0.1:5412" },
+        existsSync: () => false,
+        readFileSync: () => {
+          throw new Error("should not read");
+        },
+      }),
+    ).toBe("http://127.0.0.1:5412");
+    expect(
+      booWorkerNameForSession("cur_abc", {
+        env: { SAY_TO_ME_INTERNAL_URL: "http://127.0.0.1:5412" },
+        existsSync: () => false,
+        readFileSync: () => {
+          throw new Error("should not read");
+        },
+      }),
+    ).toBe("stm_5412_cur_abc");
+  });
+
+  it("keeps the live namespace when Astro moved without explicit origin env", () => {
+    expect(
+      resolveAgentCliServerUrl({
+        env: {},
+        cwd: "/worktree",
+        existsSync: () => true,
+        readFileSync: () => JSON.stringify({ port: 5412 }),
+      }),
+    ).toBe(null);
+    expect(
+      booWorkerNameForSession("cur_abc", {
+        env: {},
+        cwd: "/worktree",
+        existsSync: () => true,
+        readFileSync: () => JSON.stringify({ port: 5412 }),
+      }),
+    ).toBe("stm-cur_abc");
+  });
+
   it("keeps a live CLI namespace when INTERNAL_URL has a stale fallback port", () => {
     expect(
       booWorkerNameForSession("cur_abc", {

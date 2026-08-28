@@ -41,15 +41,15 @@ export SAY_TO_ME_CODEX_WORKER_AUTOSTART=0
 export SAY_TO_ME_GROK_WORKER_AUTOSTART=0
 ```
 
-| Variable                            | Why                                                                   |
-| ----------------------------------- | --------------------------------------------------------------------- |
-| `PORT` + Astro `--port`             | Config hardcodes 5411; you must pass `--port` or you fight live.      |
-| `SAY_TO_ME_DB`                      | Separate sqlite. Default is `<cwd>/.local/queue.sqlite`.              |
-| `SAY_TO_ME_INTERNAL_URL`            | Loopback origin so workers do not remap `say.local` to this checkout. |
-| `SAY_TO_ME_URL`                     | Makes the helper CLI target this process.                             |
-| `SAY_TO_ME_OPENCODE_URL`            | Dummy URL so you do not share live OpenCode.                          |
-| `SAY_TO_ME_EXTERNAL_CLI_STATE_ROOT` | Empty CLI home so discovery does not see live sessions.               |
-| `SAY_TO_ME_*_WORKER_AUTOSTART=0`    | Do not spawn real CLIs.                                               |
+| Variable                            | Why                                                                    |
+| ----------------------------------- | ---------------------------------------------------------------------- |
+| `PORT` + Astro `--port`             | Config hardcodes 5411; you must pass `--port` or you fight live.       |
+| `SAY_TO_ME_DB`                      | Separate sqlite. Default is `<cwd>/.local/queue.sqlite`.               |
+| `SAY_TO_ME_INTERNAL_URL`            | Worker-side isolation opt-in and loopback origin for this checkout.    |
+| `SAY_TO_ME_URL`                     | Makes the helper CLI target this process; keep it aligned with origin. |
+| `SAY_TO_ME_OPENCODE_URL`            | Dummy URL so you do not share live OpenCode.                           |
+| `SAY_TO_ME_EXTERNAL_CLI_STATE_ROOT` | Empty CLI home so discovery does not see live sessions.                |
+| `SAY_TO_ME_*_WORKER_AUTOSTART=0`    | Do not spawn real CLIs.                                                |
 
 Do not copy the live checkout `.env` into the worktree. If you need env, write a file that only contains the block above.
 
