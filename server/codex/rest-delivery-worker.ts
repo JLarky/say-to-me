@@ -13,6 +13,7 @@ import {
 } from "@say-to-me/external-cli-delivery/workflow";
 import { createExternalCliRestDeliveryWorker } from "../external-cli/rest-delivery-worker.ts";
 import { workerBin, workerVersion } from "../external-cli/worker-env.ts";
+import type { ResolveWorkerInternalUrlOptions } from "../external-cli/worker-internal-url.ts";
 import { codexReasoningEffortConfigArg, type CodexReasoningEffort } from "./reasoning-effort.ts";
 
 type ClaimedJob = {
@@ -23,8 +24,12 @@ type ClaimedJob = {
 
 type ClaimedJobWithMessage = ClaimedJob & { message: DbMessage };
 
-function deliveryPrompt(job: DbCodexDeliveryJob, message: DbMessage): string {
-  return buildAgentVoicePrompt(job.codexSessionId, message.text);
+export function codexDeliveryPrompt(
+  job: Pick<DbCodexDeliveryJob, "codexSessionId">,
+  message: Pick<DbMessage, "text">,
+  options?: ResolveWorkerInternalUrlOptions,
+): string {
+  return buildAgentVoicePrompt(job.codexSessionId, message.text, options);
 }
 
 export function codexCommandArgs(
@@ -60,7 +65,7 @@ function runCodexPrompt(
     const args = [
       ...codexCommandArgs(
         claimed.codex.resumeId,
-        deliveryPrompt(job, claimed.message),
+        codexDeliveryPrompt(job, claimed.message),
         claimed.codex.model,
         claimed.codex.reasoningEffort,
       ),
@@ -144,7 +149,7 @@ const codexRestWorker = createExternalCliRestDeliveryWorker<DbCodexDeliveryJob, 
   sessionIdRequestField: "codexSessionId",
   workerVersion: workerVersion("CODEX"),
   echoReplyLabel: "Echo from Codex worker",
-  deliveryPrompt,
+  deliveryPrompt: codexDeliveryPrompt,
   runPrompt: runCodexPrompt,
 });
 

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import { stopExternalCliSession } from "./stop-session.ts";
+import { createStopSession } from "./create-stop-session.ts";
+import { claudeDeliveryJobs } from "../db/drizzle-schema.ts";
 
 describe("stopExternalCliSession", () => {
   it("skips message updates when cancelJob loses the status race", async () => {
@@ -55,5 +57,28 @@ describe("stopExternalCliSession", () => {
     // message's own job (3) survives via keepMessageIds; only the live turn
     // holding the provider (1) is cancelled.
     expect(cancelled).toEqual([1]);
+  });
+
+  it("stops only the isolated worker name and never its live-style legacy name", async () => {
+    const killed: string[] = [];
+    const stop = createStopSession({
+      backendLabel: "test",
+      deliveryJobsTable: claudeDeliveryJobs,
+      sessionIdColumn: claudeDeliveryJobs.claudeSessionId,
+      isValidSessionId: () => true,
+      invalidSessionIdError: "nope",
+      workerName: (sessionId) => `stm_5412_${sessionId}`,
+      booDriver: {
+        killSession: async (workerName) => {
+          killed.push(workerName);
+          return "";
+        },
+      },
+    });
+
+    await stop("cur_e6ca1259-5b7f-4de3-afd5-a877811435cb");
+
+    expect(killed).toEqual(["stm_5412_cur_e6ca1259-5b7f-4de3-afd5-a877811435cb"]);
+    expect(killed).not.toContain("stm-cur_e6ca1259-5b7f-4de3-afd5-a877811435cb");
   });
 });

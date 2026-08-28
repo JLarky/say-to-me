@@ -12,6 +12,7 @@ import {
 import { createExternalCliRestDeliveryWorker } from "../external-cli/rest-delivery-worker.ts";
 import { postInternalJson } from "../external-cli/internal-http.ts";
 import { workerBin, workerVersion } from "../external-cli/worker-env.ts";
+import type { ResolveWorkerInternalUrlOptions } from "../external-cli/worker-internal-url.ts";
 import { safeJsonParse, UnknownJson } from "@say-to-me/runtime-validation";
 
 type ClaimedJob = {
@@ -24,8 +25,12 @@ type ClaimedJobWithMessage = ClaimedJob & { message: DbMessage };
 
 const OkResponse = arktype({ ok: "boolean" });
 
-function deliveryPrompt(job: DbCursorDeliveryJob, message: DbMessage): string {
-  return buildAgentVoicePrompt(job.cursorSessionId, message.text);
+export function cursorDeliveryPrompt(
+  job: Pick<DbCursorDeliveryJob, "cursorSessionId">,
+  message: Pick<DbMessage, "text">,
+  options?: ResolveWorkerInternalUrlOptions,
+): string {
+  return buildAgentVoicePrompt(job.cursorSessionId, message.text, options);
 }
 
 function isJsonRecord(value: unknown): value is Record<string, unknown> {
@@ -105,7 +110,7 @@ function runCursorPrompt(
       workerBin("CURSOR", "cursor-agent"),
       cursorCommandArgs(
         claimed.cursor.resumeId,
-        deliveryPrompt(job, claimed.message),
+        cursorDeliveryPrompt(job, claimed.message),
         claimed.cursor.model,
       ),
       { cwd: claimed.cursor.cwd, stdio: ["ignore", "pipe", "pipe"] },
@@ -193,7 +198,7 @@ const cursorRestWorker = createExternalCliRestDeliveryWorker<DbCursorDeliveryJob
   sessionIdRequestField: "cursorSessionId",
   workerVersion: workerVersion("CURSOR"),
   echoReplyLabel: "Echo from Cursor worker",
-  deliveryPrompt,
+  deliveryPrompt: cursorDeliveryPrompt,
   runPrompt: runCursorPrompt,
 });
 

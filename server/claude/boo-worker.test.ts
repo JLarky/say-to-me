@@ -27,14 +27,17 @@ function fakeDriver(name: string, staleFor: number) {
 
 describe("scheduleClaudeBooWorkerReplacement", () => {
   const sessionId = "cc_00000000-0000-0000-0000-000000000000";
-  const name = claudeBooWorkerName(sessionId);
+  const name = `stm-${sessionId}`;
   let previousInternalUrl: string | undefined;
+  let previousCliUrl: string | undefined;
 
   beforeEach(() => {
     delete process.env.SAY_TO_ME_CLAUDE_WORKER_AUTOSTART;
     delete process.env.SAY_TO_ME_CLAUDE_WORKER_MODE;
     previousInternalUrl = process.env.SAY_TO_ME_INTERNAL_URL;
+    previousCliUrl = process.env.SAY_TO_ME_URL;
     delete process.env.SAY_TO_ME_INTERNAL_URL;
+    delete process.env.SAY_TO_ME_URL;
   });
 
   afterEach(() => {
@@ -42,6 +45,8 @@ describe("scheduleClaudeBooWorkerReplacement", () => {
     delete process.env.SAY_TO_ME_CLAUDE_WORKER_MODE;
     if (previousInternalUrl === undefined) delete process.env.SAY_TO_ME_INTERNAL_URL;
     else process.env.SAY_TO_ME_INTERNAL_URL = previousInternalUrl;
+    if (previousCliUrl === undefined) delete process.env.SAY_TO_ME_URL;
+    else process.env.SAY_TO_ME_URL = previousCliUrl;
   });
 
   it("autostarts with real claude mode and without disabling TLS verification", async () => {
@@ -57,10 +62,13 @@ describe("scheduleClaudeBooWorkerReplacement", () => {
     expect(started).toHaveLength(1);
     const { resolveWorkerInternalUrl } = await import("../external-cli/worker-internal-url.ts");
     expect(started[0]?.args).toContain(`SAY_TO_ME_INTERNAL_URL=${resolveWorkerInternalUrl()}`);
+    expect(started[0]?.args?.some((arg) => arg.startsWith("SAY_TO_ME_URL="))).toBe(false);
     expect(started[0]?.args).toContain("SAY_TO_ME_CLAUDE_WORKER_MODE=claude");
     expect(started[0]?.args?.some((arg) => arg.startsWith("NODE_TLS_REJECT_UNAUTHORIZED="))).toBe(
       false,
     );
+    expect(started[0]?.name).toBe(name);
+    expect(claudeBooWorkerName(sessionId)).toBe(name);
   });
 
   it("retries until the stale worker's name frees, then starts a fresh worker", async () => {
@@ -72,6 +80,45 @@ describe("scheduleClaudeBooWorkerReplacement", () => {
     });
     expect(driver.started).toHaveLength(1);
     expect(driver.started[0]?.name).toBe(name);
+  });
+
+  it("does not start beside a machine-global legacy worker", async () => {
+    process.env.SAY_TO_ME_INTERNAL_URL = "http://127.0.0.1:5412";
+    process.env.SAY_TO_ME_URL = "http://127.0.0.1:5412";
+    const started: StartCommandOptions[] = [];
+    const driver = {
+      listSessions: async (): Promise<BooSession[]> => [{ name: `stm-${sessionId}` }],
+      startCommand: async (options: StartCommandOptions): Promise<string> => {
+        started.push(options);
+        return "started";
+      },
+    };
+
+    const didStart = await ensureClaudeBooWorker(sessionId, driver);
+
+    expect(didStart).toBe(false);
+    expect(started).toHaveLength(0);
+  });
+
+  it("pins SAY_TO_ME_URL and an isolated Boo name on non-live origins", async () => {
+    process.env.SAY_TO_ME_INTERNAL_URL = "http://127.0.0.1:5412";
+    process.env.SAY_TO_ME_URL = "http://127.0.0.1:5412";
+    const started: StartCommandOptions[] = [];
+    const driver = {
+      listSessions: async (): Promise<BooSession[]> => [],
+      startCommand: async (options: StartCommandOptions): Promise<string> => {
+        started.push(options);
+        return "started";
+      },
+    };
+
+    const didStart = await ensureClaudeBooWorker(sessionId, driver);
+
+    expect(didStart).toBe(true);
+    expect(started).toHaveLength(1);
+    expect(started[0]?.name).toBe(`stm_5412_${sessionId}`);
+    expect(started[0]?.args).toContain("SAY_TO_ME_INTERNAL_URL=http://127.0.0.1:5412");
+    expect(started[0]?.args).toContain("SAY_TO_ME_URL=http://127.0.0.1:5412");
   });
 
   it("gives up after maxAttempts without starting a worker", async () => {
