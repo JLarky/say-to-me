@@ -26,10 +26,6 @@ function isSharedPortlessUrl(url: string): boolean {
   }
 }
 
-function isLoopbackHostname(hostname: string): boolean {
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
-}
-
 function readAstroDevLoopbackUrl(
   cwd: string,
   exists: (path: string) => boolean,
@@ -69,77 +65,6 @@ export function resolveWorkerInternalUrl(options: ResolveWorkerInternalUrlOption
   const read = options.readFileSync ?? readFileSync;
   const configured = (env.SAY_TO_ME_INTERNAL_URL ?? DEFAULT_INTERNAL_URL).replace(/\/$/, "");
   const local = readAstroDevLoopbackUrl(cwd, exists, read);
-  const cliOrigin = (env.SAY_TO_ME_URL ?? "").replace(/\/$/, "");
-  if (local && isSharedPortlessUrl(configured) && cliOrigin && isNonLiveAgentCliOrigin(cliOrigin)) {
-    return local;
-  }
+  if (local && isSharedPortlessUrl(configured)) return local;
   return configured;
-}
-
-export function listenPortFromUrl(url: string): string | null {
-  try {
-    const parsed = new URL(url);
-    if (parsed.port) return parsed.port;
-    if (parsed.protocol === "https:") return "443";
-    if (parsed.protocol === "http:") return "80";
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Origins agents should treat as the live shared instance.
- * Isolated `vp run dev` ports (e.g. 5412) must pass `--server` on every CLI call
- * and use port-prefixed Boo names (`stm_5412_<id>`).
- */
-export function isNonLiveAgentCliOrigin(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-    const hostname = parsed.hostname.toLowerCase();
-    if (hostname === "say.local" || hostname.endsWith(".local")) return false;
-    const port = parsed.port || (parsed.protocol === "https:" ? "443" : "80");
-    if (isLoopbackHostname(hostname) && (port === "5411" || port === "1355")) return false;
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export function resolveAgentCliServerUrl(
-  options: ResolveWorkerInternalUrlOptions = {},
-): string | null {
-  const env = options.env ?? process.env;
-  const fromEnv = (env.SAY_TO_ME_URL ?? "").replace(/\/$/, "");
-  if (fromEnv) return isNonLiveAgentCliOrigin(fromEnv) ? fromEnv : null;
-  // No explicit CLI origin means the helper's live default is in use. This
-  // keeps a live checkout safe if Astro moved its listen port. An explicitly
-  // configured internal origin is the worker-side isolation opt-in.
-  if (env.SAY_TO_ME_URL === undefined || env.SAY_TO_ME_URL.trim() === "") {
-    if (!Object.hasOwn(env, "SAY_TO_ME_INTERNAL_URL")) return null;
-  }
-  const internal = resolveWorkerInternalUrl({ ...options, env });
-  if (internal && isNonLiveAgentCliOrigin(internal)) return internal;
-  return null;
-}
-
-export function booWorkerNameForSession(
-  sessionId: string,
-  options: ResolveWorkerInternalUrlOptions = {},
-): string {
-  const env = options.env ?? process.env;
-  const explicitCliOrigin = (env.SAY_TO_ME_URL ?? "").replace(/\/$/, "");
-  // An explicitly configured live CLI origin identifies the shared worker
-  // namespace even when INTERNAL_URL points at a stale Astro fallback port.
-  if (!explicitCliOrigin && !Object.hasOwn(env, "SAY_TO_ME_INTERNAL_URL")) {
-    return `stm-${sessionId}`;
-  }
-  const origin =
-    explicitCliOrigin && !isNonLiveAgentCliOrigin(explicitCliOrigin)
-      ? explicitCliOrigin
-      : resolveWorkerInternalUrl(options);
-  if (!isNonLiveAgentCliOrigin(origin)) return `stm-${sessionId}`;
-  const port = listenPortFromUrl(origin);
-  if (!port) return `stm-${sessionId}`;
-  return `stm_${port}_${sessionId}`;
 }

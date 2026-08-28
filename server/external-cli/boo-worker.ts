@@ -7,7 +7,7 @@ import {
 } from "../boo/schedule-worker-replacement.ts";
 import { ensureInternalApiToken } from "../claude/internal-api-token.ts";
 import { portlessCaEnvVar } from "./portless-ca.ts";
-import { booWorkerNameForSession, resolveWorkerInternalUrl } from "./worker-internal-url.ts";
+import { resolveWorkerInternalUrl } from "./worker-internal-url.ts";
 import {
   autostartWorkerMode,
   workerAutostartDisabled,
@@ -31,7 +31,7 @@ export function createExternalCliBooWorker(config: ExternalCliBooWorkerConfig) {
   );
 
   function booWorkerName(sessionId: string): string {
-    return booWorkerNameForSession(sessionId);
+    return `stm-${sessionId}`;
   }
 
   function workerProcessEnv(internalUrl: string): string[] {
@@ -51,17 +51,6 @@ export function createExternalCliBooWorker(config: ExternalCliBooWorkerConfig) {
     const name = booWorkerName(sessionId);
     const sessions = await driver.listSessions();
     if (sessions.some((session) => session.name === name)) return false;
-    // Legacy names are machine-global and may belong to the live instance.
-    // An isolated server must never kill or coexist with one.
-    if (
-      name !== `stm-${sessionId}` &&
-      sessions.some((session) => session.name === `stm-${sessionId}`)
-    ) {
-      console.warn(
-        `[${config.envPrefix.toLowerCase()}-boo-worker] refusing isolated worker ${name}: legacy worker stm-${sessionId} already exists`,
-      );
-      return false;
-    }
     const internalUrl = resolveWorkerInternalUrl();
     const mode = autostartWorkerMode(config.envPrefix, config.realWorkerMode);
     const internalApiToken = ensureInternalApiToken();
@@ -70,7 +59,6 @@ export function createExternalCliBooWorker(config: ExternalCliBooWorkerConfig) {
       args: [
         "env",
         `SAY_TO_ME_INTERNAL_URL=${internalUrl}`,
-        `SAY_TO_ME_URL=${internalUrl}`,
         `SAY_TO_ME_INTERNAL_API_TOKEN=${internalApiToken}`,
         `${workerModeEnvName(config.envPrefix)}=${mode}`,
         ...workerProcessEnv(internalUrl),

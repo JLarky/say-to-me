@@ -45,7 +45,6 @@ export type CreateStopSessionConfig = {
   isValidSessionId: (sessionId: string) => boolean;
   invalidSessionIdError: string;
   workerName: (sessionId: string) => string;
-  booDriver?: Pick<BooDriver, "killSession">;
 };
 
 function nowSql() {
@@ -113,7 +112,7 @@ export function createStopSession(config: CreateStopSessionConfig) {
       keepMessageIds: options.keepMessageId != null ? [options.keepMessageId] : undefined,
       busyOnly: options.busyOnly === true,
       killWorker: async (activeSessionId) => {
-        await (config.booDriver ?? new BooDriver()).killSession(workerName(activeSessionId));
+        await new BooDriver().killSession(workerName(activeSessionId));
       },
     });
   };

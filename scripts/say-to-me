@@ -138,7 +138,7 @@ Request body and headers:
 Server URL resolution (no auto-start):
   --server <url>   Override base URL
   SAY_TO_ME_URL    Env default when --server is omitted
-  default          http://localhost:5411
+  default          https://say.local:1355
 
 Flags:
   --param name=value   Path template or query parameter

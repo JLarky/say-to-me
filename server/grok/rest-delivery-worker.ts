@@ -9,7 +9,6 @@ import {
 } from "@say-to-me/external-cli-delivery/workflow";
 import { createExternalCliRestDeliveryWorker } from "../external-cli/rest-delivery-worker.ts";
 import { workerBin, workerVersion } from "../external-cli/worker-env.ts";
-import type { ResolveWorkerInternalUrlOptions } from "../external-cli/worker-internal-url.ts";
 import { safeJsonParse, UnknownJson } from "@say-to-me/runtime-validation";
 
 type ClaimedJob = {
@@ -20,12 +19,8 @@ type ClaimedJob = {
 
 type ClaimedJobWithMessage = ClaimedJob & { message: DbMessage };
 
-export function grokDeliveryPrompt(
-  job: Pick<DbGrokDeliveryJob, "grokSessionId">,
-  message: Pick<DbMessage, "text">,
-  options?: ResolveWorkerInternalUrlOptions,
-): string {
-  return buildAgentVoicePrompt(job.grokSessionId, message.text, options);
+function deliveryPrompt(job: DbGrokDeliveryJob, message: DbMessage): string {
+  return buildAgentVoicePrompt(job.grokSessionId, message.text);
 }
 
 export function parseGrokJsonOutput(stdout: string): { isError?: boolean; text?: string } {
@@ -71,7 +66,7 @@ function runGrokPrompt(
       workerBin("GROK", "grok"),
       grokCommandArgs(
         claimed.grok.resumeId,
-        grokDeliveryPrompt(job, claimed.message),
+        deliveryPrompt(job, claimed.message),
         claimed.grok.model,
       ),
       { cwd: claimed.grok.cwd, stdio: ["ignore", "pipe", "pipe"] },
@@ -137,7 +132,7 @@ const grokRestWorker = createExternalCliRestDeliveryWorker<DbGrokDeliveryJob, Cl
   sessionIdRequestField: "grokSessionId",
   workerVersion: workerVersion("GROK"),
   echoReplyLabel: "Echo from Grok worker",
-  deliveryPrompt: grokDeliveryPrompt,
+  deliveryPrompt,
   runPrompt: runGrokPrompt,
 });
 
