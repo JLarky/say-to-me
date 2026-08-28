@@ -110,6 +110,21 @@ describe("resolveAgentCliServerUrl", () => {
       }),
     ).toBe(null);
   });
+
+  it("keeps a live CLI namespace when INTERNAL_URL has a stale fallback port", () => {
+    expect(
+      booWorkerNameForSession("cur_abc", {
+        env: {
+          SAY_TO_ME_URL: "http://localhost:5411",
+          SAY_TO_ME_INTERNAL_URL: "http://127.0.0.1:5412",
+        },
+        existsSync: () => false,
+        readFileSync: () => {
+          throw new Error("should not read");
+        },
+      }),
+    ).toBe("stm-cur_abc");
+  });
 });
 
 describe("booWorkerNameForSession", () => {

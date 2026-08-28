@@ -118,7 +118,14 @@ export function booWorkerNameForSession(
   sessionId: string,
   options: ResolveWorkerInternalUrlOptions = {},
 ): string {
-  const origin = resolveWorkerInternalUrl(options);
+  const env = options.env ?? process.env;
+  const explicitCliOrigin = (env.SAY_TO_ME_URL ?? "").replace(/\/$/, "");
+  // An explicitly configured live CLI origin identifies the shared worker
+  // namespace even when INTERNAL_URL points at a stale Astro fallback port.
+  const origin =
+    explicitCliOrigin && !isNonLiveAgentCliOrigin(explicitCliOrigin)
+      ? explicitCliOrigin
+      : resolveWorkerInternalUrl(options);
   if (!isNonLiveAgentCliOrigin(origin)) return `stm-${sessionId}`;
   const port = listenPortFromUrl(origin);
   if (!port) return `stm-${sessionId}`;

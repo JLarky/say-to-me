@@ -28,12 +28,15 @@ describe("scheduleClaudeBooWorkerReplacement", () => {
   const sessionId = "cc_00000000-0000-0000-0000-000000000000";
   const name = `stm_5412_${sessionId}`;
   let previousInternalUrl: string | undefined;
+  let previousCliUrl: string | undefined;
 
   beforeEach(() => {
     delete process.env.SAY_TO_ME_CLAUDE_WORKER_AUTOSTART;
     delete process.env.SAY_TO_ME_CLAUDE_WORKER_MODE;
     previousInternalUrl = process.env.SAY_TO_ME_INTERNAL_URL;
+    previousCliUrl = process.env.SAY_TO_ME_URL;
     process.env.SAY_TO_ME_INTERNAL_URL = "http://127.0.0.1:5412";
+    delete process.env.SAY_TO_ME_URL;
   });
 
   afterEach(() => {
@@ -41,6 +44,8 @@ describe("scheduleClaudeBooWorkerReplacement", () => {
     delete process.env.SAY_TO_ME_CLAUDE_WORKER_MODE;
     if (previousInternalUrl === undefined) delete process.env.SAY_TO_ME_INTERNAL_URL;
     else process.env.SAY_TO_ME_INTERNAL_URL = previousInternalUrl;
+    if (previousCliUrl === undefined) delete process.env.SAY_TO_ME_URL;
+    else process.env.SAY_TO_ME_URL = previousCliUrl;
   });
 
   it("autostarts with real claude mode and without disabling TLS verification", async () => {
@@ -72,6 +77,22 @@ describe("scheduleClaudeBooWorkerReplacement", () => {
     });
     expect(driver.started).toHaveLength(1);
     expect(driver.started[0]?.name).toBe(name);
+  });
+
+  it("does not start beside a machine-global legacy worker", async () => {
+    const started: StartCommandOptions[] = [];
+    const driver = {
+      listSessions: async (): Promise<BooSession[]> => [{ name: `stm-${sessionId}` }],
+      startCommand: async (options: StartCommandOptions): Promise<string> => {
+        started.push(options);
+        return "started";
+      },
+    };
+
+    const didStart = await ensureClaudeBooWorker(sessionId, driver);
+
+    expect(didStart).toBe(false);
+    expect(started).toHaveLength(0);
   });
 
   it("gives up after maxAttempts without starting a worker", async () => {
