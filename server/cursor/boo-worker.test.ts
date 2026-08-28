@@ -11,7 +11,7 @@ describe("ensureCursorBooWorker", () => {
     delete process.env.SAY_TO_ME_CURSOR_WORKER_AUTOSTART;
     delete process.env.SAY_TO_ME_CURSOR_WORKER_MODE;
     previousInternalUrl = process.env.SAY_TO_ME_INTERNAL_URL;
-    delete process.env.SAY_TO_ME_INTERNAL_URL;
+    process.env.SAY_TO_ME_INTERNAL_URL = "http://127.0.0.1:5412";
   });
 
   afterEach(() => {

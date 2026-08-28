@@ -85,9 +85,13 @@ https://say.local:1355  ->  localhost:4121
 
 When validating locally from the VM, prefer the forwarded local port (for example `http://127.0.0.1:4121`) instead of starting extra temporary dev servers unless you specifically need an isolated build.
 
+For **isolated** process-level e2e (worktree, separate sqlite, non-5411 port, `agent-browser` against that origin only), see [docs/isolated-e2e.md](docs/isolated-e2e.md). Pin the helper CLI with `--server http://127.0.0.1:$PORT` or `SAY_TO_ME_URL`; do not call `say.local`.
+
 ## Browser Automation
 
 Use `agent-browser` for browser automation tasks. Repository: https://github.com/vercel-labs/agent-browser
+
+Isolated UI smoke must open the worktree origin (`http://127.0.0.1:$PORT`), never `say.local`. Recipe: [docs/isolated-e2e.md](docs/isolated-e2e.md).
 
 ## GitHub PRs
 
