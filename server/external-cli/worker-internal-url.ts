@@ -68,3 +68,57 @@ export function resolveWorkerInternalUrl(options: ResolveWorkerInternalUrlOption
   if (local && isSharedPortlessUrl(configured)) return local;
   return configured;
 }
+
+export function listenPortFromUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    if (parsed.port) return parsed.port;
+    if (parsed.protocol === "https:") return "443";
+    if (parsed.protocol === "http:") return "80";
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Origins agents should treat as the live shared instance.
+ * Isolated `vp run dev` ports (e.g. 5412) must pass `--server` on every CLI call
+ * and use port-prefixed Boo names (`stm_5412_<id>`).
+ */
+export function isNonLiveAgentCliOrigin(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const hostname = parsed.hostname.toLowerCase();
+    if (hostname === "say.local" || hostname.endsWith(".local")) return false;
+    const port = parsed.port || (parsed.protocol === "https:" ? "443" : "80");
+    if (port === "5411" || port === "1355") return false;
+    // Test dummy used by the API harness / vitest db setup — not a real instance.
+    if (hostname === "127.0.0.1" && port === "1") return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function resolveAgentCliServerUrl(
+  options: ResolveWorkerInternalUrlOptions = {},
+): string | null {
+  const env = options.env ?? process.env;
+  const fromEnv = (env.SAY_TO_ME_URL ?? "").replace(/\/$/, "");
+  if (fromEnv && isNonLiveAgentCliOrigin(fromEnv)) return fromEnv;
+  const internal = resolveWorkerInternalUrl({ ...options, env });
+  if (internal && isNonLiveAgentCliOrigin(internal)) return internal;
+  return null;
+}
+
+export function booWorkerNameForSession(
+  sessionId: string,
+  options: ResolveWorkerInternalUrlOptions = {},
+): string {
+  const origin = resolveWorkerInternalUrl(options);
+  if (!isNonLiveAgentCliOrigin(origin)) return `stm-${sessionId}`;
+  const port = listenPortFromUrl(origin);
+  if (!port) return `stm-${sessionId}`;
+  return `stm_${port}_${sessionId}`;
+}

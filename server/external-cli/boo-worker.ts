@@ -7,7 +7,7 @@ import {
 } from "../boo/schedule-worker-replacement.ts";
 import { ensureInternalApiToken } from "../claude/internal-api-token.ts";
 import { portlessCaEnvVar } from "./portless-ca.ts";
-import { resolveWorkerInternalUrl } from "./worker-internal-url.ts";
+import { booWorkerNameForSession, resolveWorkerInternalUrl } from "./worker-internal-url.ts";
 import {
   autostartWorkerMode,
   workerAutostartDisabled,
@@ -31,7 +31,7 @@ export function createExternalCliBooWorker(config: ExternalCliBooWorkerConfig) {
   );
 
   function booWorkerName(sessionId: string): string {
-    return `stm-${sessionId}`;
+    return booWorkerNameForSession(sessionId);
   }
 
   function workerProcessEnv(internalUrl: string): string[] {

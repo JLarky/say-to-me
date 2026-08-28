@@ -69,7 +69,10 @@ unsupported, and add a test or documented reason for each removed capability.
 - [ ] Run `vp run check`, focused provider tests, and `vp run test`.
 - [ ] Perform a local end-to-end smoke test: create or import, send, receive a
       reply, forward to and from the provider, stop active work, restart the
-      server, and retry a failed delivery.
+      server, and retry a failed delivery. For a **second** process (custom port,
+      separate sqlite, `agent-browser` / `say-to-me api --server`, never live 5411
+      or `say.local`), follow [docs/isolated-e2e.md](../isolated-e2e.md). Live
+      `say.local` smoke is a different check and must not share that recipe.
 
 ## Final review
 

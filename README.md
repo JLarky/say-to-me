@@ -116,6 +116,10 @@ scripts/say-to-me usage timers
 scripts/say-to-me usage api
 ```
 
+To boot a **second** process from a worktree (custom port, separate sqlite, never live
+5411 / `say.local`) and drive it with `say-to-me api --server` plus `agent-browser`, see
+[`docs/isolated-e2e.md`](docs/isolated-e2e.md).
+
 ### `say-to-me api` CLI
 
 Call a **running** server without auto-start (default `https://say.local:1355`, or
