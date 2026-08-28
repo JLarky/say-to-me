@@ -152,7 +152,10 @@ describe("booWorkerNameForSession", () => {
   it("prefixes isolated ports as stm_<port>_<id>", () => {
     expect(
       booWorkerNameForSession("cur_abc", {
-        env: { SAY_TO_ME_INTERNAL_URL: "http://127.0.0.1:5412" },
+        env: {
+          SAY_TO_ME_URL: "http://127.0.0.1:5412",
+          SAY_TO_ME_INTERNAL_URL: "http://127.0.0.1:5412",
+        },
         existsSync: () => false,
         readFileSync: () => {
           throw new Error("should not read");

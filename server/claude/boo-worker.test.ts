@@ -36,7 +36,7 @@ describe("scheduleClaudeBooWorkerReplacement", () => {
     previousInternalUrl = process.env.SAY_TO_ME_INTERNAL_URL;
     previousCliUrl = process.env.SAY_TO_ME_URL;
     process.env.SAY_TO_ME_INTERNAL_URL = "http://127.0.0.1:5412";
-    delete process.env.SAY_TO_ME_URL;
+    process.env.SAY_TO_ME_URL = "http://127.0.0.1:5412";
   });
 
   afterEach(() => {

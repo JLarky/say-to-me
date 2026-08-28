@@ -169,6 +169,7 @@ When this process is **not** live 5411 / `say.local`:
 
 - Delivery prompts include: this session requires `say-to-me api --server http://127.0.0.1:$PORT` on every call. Do not use `say.local`.
 - Boo worker names are `stm_<port>_<sessionId>` (example: `stm_5412_cur_abc`) instead of live `stm-<sessionId>`.
+- If an isolated worker finds a machine-global legacy `stm-<sessionId>` worker, it refuses to start and logs the conflicting names. It never kills that legacy worker; stop only targets the isolated `stm_<port>_<sessionId>` name.
 
 ## What this is not
 

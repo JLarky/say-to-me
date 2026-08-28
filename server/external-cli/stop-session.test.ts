@@ -68,8 +68,11 @@ describe("stopExternalCliSession", () => {
       isValidSessionId: () => true,
       invalidSessionIdError: "nope",
       workerName: (sessionId) => `stm_5412_${sessionId}`,
-      killWorker: async (workerName) => {
-        killed.push(workerName);
+      booDriver: {
+        killSession: async (workerName) => {
+          killed.push(workerName);
+          return "";
+        },
       },
     });
 

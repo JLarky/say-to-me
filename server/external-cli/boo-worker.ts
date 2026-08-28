@@ -57,6 +57,9 @@ export function createExternalCliBooWorker(config: ExternalCliBooWorkerConfig) {
       name !== `stm-${sessionId}` &&
       sessions.some((session) => session.name === `stm-${sessionId}`)
     ) {
+      console.warn(
+        `[${config.envPrefix.toLowerCase()}-boo-worker] refusing isolated worker ${name}: legacy worker stm-${sessionId} already exists`,
+      );
       return false;
     }
     const internalUrl = resolveWorkerInternalUrl();

@@ -109,6 +109,9 @@ export function resolveAgentCliServerUrl(
   const env = options.env ?? process.env;
   const fromEnv = (env.SAY_TO_ME_URL ?? "").replace(/\/$/, "");
   if (fromEnv) return isNonLiveAgentCliOrigin(fromEnv) ? fromEnv : null;
+  // No explicit CLI origin means the helper's live default is in use. This
+  // keeps a live checkout safe if Astro moved its listen port.
+  if (env.SAY_TO_ME_URL === undefined || env.SAY_TO_ME_URL.trim() === "") return null;
   const internal = resolveWorkerInternalUrl({ ...options, env });
   if (internal && isNonLiveAgentCliOrigin(internal)) return internal;
   return null;
@@ -122,6 +125,7 @@ export function booWorkerNameForSession(
   const explicitCliOrigin = (env.SAY_TO_ME_URL ?? "").replace(/\/$/, "");
   // An explicitly configured live CLI origin identifies the shared worker
   // namespace even when INTERNAL_URL points at a stale Astro fallback port.
+  if (!explicitCliOrigin) return `stm-${sessionId}`;
   const origin =
     explicitCliOrigin && !isNonLiveAgentCliOrigin(explicitCliOrigin)
       ? explicitCliOrigin
