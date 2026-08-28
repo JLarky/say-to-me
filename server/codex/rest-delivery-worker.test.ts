@@ -18,10 +18,12 @@ const { codexCommandArgs, parseCodexLastMessage, runCodexRestDeliveryOnce } =
 
 describe("Codex REST delivery worker", () => {
   let server: Awaited<ReturnType<typeof listen>>["server"] | null = null;
+  let origin = "";
 
   beforeEach(async () => {
     const started = await listen(createApiMiddleware());
     server = started.server;
+    origin = started.origin;
     process.env.SAY_TO_ME_INTERNAL_URL = started.origin;
     process.env.SAY_TO_ME_INTERNAL_API_TOKEN = "test-internal-api-token";
     process.env.SAY_TO_ME_CODEX_WORKER_MODE = "echo";
@@ -76,7 +78,7 @@ describe("Codex REST delivery worker", () => {
       )
       .all();
     expect(replies.map((row) => row.extraMarkdown)).toContain(
-      `Echo from Codex worker: you have to reply to this message with voice (cli \`say-to-me usage\` to learn how/why)\n\n${sessionId} says: rest worker echo`,
+      `Echo from Codex worker: you have to reply to this message with voice (cli \`say-to-me usage\` to learn how/why)\nThis session requires \`say-to-me api --server ${origin}\` on every call. Do not use say.local.\n\n${sessionId} says: rest worker echo`,
     );
   });
 

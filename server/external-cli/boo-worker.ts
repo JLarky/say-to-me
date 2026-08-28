@@ -54,11 +54,16 @@ export function createExternalCliBooWorker(config: ExternalCliBooWorkerConfig) {
     const internalUrl = resolveWorkerInternalUrl();
     const mode = autostartWorkerMode(config.envPrefix, config.realWorkerMode);
     const internalApiToken = ensureInternalApiToken();
+    const legacyName = `stm-${sessionId}`;
+    if (legacyName !== name && sessions.some((session) => session.name === legacyName)) {
+      await driver.killSession(legacyName);
+    }
     await driver.startCommand({
       name,
       args: [
         "env",
         `SAY_TO_ME_INTERNAL_URL=${internalUrl}`,
+        `SAY_TO_ME_URL=${internalUrl}`,
         `SAY_TO_ME_INTERNAL_API_TOKEN=${internalApiToken}`,
         `${workerModeEnvName(config.envPrefix)}=${mode}`,
         ...workerProcessEnv(internalUrl),

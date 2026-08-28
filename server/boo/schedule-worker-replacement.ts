@@ -5,7 +5,7 @@ const REPLACEMENT_INTERVAL_MS = 500;
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-export type WorkerDriver = Pick<BooDriver, "listSessions" | "startCommand">;
+export type WorkerDriver = Pick<BooDriver, "killSession" | "listSessions" | "startCommand">;
 
 export type ScheduleWorkerReplacementOptions = {
   driver?: WorkerDriver;

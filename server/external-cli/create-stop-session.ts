@@ -112,7 +112,11 @@ export function createStopSession(config: CreateStopSessionConfig) {
       keepMessageIds: options.keepMessageId != null ? [options.keepMessageId] : undefined,
       busyOnly: options.busyOnly === true,
       killWorker: async (activeSessionId) => {
-        await new BooDriver().killSession(workerName(activeSessionId));
+        const driver = new BooDriver();
+        const name = workerName(activeSessionId);
+        await driver.killSession(name);
+        const legacyName = `stm-${activeSessionId}`;
+        if (legacyName !== name) await driver.killSession(legacyName);
       },
     });
   };

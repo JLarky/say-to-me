@@ -11,7 +11,7 @@ describe("ensureCursorBooWorker", () => {
     delete process.env.SAY_TO_ME_CURSOR_WORKER_AUTOSTART;
     delete process.env.SAY_TO_ME_CURSOR_WORKER_MODE;
     previousInternalUrl = process.env.SAY_TO_ME_INTERNAL_URL;
-    delete process.env.SAY_TO_ME_INTERNAL_URL;
+    process.env.SAY_TO_ME_INTERNAL_URL = "http://127.0.0.1:5412";
   });
 
   afterEach(() => {
@@ -24,6 +24,7 @@ describe("ensureCursorBooWorker", () => {
   it("autostarts with real cursor mode and without disabling TLS verification", async () => {
     const started: StartCommandOptions[] = [];
     const driver = {
+      killSession: async (): Promise<string> => "killed",
       listSessions: async (): Promise<BooSession[]> => [],
       startCommand: async (options: StartCommandOptions): Promise<string> => {
         started.push(options);

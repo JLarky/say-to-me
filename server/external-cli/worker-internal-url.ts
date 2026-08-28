@@ -26,6 +26,10 @@ function isSharedPortlessUrl(url: string): boolean {
   }
 }
 
+function isLoopbackHostname(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+}
+
 function readAstroDevLoopbackUrl(
   cwd: string,
   exists: (path: string) => boolean,
@@ -92,9 +96,7 @@ export function isNonLiveAgentCliOrigin(url: string): boolean {
     const hostname = parsed.hostname.toLowerCase();
     if (hostname === "say.local" || hostname.endsWith(".local")) return false;
     const port = parsed.port || (parsed.protocol === "https:" ? "443" : "80");
-    if (port === "5411" || port === "1355") return false;
-    // Test dummy used by the API harness / vitest db setup — not a real instance.
-    if (hostname === "127.0.0.1" && port === "1") return false;
+    if (isLoopbackHostname(hostname) && (port === "5411" || port === "1355")) return false;
     return true;
   } catch {
     return false;

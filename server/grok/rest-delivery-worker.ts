@@ -19,7 +19,10 @@ type ClaimedJob = {
 
 type ClaimedJobWithMessage = ClaimedJob & { message: DbMessage };
 
-function deliveryPrompt(job: DbGrokDeliveryJob, message: DbMessage): string {
+export function grokDeliveryPrompt(
+  job: Pick<DbGrokDeliveryJob, "grokSessionId">,
+  message: Pick<DbMessage, "text">,
+): string {
   return buildAgentVoicePrompt(job.grokSessionId, message.text);
 }
 
@@ -66,7 +69,7 @@ function runGrokPrompt(
       workerBin("GROK", "grok"),
       grokCommandArgs(
         claimed.grok.resumeId,
-        deliveryPrompt(job, claimed.message),
+        grokDeliveryPrompt(job, claimed.message),
         claimed.grok.model,
       ),
       { cwd: claimed.grok.cwd, stdio: ["ignore", "pipe", "pipe"] },
@@ -132,7 +135,7 @@ const grokRestWorker = createExternalCliRestDeliveryWorker<DbGrokDeliveryJob, Cl
   sessionIdRequestField: "grokSessionId",
   workerVersion: workerVersion("GROK"),
   echoReplyLabel: "Echo from Grok worker",
-  deliveryPrompt,
+  deliveryPrompt: grokDeliveryPrompt,
   runPrompt: runGrokPrompt,
 });
 

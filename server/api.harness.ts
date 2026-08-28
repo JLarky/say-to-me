@@ -28,6 +28,9 @@ process.env.SAY_TO_ME_OPENCODE_URL = "http://127.0.0.1:1";
 // Keep any internal delivery workers from falling back to the shared say.local
 // endpoint during tests. Individual worker tests override this with a local server.
 process.env.SAY_TO_ME_INTERNAL_URL = "http://127.0.0.1:1";
+// Keep prompt and CLI-origin tests deterministic; isolated process tests set
+// SAY_TO_ME_URL explicitly in their own environment.
+process.env.SAY_TO_ME_URL = "http://127.0.0.1:5411";
 process.env.SAY_TO_ME_INTERNAL_API_TOKEN = "test-internal-api-token";
 process.env.OTEL_ENABLED = "false";
 

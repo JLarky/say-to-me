@@ -60,7 +60,7 @@ describe("say API: OpenCode delivery and status", () => {
       const body = promptRequest!.body as { parts: { type: string; text: string }[] };
       expect(body.parts[0]).toMatchObject({ type: "text" });
       expect(body.parts[0].text).toBe(
-        "you have to reply to this message with voice (cli `say-to-me usage` to learn how/why)\n\nses_1dd864100ffes6uqv2NbJatAKt says: user",
+        "you have to reply to this message with voice (cli `say-to-me usage` to learn how/why)\nThis session requires `say-to-me api --server http://127.0.0.1:1` on every call. Do not use say.local.\n\nses_1dd864100ffes6uqv2NbJatAKt says: user",
       );
       await waitFor(async () => {
         const queue = await fetch(

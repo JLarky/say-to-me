@@ -56,7 +56,7 @@ describe("isNonLiveAgentCliOrigin", () => {
   it("treats say.local and live 5411 as live", () => {
     expect(isNonLiveAgentCliOrigin("https://say.local:1355")).toBe(false);
     expect(isNonLiveAgentCliOrigin("http://127.0.0.1:5411")).toBe(false);
-    expect(isNonLiveAgentCliOrigin("http://127.0.0.1:1")).toBe(false);
+    expect(isNonLiveAgentCliOrigin("http://127.0.0.1:1")).toBe(true);
   });
 
   it("treats isolated loopback ports as non-live", () => {

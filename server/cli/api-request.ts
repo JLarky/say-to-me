@@ -7,7 +7,7 @@ import { portlessCaPem } from "../external-cli/portless-ca.ts";
 /** HTTP methods accepted for curl-like `METHOD /path` requests. */
 const methods = new Set(["delete", "get", "head", "options", "patch", "post", "put"]);
 
-export const DEFAULT_SAY_TO_ME_URL = "http://localhost:5411";
+export const DEFAULT_SAY_TO_ME_URL = "https://say.local:1355";
 export const OPENAPI_PATH = "/openapi.json";
 
 let httpsAgent: Agent | null = null;
