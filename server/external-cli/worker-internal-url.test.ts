@@ -10,7 +10,10 @@ describe("resolveWorkerInternalUrl", () => {
   it("prefers this process Astro loopback when INTERNAL_URL is shared say.local", () => {
     const url = resolveWorkerInternalUrl({
       cwd: "/worktree",
-      env: { SAY_TO_ME_INTERNAL_URL: "https://say.local:1355" },
+      env: {
+        SAY_TO_ME_INTERNAL_URL: "https://say.local:1355",
+        SAY_TO_ME_URL: "http://127.0.0.1:5416",
+      },
       existsSync: (filePath) => filePath.endsWith(".astro/dev.json"),
       readFileSync: () => JSON.stringify({ port: 5416, url: "http://localhost:5416" }),
     });
@@ -25,6 +28,16 @@ describe("resolveWorkerInternalUrl", () => {
       readFileSync: () => JSON.stringify({ port: 5416 }),
     });
     expect(url).toBe("http://127.0.0.1:9876");
+  });
+
+  it("does not remap a live shared origin when Astro moved its port", () => {
+    const url = resolveWorkerInternalUrl({
+      cwd: "/worktree",
+      env: { SAY_TO_ME_INTERNAL_URL: "https://say.local:1355" },
+      existsSync: () => true,
+      readFileSync: () => JSON.stringify({ port: 5412 }),
+    });
+    expect(url).toBe("https://say.local:1355");
   });
 
   it("falls back to say.local when no Astro dev metadata exists", () => {
@@ -164,6 +177,19 @@ describe("resolveAgentCliServerUrl", () => {
         },
       }),
     ).toBe("stm-cur_abc");
+  });
+
+  it("covers distinct isolated prompt and worker origins", () => {
+    const options = {
+      env: {
+        SAY_TO_ME_URL: "http://127.0.0.1:5413",
+        SAY_TO_ME_INTERNAL_URL: "http://127.0.0.1:5412",
+      },
+      existsSync: () => false,
+      readFileSync: () => "",
+    };
+    expect(resolveAgentCliServerUrl(options)).toBe("http://127.0.0.1:5413");
+    expect(booWorkerNameForSession("cur_abc", options)).toBe("stm_5412_cur_abc");
   });
 });
 

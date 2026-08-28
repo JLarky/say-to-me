@@ -69,7 +69,10 @@ export function resolveWorkerInternalUrl(options: ResolveWorkerInternalUrlOption
   const read = options.readFileSync ?? readFileSync;
   const configured = (env.SAY_TO_ME_INTERNAL_URL ?? DEFAULT_INTERNAL_URL).replace(/\/$/, "");
   const local = readAstroDevLoopbackUrl(cwd, exists, read);
-  if (local && isSharedPortlessUrl(configured)) return local;
+  const cliOrigin = (env.SAY_TO_ME_URL ?? "").replace(/\/$/, "");
+  if (local && isSharedPortlessUrl(configured) && cliOrigin && isNonLiveAgentCliOrigin(cliOrigin)) {
+    return local;
+  }
   return configured;
 }
 
