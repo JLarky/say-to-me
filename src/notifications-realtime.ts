@@ -22,6 +22,32 @@ type NotificationsRealtimeHandlers = {
   onError?: () => void;
 };
 
+const NOTIFICATIONS_STALL_MS = 45_000;
+const NOTIFICATIONS_STALL_CHECK_MS = 5_000;
+
+function withLiveness(
+  handlers: NotificationsRealtimeHandlers,
+  onStall: () => void,
+): { handlers: NotificationsRealtimeHandlers; stop: () => void } {
+  let lastSeenAt = Date.now();
+  const timer = setInterval(() => {
+    if (Date.now() - lastSeenAt > NOTIFICATIONS_STALL_MS) onStall();
+  }, NOTIFICATIONS_STALL_CHECK_MS);
+  return {
+    handlers: {
+      onEvent(eventType, data) {
+        lastSeenAt = Date.now();
+        if (eventType === "ping") return;
+        handlers.onEvent(eventType, data);
+      },
+      onError: handlers.onError,
+    },
+    stop() {
+      clearInterval(timer);
+    },
+  };
+}
+
 let currentStatus: NotificationsRealtimeStatus = {
   mode: "connecting",
   clientCount: 0,
@@ -74,8 +100,10 @@ export function isSharedNotificationsWorkerEnabled(): boolean {
 }
 
 function subscribeDirect(handlers: NotificationsRealtimeHandlers): () => void {
+  const live = withLiveness(handlers, () => handlers.onError?.());
   publishStatus({ mode: "direct", clientCount: 1, error: null });
   if (typeof EventSource !== "function") {
+    live.stop();
     handlers.onError?.();
     return () => {};
   }
@@ -83,24 +111,32 @@ function subscribeDirect(handlers: NotificationsRealtimeHandlers): () => void {
   const events = new EventSource(NOTIFICATIONS_EVENTS_URL);
 
   function onSnapshot(event: MessageEvent): void {
-    handlers.onEvent("snapshot", typeof event.data === "string" ? event.data : "");
+    live.handlers.onEvent("snapshot", typeof event.data === "string" ? event.data : "");
+  }
+  function onPing(event: MessageEvent): void {
+    live.handlers.onEvent("ping", typeof event.data === "string" ? event.data : "");
   }
 
   events.addEventListener("snapshot", onSnapshot);
+  events.addEventListener("ping", onPing);
+  events.onopen = () => live.handlers.onEvent("ping", "");
   events.onmessage = (event) => {
-    handlers.onEvent("message", typeof event.data === "string" ? event.data : "");
+    live.handlers.onEvent("message", typeof event.data === "string" ? event.data : "");
   };
   events.onerror = () => {
-    handlers.onError?.();
+    live.handlers.onError?.();
   };
 
   return () => {
+    live.stop();
     // Some test doubles only stub addEventListener/close; real EventSource
     // always exposes removeEventListener via EventTarget.
     if (typeof events.removeEventListener === "function") {
       events.removeEventListener("snapshot", onSnapshot);
+      events.removeEventListener("ping", onPing);
     }
     events.onmessage = null;
+    events.onopen = null;
     events.onerror = null;
     events.close();
   };
@@ -116,6 +152,7 @@ function subscribeShared(handlers: NotificationsRealtimeHandlers): () => void {
   const port = worker.port;
   let closed = false;
   let directCleanup: (() => void) | null = null;
+  let liveStop: (() => void) | null = null;
 
   function fallBackToDirect(reason: string): void {
     if (closed || directCleanup) return;
@@ -130,8 +167,16 @@ function subscribeShared(handlers: NotificationsRealtimeHandlers): () => void {
     } catch {
       // ignore
     }
+    liveStop?.();
+    liveStop = null;
     directCleanup = subscribeDirect(handlers);
   }
+
+  const live = withLiveness(handlers, () => {
+    handlers.onError?.();
+    fallBackToDirect("stalled");
+  });
+  liveStop = live.stop;
 
   port.onmessage = (messageEvent) => {
     // SAFETY: SharedWorker protocol messages are validated by `type` discriminant below.
@@ -148,12 +193,12 @@ function subscribeShared(handlers: NotificationsRealtimeHandlers): () => void {
         fallBackToDirect(message.error || "shared worker error");
         return;
       }
-      if (message.error) handlers.onError?.();
+      if (message.error) live.handlers.onError?.();
       return;
     }
 
     if (message.type === "event") {
-      handlers.onEvent(message.eventType, message.data);
+      live.handlers.onEvent(message.eventType, message.data);
     }
   };
 
@@ -169,6 +214,7 @@ function subscribeShared(handlers: NotificationsRealtimeHandlers): () => void {
 
   return () => {
     closed = true;
+    liveStop?.();
     try {
       port.postMessage({ type: "disconnect" } satisfies ClientToWorkerMessage);
     } catch {

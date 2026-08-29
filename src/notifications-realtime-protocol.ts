@@ -67,7 +67,7 @@ export function createNotificationsFanOut(): NotificationsFanOut {
       return ports.size;
     },
     fanEvent(eventType, data) {
-      lastEvent = { eventType, data };
+      if (eventType !== "ping") lastEvent = { eventType, data };
       broadcast({ type: "event", eventType, data });
     },
     broadcastStatus(mode, clientCount, error) {

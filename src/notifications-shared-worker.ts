@@ -41,6 +41,16 @@ function ensureEventSource(): void {
   eventSource.onmessage = (event) => {
     onPayload("message", event);
   };
+  eventSource.addEventListener("ping", (event) => {
+    onPayload("ping", event);
+  });
+  eventSource.onopen = () => {
+    hub.fanEvent("ping", "");
+    if (!upstreamReady) {
+      upstreamReady = true;
+      hub.broadcastStatus("shared", hub.getClientCount());
+    }
+  };
   eventSource.onerror = () => {
     if (hub.getClientCount() === 0) return;
     if (eventSource?.readyState === EventSource.CLOSED) {

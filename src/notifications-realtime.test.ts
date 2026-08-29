@@ -45,6 +45,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 describe("notifications fan-out", () => {
@@ -61,6 +62,9 @@ describe("notifications fan-out", () => {
     hub.fanEvent("snapshot", '{"notifications":[]}');
     expect(a).toEqual([{ type: "event", eventType: "snapshot", data: '{"notifications":[]}' }]);
     expect(b).toEqual([{ type: "event", eventType: "snapshot", data: '{"notifications":[]}' }]);
+    expect(hub.getLastEvent()?.data).toBe('{"notifications":[]}');
+
+    hub.fanEvent("ping", "");
     expect(hub.getLastEvent()?.data).toBe('{"notifications":[]}');
 
     expect(hub.removePort(portA)).toBe(1);
@@ -146,6 +150,11 @@ describe("shared notifications flag and fallback", () => {
     }
     expect(events).toEqual([{ eventType: "snapshot", data: '{"notifications":[]}' }]);
 
+    for (const listener of listeners.get("ping") ?? []) {
+      listener({ data: "{}" } as MessageEvent);
+    }
+    expect(events).toEqual([{ eventType: "snapshot", data: '{"notifications":[]}' }]);
+
     stop();
     expect(instances[0]?.close).toHaveBeenCalled();
   });
@@ -210,6 +219,33 @@ describe("shared notifications flag and fallback", () => {
 
     expect(onError).toHaveBeenCalledTimes(1);
     stop();
+  });
+
+  it("calls onError when the direct stream stays quiet for 45s", () => {
+    vi.useFakeTimers();
+    class FakeEventSource {
+      onmessage: ((event: MessageEvent) => void) | null = null;
+      onopen: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      addEventListener() {}
+      removeEventListener() {}
+      close = vi.fn();
+    }
+
+    vi.stubGlobal("EventSource", FakeEventSource);
+    vi.stubGlobal("SharedWorker", undefined);
+
+    const onError = vi.fn();
+    const stop = subscribeNotificationsRealtime({
+      onEvent: () => {},
+      onError,
+    });
+
+    expect(onError).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(50_000);
+    expect(onError).toHaveBeenCalled();
+    stop();
+    vi.useRealTimers();
   });
 });
 
