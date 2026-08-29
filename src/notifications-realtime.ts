@@ -146,7 +146,9 @@ function subscribeShared(handlers: NotificationsRealtimeHandlers): () => void {
       });
       if (message.mode === "error") {
         fallBackToDirect(message.error || "shared worker error");
+        return;
       }
+      if (message.error) handlers.onError?.();
       return;
     }
 

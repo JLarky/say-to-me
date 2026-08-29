@@ -42,10 +42,12 @@ function ensureEventSource(): void {
     onPayload("message", event);
   };
   eventSource.onerror = () => {
-    // EventSource reconnects on its own; keep the shared upstream.
-    if (hub.getClientCount() > 0) {
-      hub.broadcastStatus("connecting", hub.getClientCount(), "upstream reconnecting");
+    if (hub.getClientCount() === 0) return;
+    if (eventSource?.readyState === EventSource.CLOSED) {
+      hub.broadcastStatus("error", hub.getClientCount(), "upstream closed");
+      return;
     }
+    hub.broadcastStatus("connecting", hub.getClientCount(), "upstream reconnecting");
   };
 }
 

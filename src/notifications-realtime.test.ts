@@ -68,6 +68,19 @@ describe("notifications fan-out", () => {
     expect(b.at(-1)).toEqual({ type: "status", mode: "shared", clientCount: 1 });
   });
 
+  it("keeps connecting status when the upstream is reconnecting", () => {
+    const hub = createNotificationsFanOut();
+    const messages: unknown[] = [];
+    hub.addPort({ postMessage: (data: unknown) => messages.push(data) });
+    hub.broadcastStatus("connecting", hub.getClientCount(), "upstream reconnecting");
+    expect(messages.at(-1)).toEqual({
+      type: "status",
+      mode: "connecting",
+      clientCount: 1,
+      error: "upstream reconnecting",
+    });
+  });
+
   it("drops ports that throw on postMessage", () => {
     const hub = createNotificationsFanOut();
     const healthy: unknown[] = [];
@@ -152,6 +165,51 @@ describe("shared notifications flag and fallback", () => {
     });
 
     expect(() => stop()).not.toThrow();
+  });
+
+  it("runs onError when the shared worker reports an upstream reconnect", () => {
+    const workers: Array<{
+      port: {
+        onmessage: ((event: MessageEvent) => void) | null;
+        close: ReturnType<typeof vi.fn>;
+      };
+    }> = [];
+
+    class FakeSharedWorker {
+      port = {
+        onmessage: null as ((event: MessageEvent) => void) | null,
+        onmessageerror: null as (() => void) | null,
+        start() {},
+        close: vi.fn(),
+        postMessage() {},
+      };
+      onerror: (() => void) | null = null;
+
+      constructor() {
+        workers.push(this);
+      }
+    }
+
+    vi.stubGlobal("SharedWorker", FakeSharedWorker);
+
+    const onError = vi.fn();
+    const stop = subscribeNotificationsRealtime({
+      onEvent: () => {},
+      onError,
+    });
+
+    expect(workers).toHaveLength(1);
+    workers[0]?.port.onmessage?.({
+      data: {
+        type: "status",
+        mode: "connecting",
+        clientCount: 1,
+        error: "upstream reconnecting",
+      },
+    } as MessageEvent);
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    stop();
   });
 });
 

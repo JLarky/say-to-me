@@ -4,6 +4,7 @@ import { type } from "arktype";
 import { safeJsonParse } from "@say-to-me/runtime-validation";
 
 import {
+  SESSION_QUEUE_MULTIPLEX_MAX_IDS,
   SESSION_QUEUE_MULTIPLEX_URL,
   type SessionQueuePortMessage,
   type SessionQueueWorkerMessage,
@@ -33,11 +34,36 @@ function post(port: MessagePort, message: SessionQueueWorkerMessage): void {
   }
 }
 
+function acceptedSessionIds(): string[] {
+  return desiredSessionIds().slice(0, SESSION_QUEUE_MULTIPLEX_MAX_IDS);
+}
+
+function isOverflowSessionId(sessionId: string | null): boolean {
+  if (!sessionId) return false;
+  return !acceptedSessionIds().includes(sessionId);
+}
+
 function broadcastStatus(mode: "shared" | "connecting" | "error", error?: string): void {
   const message: SessionQueueWorkerMessage = error
     ? { type: "status", mode, sessionIds: connectedIds, error }
     : { type: "status", mode, sessionIds: connectedIds };
-  for (const state of ports) post(state.port, message);
+  for (const state of ports) {
+    if (isOverflowSessionId(state.sessionId)) continue;
+    post(state.port, message);
+  }
+}
+
+function rejectOverflowPorts(): void {
+  const acceptedIds = acceptedSessionIds();
+  for (const state of ports) {
+    if (!isOverflowSessionId(state.sessionId)) continue;
+    post(state.port, {
+      type: "status",
+      mode: "error",
+      sessionIds: acceptedIds,
+      error: `Shared queue stream caps at ${SESSION_QUEUE_MULTIPLEX_MAX_IDS} sessions.`,
+    });
+  }
 }
 
 function desiredSessionIds(): string[] {
@@ -52,6 +78,19 @@ function idsEqual(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((value, index) => value === b[index]);
 }
 
+function fanHeartbeat(): void {
+  for (const state of ports) {
+    if (!state.sessionId || isOverflowSessionId(state.sessionId)) continue;
+    post(state.port, {
+      type: "event",
+      sessionId: state.sessionId,
+      eventType: "ping",
+      data: "",
+    });
+  }
+  broadcastStatus("shared");
+}
+
 function ensureEventSource(): void {
   const nextIds = desiredSessionIds();
   if (nextIds.length === 0) {
@@ -62,14 +101,16 @@ function ensureEventSource(): void {
     connectedIds = [];
     return;
   }
-  if (eventSource && idsEqual(connectedIds, nextIds)) return;
+  const acceptedIds = acceptedSessionIds();
+  rejectOverflowPorts();
+  if (eventSource && idsEqual(connectedIds, acceptedIds)) return;
 
   if (eventSource) {
     eventSource.close();
     eventSource = null;
   }
-  connectedIds = nextIds;
-  const url = `${SESSION_QUEUE_MULTIPLEX_URL}?ids=${encodeURIComponent(nextIds.join(","))}`;
+  connectedIds = acceptedIds;
+  const url = `${SESSION_QUEUE_MULTIPLEX_URL}?ids=${encodeURIComponent(acceptedIds.join(","))}`;
   broadcastStatus("connecting");
   try {
     eventSource = new EventSource(url);
@@ -101,10 +142,13 @@ function ensureEventSource(): void {
   eventSource.onmessage = (event) => {
     handlePayload("message", typeof event.data === "string" ? event.data : "");
   };
-  eventSource.addEventListener("ping", () => {
-    broadcastStatus("shared");
-  });
+  eventSource.addEventListener("ping", fanHeartbeat);
+  eventSource.onopen = () => fanHeartbeat();
   eventSource.onerror = () => {
+    if (eventSource?.readyState === EventSource.CLOSED) {
+      broadcastStatus("error", "upstream closed");
+      return;
+    }
     broadcastStatus("connecting", "upstream reconnecting");
   };
 }

@@ -157,7 +157,12 @@ export function useSessionSync({
       stopRealtime?.();
       setLiveStatus("connecting");
       stopRealtime = subscribeSessionQueueRealtime(activeSessionId, {
-        onEvent: (_eventType, data) => {
+        onEvent: (eventType, data) => {
+          if (eventType === "ping") {
+            lastSeenAt = Date.now();
+            setLiveStatus("connected");
+            return;
+          }
           handleSnapshotData(data);
         },
         onError: () => {

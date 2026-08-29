@@ -37,15 +37,21 @@ function subscribeDirect(sessionId: string, handlers: Handlers): () => void {
   const onSnapshot = (event: MessageEvent) => {
     handlers.onEvent("snapshot", typeof event.data === "string" ? event.data : "");
   };
+  const onPing = (event: MessageEvent) => {
+    handlers.onEvent("ping", typeof event.data === "string" ? event.data : "");
+  };
   events.addEventListener("snapshot", onSnapshot);
   events.onmessage = onSnapshot;
-  events.addEventListener("ping", () => {});
+  events.addEventListener("ping", onPing);
+  events.onopen = () => handlers.onEvent("ping", "");
   events.onerror = () => handlers.onError?.();
   return () => {
     if (typeof events.removeEventListener === "function") {
       events.removeEventListener("snapshot", onSnapshot);
+      events.removeEventListener("ping", onPing);
     }
     events.onmessage = null;
+    events.onopen = null;
     events.onerror = null;
     events.close();
   };
@@ -81,7 +87,11 @@ function subscribeShared(sessionId: string, handlers: Handlers): () => void {
     const message = messageEvent.data as SessionQueueWorkerMessage | undefined;
     if (!message || typeof message !== "object") return;
     if (message.type === "status") {
-      if (message.mode === "error") fallBack(message.error || "shared queue worker error");
+      if (message.mode === "error") {
+        fallBack(message.error || "shared queue worker error");
+        return;
+      }
+      if (message.error) handlers.onError?.();
       return;
     }
     if (message.type === "event" && message.sessionId === sessionId) {

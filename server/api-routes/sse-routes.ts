@@ -18,6 +18,7 @@ import { ensureSession } from "../sessions.ts";
 import { formatSseEvent, sseSnapshotFrame, startSseHeartbeat } from "../sse/client.ts";
 import { createSseWebResponse } from "../sse/stream.ts";
 import type { SseClient } from "../sse/client.ts";
+import { SESSION_QUEUE_MULTIPLEX_MAX_IDS } from "../../src/session-queue-realtime-protocol.ts";
 
 type QueueSnapshotWriter = (client: SseClient, sessionId?: string) => Promise<void>;
 
@@ -37,10 +38,20 @@ export function startQueueSseClient(
   let stopHeartbeat: (() => void) | undefined;
   const unsubscribeActivity = subscribeExternalCliActivity(sessionId, 8, {
     onSnapshot: (externalCliActivity) => {
-      if (!closed) writeSessionSseFrame(client, sseSnapshotFrame({ externalCliActivity }));
+      if (!closed) {
+        writeSessionSseFrame(
+          client,
+          sseSnapshotFrame({ externalCliActivity, targetSessionId: sessionId }),
+        );
+      }
     },
     onError: () => {
-      if (!closed) writeSessionSseFrame(client, sseSnapshotFrame({ externalCliActivity: null }));
+      if (!closed) {
+        writeSessionSseFrame(
+          client,
+          sseSnapshotFrame({ externalCliActivity: null, targetSessionId: sessionId }),
+        );
+      }
     },
   });
   void writeSnapshot(client, sessionId)
@@ -84,10 +95,15 @@ function multiSessionQueueEventsResponse(url: URL): Response {
     if (!trimmed) continue;
     const sessionId = normalizeSessionId(trimmed);
     if (sessionId && !sessionIds.includes(sessionId)) sessionIds.push(sessionId);
-    if (sessionIds.length >= 24) break;
   }
   if (sessionIds.length === 0) {
     return Response.json({ error: "At least one session id is required." }, { status: 400 });
+  }
+  if (sessionIds.length > SESSION_QUEUE_MULTIPLEX_MAX_IDS) {
+    return Response.json(
+      { error: `At most ${SESSION_QUEUE_MULTIPLEX_MAX_IDS} session ids are allowed.` },
+      { status: 400 },
+    );
   }
 
   return createSseWebResponse(
