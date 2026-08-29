@@ -85,7 +85,7 @@ https://say.local:1355  ->  localhost:4121
 
 When validating locally from the VM, prefer the forwarded local port (for example `http://127.0.0.1:4121`) instead of starting extra temporary dev servers unless you specifically need an isolated build.
 
-For **isolated** process-level e2e (worktree, separate sqlite, non-5411 port, `agent-browser` against that origin only), see [docs/isolated-e2e.md](docs/isolated-e2e.md). Pin the helper CLI with `--server http://127.0.0.1:$PORT` or `SAY_TO_ME_URL`; do not call `say.local`.
+For **isolated** process-level e2e (worktree, separate sqlite, non-5411 port, `agent-browser` against that origin only), see [docs/isolated-e2e.md](docs/isolated-e2e.md). Pin every isolated helper call with `--server http://127.0.0.1:$PORT`. Do not export `SAY_TO_ME_URL` to the isolated origin from a live 5411 shell. Do not call `say.local`.
 
 ## Browser Automation
 
