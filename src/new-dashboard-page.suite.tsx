@@ -26,6 +26,7 @@ vi.mock("./spaces-api.ts", () => ({
   releaseSession: vi.fn(),
   releaseWorktree: vi.fn(),
   restoreSpace: vi.fn(),
+  setSessionState: vi.fn(),
   updateRepository: vi.fn(),
   updateSpace: vi.fn(),
 }));
@@ -40,7 +41,8 @@ vi.mock("./settings-api.ts", () => ({
   })),
 }));
 
-const { fetchSpaceState, attachRepositoryToSpace } = await import("./spaces-api.ts");
+const { fetchSpaceState, attachRepositoryToSpace, setSessionState } =
+  await import("./spaces-api.ts");
 const { NewDashboardPage } = await import("./components/page/NewDashboardPage.tsx");
 
 const defaultSpace = {
@@ -64,6 +66,7 @@ describe("NewDashboardPage empty and route states", () => {
     root = undefined;
     vi.mocked(fetchSpaceState).mockReset();
     vi.mocked(attachRepositoryToSpace).mockReset();
+    vi.mocked(setSessionState).mockReset();
   });
 
   async function renderDashboard(initialPath = "/dashboard") {
@@ -317,5 +320,58 @@ describe("NewDashboardPage empty and route states", () => {
     const baseInput = createFromInput?.querySelector("input");
     expect(baseInput).toBeTruthy();
     expect(baseInput!.value).toBe("feature/foo");
+  });
+
+  it("pins from the session context menu using the same sessions.state store", async () => {
+    const session = {
+      id: "ses_44pinunpin9f1f427fa72c",
+      title: "Context pin",
+      agent: "OpenCode",
+      provider: "OpenCode",
+      model: "gpt-4.1",
+      status: "Attached" as const,
+      tone: "blue",
+      state: "general" as const,
+      rosterStatus: "idle" as const,
+      rosterStatusLabel: "IDLE",
+      activityAt: "2026-08-28 00:00:00",
+    };
+    vi.mocked(fetchSpaceState).mockResolvedValue({
+      selectedSpaceId: defaultSpace.id,
+      spaces: [{ ...defaultSpace, sessions: [session] }],
+    });
+    vi.mocked(setSessionState).mockResolvedValue(undefined);
+
+    await renderDashboard(`/dashboard/${defaultSpace.id}`);
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+
+    const body = container!.querySelector("[data-session-item] time");
+    expect(body).toBeTruthy();
+    await act(async () => {
+      body!.dispatchEvent(
+        new MouseEvent("contextmenu", {
+          bubbles: true,
+          cancelable: true,
+          clientX: 40,
+          clientY: 80,
+        }),
+      );
+    });
+
+    const menu = container!.querySelector("[data-session-context-menu]");
+    expect(menu).toBeTruthy();
+    const pinItem = Array.from(menu!.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find(
+      (button) => button.textContent?.includes("Pin") && !button.textContent.includes("Unpin"),
+    );
+    expect(pinItem).toBeTruthy();
+    expect(pinItem!.textContent).toContain("Shows in Important on Home");
+
+    await act(async () => {
+      pinItem!.click();
+      await Promise.resolve();
+    });
+
+    expect(setSessionState).toHaveBeenCalledWith("ses_44pinunpin9f1f427fa72c", "important");
+    expect(container!.querySelector("[data-session-context-menu]")).toBeNull();
   });
 });

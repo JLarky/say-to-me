@@ -12,6 +12,7 @@ import {
   archivePrototypeSession,
   loadPrototypeProfile,
   profileInitials,
+  setPrototypeSessionState,
   sortPrototypeRosterSessions,
   flattenSpacesDepthFirst,
   sortSpacesBySortOrder,
@@ -44,6 +45,7 @@ import {
   releaseWorktree,
   reorderSpaceSiblings,
   restoreSpace,
+  setSessionState,
   updateRepository,
   updateSpace,
 } from "../../spaces-api.ts";
@@ -107,6 +109,7 @@ import {
   worktreeCreateButtonLabel,
   type GitPickerPurpose,
 } from "../../space-worktree-create.ts";
+import { nextSessionPinState, sessionPinActionLabel } from "../../organize-tree.ts";
 import {
   isSessionLinkContextTarget,
   shouldDismissSessionContextMenu,
@@ -1326,8 +1329,27 @@ function ExplorerDashboard() {
     setSessionContextMenu({
       sessionId,
       x: Math.max(10, Math.min(event.clientX, window.innerWidth - 282)),
-      y: Math.max(10, Math.min(event.clientY, window.innerHeight - 320)),
+      y: Math.max(10, Math.min(event.clientY, window.innerHeight - 360)),
     });
+  }
+
+  function toggleAttachedSessionPin(sessionId: string) {
+    const session =
+      selectedSpace.sessions.find((item) => item.id === sessionId) ??
+      visibleSessions.find((item) => item.id === sessionId);
+    const nextState = nextSessionPinState(session?.state);
+    setSessionContextMenu(null);
+    spacesFetchGate.begin();
+    setPrototype((current) => setPrototypeSessionState(current, sessionId, nextState));
+    void (async () => {
+      try {
+        await setSessionState(sessionId, nextState);
+        await reloadSpaces();
+      } catch (error) {
+        await reloadSpaces({ quiet: true });
+        setRequestError(error instanceof Error ? error.message : "Unable to update session pin.");
+      }
+    })();
   }
 
   function archiveAttachedSession(sessionId: string) {
@@ -2264,6 +2286,26 @@ function ExplorerDashboard() {
             <span {...stylex.props(menu.headingLabel)}>SESSION</span>
             <strong {...stylex.props(menu.headingTitle)}>{contextSession.title}</strong>
           </div>
+          <button
+            {...stylex.props(menu.item)}
+            type="button"
+            role="menuitem"
+            onClick={() => toggleAttachedSessionPin(contextSession.id)}
+          >
+            <span {...stylex.props(menu.itemIcon)}>
+              <Icon name="session" />
+            </span>
+            <span {...stylex.props(menu.itemText)}>
+              <strong {...stylex.props(menu.itemTitle)}>
+                {sessionPinActionLabel(contextSession.state)}
+              </strong>
+              <small {...stylex.props(menu.itemDetail)}>
+                {contextSession.state === "important"
+                  ? "Remove from Important on Home"
+                  : "Shows in Important on Home"}
+              </small>
+            </span>
+          </button>
           <button
             {...stylex.props(menu.item)}
             type="button"

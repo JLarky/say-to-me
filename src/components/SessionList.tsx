@@ -11,6 +11,7 @@ import { badge, messageMeta, queue, thread } from "../styles/feed.stylex.ts";
 import { session as sessionStyles } from "../styles/session.stylex.ts";
 import type { Session } from "../types.ts";
 import type { SessionState } from "../types.ts";
+import { nextSessionPinState, sessionPinActionLabel } from "../organize-tree.ts";
 import {
   cliContextLabel,
   openCodeContextLabel,
@@ -258,11 +259,9 @@ export function SessionListItem({
             <button
               {...stylex.props(controls.button, controls.secondary)}
               type="button"
-              onClick={() =>
-                onStateChange(session, state === "important" ? "general" : "important")
-              }
+              onClick={() => onStateChange(session, nextSessionPinState(state))}
             >
-              {state === "important" ? "Unpin" : "Pin"}
+              {sessionPinActionLabel(state)}
             </button>
           ) : null}
           {onStateChange ? (
