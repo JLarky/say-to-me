@@ -269,6 +269,27 @@ This finds the message, derives its session, and returns the same shape as
 /api/sessions/<session-id>/jarvis-status. On the first call, the requested
 message is guaranteed to appear in messages, including idle system notices.
 
+Idle notifications:
+
+When a worker you forwarded work to goes idle (the default notifyOnCompletion
+path), you get a continue that starts with:
+
+  you got idle notification (cli `say-to-me usage jarvis` to learn when they happen)
+
+User continues still start with the voice banner (`say-to-me usage`).
+Attribution is `at HH:MM <your-session-id> said:` for both. The idle body names
+the worker: `say-to-me(<id>, <alias>) is now idle.` Alias comes from getSession.
+If the worker has no alias: `say-to-me(<id>) is now idle.`
+
+Several idles can share one continue. Each keeps its own `at HH:MM`.
+
+Isolated/custom ports add this line on user and idle continues (omit on 5411):
+
+  This session requires `say-to-me api --server http://127.0.0.1:<port>` on every call. Otherwise it will use port 5411.
+
+The worker's own chat dings `Session is now idle.` for humans/TTS. That ding is
+not model input. Failed relays stay distinct: `Your relay could not be delivered.`
+
 Routines (formerly timers) are scheduled prompts for sessions. To manage routines, run:
 
   say-to-me usage routines
@@ -417,10 +438,15 @@ Relay rule (critical):
     CLI worker — the worker will never see the long form.
 
 Idle notifications instead of polling:
-  After relaying, wait for idle system notices / completion watches rather than
-  tight-looping jarvis-status. Workers should voice reports in their own
-  session. Return relays paste their chat into yours (hard to read), and the
-  worker is notified when you go idle. When you do need status:
+  After relaying, wait for idle continues rather than tight-looping
+  jarvis-status. Idle continues start with
+  `you got idle notification (cli \`say-to-me usage jarvis\` to learn when they happen)`
+  and name the worker as `say-to-me(<id>, <alias>) is now idle.`
+  The worker chat still dings `Session is now idle.` for humans; that is not
+  model input. Failed relays stay `Your relay could not be delivered.`
+  Workers should voice reports in their own session. Return relays paste their
+  chat into yours (hard to read), and the worker is notified when you go idle.
+  When you do need status:
 
   say-to-me api GET '/api/sessions/<session-id>/jarvis-status?wait=5sec'
 

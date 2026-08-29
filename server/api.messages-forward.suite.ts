@@ -346,7 +346,7 @@ describe("say API: message forwarding basics", () => {
             typeof request.body === "object" &&
             request.body != null &&
             JSON.stringify(request.body).includes(
-              `${targetSessionId} says: please sleep 5 seconds`,
+              `${targetSessionId} said: please sleep 5 seconds`,
             ) &&
             !JSON.stringify(request.body).includes(`${targetSessionId} please sleep 5 seconds`),
         ),
@@ -415,7 +415,7 @@ describe("say API: message forwarding basics", () => {
             typeof request.body === "object" &&
             request.body != null &&
             JSON.stringify(request.body).includes(
-              `${targetSessionId} says: ping me once you are done`,
+              `${targetSessionId} said: ping me once you are done`,
             ) &&
             JSON.stringify(request.body).includes("ping me once you are done"),
         ),

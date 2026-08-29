@@ -4,7 +4,10 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { Effect } from "effect";
-import { buildAgentVoicePrompt } from "../agent-voice-prompt.ts";
+import {
+  buildAgentVoicePromptFromMessage,
+  type VoicePromptMessage,
+} from "../agent-voice-prompt.ts";
 import type { DbCodexDeliveryJob, DbMessage } from "../db/schemas.ts";
 import {
   ProviderFailedError,
@@ -26,10 +29,10 @@ type ClaimedJobWithMessage = ClaimedJob & { message: DbMessage };
 
 export function codexDeliveryPrompt(
   job: Pick<DbCodexDeliveryJob, "codexSessionId">,
-  message: Pick<DbMessage, "text">,
+  message: VoicePromptMessage,
   options?: ResolveWorkerInternalUrlOptions,
 ): string {
-  return buildAgentVoicePrompt(job.codexSessionId, message.text, options);
+  return buildAgentVoicePromptFromMessage(job.codexSessionId, message, options);
 }
 
 export function codexCommandArgs(

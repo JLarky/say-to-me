@@ -13,9 +13,16 @@ import {
   updateForwardTarget,
   updateOpencodeDelivery,
 } from "../messages.ts";
-import { isIdleNoticeText } from "@say-to-me/session-utils/idle-notices";
+import {
+  formatContinueAttributionLine,
+  formatIdleContinueBody,
+  isAttributedIdleStoredText,
+  isIdleContinueNoticeText,
+  isIdleNoticeText,
+  parseMessageCreatedAt,
+} from "@say-to-me/session-utils/idle-notices";
 import { validateSessionId } from "../session-id.ts";
-import { requireSession } from "../sessions.ts";
+import { getSession, requireSession } from "../sessions.ts";
 import {
   inspectOpenCodeActivityRuntime,
   waitForOpenCodeWorkingActivity,
@@ -25,17 +32,57 @@ import { resumeCompletionWatches, startCompletionWatch } from "./completion-watc
 import { isLiveCompletionWatchStatus } from "@say-to-me/completion-watch/workflow";
 import { createOpenCodeClient, openCodeBaseUrl, openCodeFetch } from "./http.ts";
 import { classifyCliTimeoutFromActivity } from "./timeout-classification.ts";
-import { buildAgentVoicePrompt } from "../agent-voice-prompt.ts";
+import { buildAgentVoicePromptFromMessage, idleTargetFromMessage } from "../agent-voice-prompt.ts";
 import { opencodeReasoningEffortCliArg, readOpenCodeSessionVariant } from "./reasoning-effort.ts";
 
 export const QUEUED_DELIVERY_STATUS = "queued";
 
-function buildOpenCodeUserMessage(sessionId: string, text: string, imagePaths: string[]): string {
+function lookupSessionAlias(sessionId: string): string | null {
+  return getSession(sessionId)?.alias ?? null;
+}
+
+function buildOpenCodeUserMessage(
+  sessionId: string,
+  reply: Pick<
+    DbMessage,
+    | "text"
+    | "createdAt"
+    | "sessionId"
+    | "sessionRefs"
+    | "forwardRole"
+    | "forwardSourceSessionId"
+    | "forwardTargetSessionId"
+  >,
+  imagePaths: string[],
+): string {
   // The agent reads image attachments as /tmp paths in the prompt text, so append
   // any not already inlined there (deduped, so an inline path isn't repeated).
-  const missing = imagePaths.filter((filePath) => !text.includes(filePath));
-  const body = missing.length > 0 ? `${text}\n${missing.join("\n")}` : text;
-  return buildAgentVoicePrompt(sessionId, body);
+  const missing = imagePaths.filter((filePath) => !reply.text.includes(filePath));
+  const body = missing.length > 0 ? `${reply.text}\n${missing.join("\n")}` : reply.text;
+  return buildAgentVoicePromptFromMessage(
+    sessionId,
+    { ...reply, text: body },
+    { lookupAlias: lookupSessionAlias },
+  );
+}
+
+function combinedQueuedText(sessionId: string, pending: DbMessage[]): string {
+  if (pending.length > 1 && pending.every((reply) => isIdleContinueNoticeText(reply.text))) {
+    return pending
+      .map((reply) => {
+        if (isAttributedIdleStoredText(reply.text)) return reply.text.trim();
+        const target = idleTargetFromMessage(sessionId, reply);
+        const alias = target ? (lookupSessionAlias(target.id) ?? target.alias) : null;
+        const body = target ? formatIdleContinueBody(target.id, alias) : reply.text;
+        return formatContinueAttributionLine(
+          sessionId,
+          body,
+          parseMessageCreatedAt(reply.createdAt),
+        );
+      })
+      .join("\n");
+  }
+  return pending.map((reply) => reply.text).join("\n\n");
 }
 
 function listOpenCodeAttachmentPaths(messageId: number): string[] {
@@ -158,7 +205,7 @@ export async function deliverQueuedAsNewMessage(
       return { combined: getMessage(pending[0].id) ?? pending[0], pending: [] };
     }
 
-    const text = pending.map((reply) => reply.text).join("\n\n");
+    const text = combinedQueuedText(sessionId, pending);
     const forwarded = pending.length === 1 ? pending[0] : null;
     const combined = forwarded?.forwardRole
       ? insertForwardMessageRow({
@@ -250,7 +297,7 @@ async function deliverReplyToOpencodeViaApi(
     sessionID: sessionId,
     model: selectedModel,
     variant: variant ?? undefined,
-    parts: [{ type: "text", text: buildOpenCodeUserMessage(sessionId, reply.text, imagePaths) }],
+    parts: [{ type: "text", text: buildOpenCodeUserMessage(sessionId, reply, imagePaths) }],
   });
 
   if (!result.response) {
@@ -298,7 +345,7 @@ async function deliverReplyToOpencodeViaCli(sessionId: string, reply: DbMessage)
   const baseUrl = openCodeBaseUrl();
 
   const imagePaths = listOpenCodeAttachmentPaths(reply.id);
-  const message = buildOpenCodeUserMessage(sessionId, reply.text, imagePaths);
+  const message = buildOpenCodeUserMessage(sessionId, reply, imagePaths);
   if (Buffer.byteLength(message, "utf8") > OPENCODE_CLI_MAX_MESSAGE_BYTES) {
     throw new Error(
       `Message too long for CLI delivery (>${OPENCODE_CLI_MAX_MESSAGE_BYTES} bytes); disable "Use CLI" or shorten the reply`,

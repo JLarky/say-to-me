@@ -34,6 +34,7 @@ import {
 } from "../external-cli/session-work-status.ts";
 import { getExternalCliPromptDispatchedAt } from "../external-cli/cli-session-busy.ts";
 import { detectSessionBackend } from "../session-id.ts";
+import { getSession } from "../sessions.ts";
 import { getOpenCodeStatus } from "./client.ts";
 import { openCodeBaseUrl } from "./http.ts";
 import {
@@ -158,6 +159,7 @@ export const CompletionWatchEffectsLive = Layer.succeed(CompletionWatchEffects, 
         reason: input.reason,
       });
     }),
+  getSessionAlias: (sessionId) => tryWatchEffects(() => getSession(sessionId)?.alias ?? null),
 } satisfies CompletionWatchEffectsService);
 
 function completionWatchPoller(messageId: number): Effect.Effect<void, never> {
