@@ -98,7 +98,7 @@ describe("say API: session_idle routines (phase 2)", () => {
     }
   });
 
-  it("does not create a duplicate session_idle routine for the same owner and target", async () => {
+  it("rebinds a stuck owner→target idle wait so a later relay is not permanently blocked", async () => {
     const app = createApiMiddleware();
     const { origin, server } = await listen(app);
     try {
@@ -107,7 +107,7 @@ describe("say API: session_idle routines (phase 2)", () => {
       await createTestSession(sourceSessionId);
       await createTestSession(targetSessionId);
 
-      const first = await json<{ message: { id: number } }>(
+      const first = await json<{ message: { id: number }; targetMessage: { id: number } }>(
         await fetch(`${origin}/api/sessions/${sourceSessionId}/messages`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -119,26 +119,35 @@ describe("say API: session_idle routines (phase 2)", () => {
           }),
         }),
       );
+      expect(findSessionIdleRoutineBySourceMessageId(first.message.id)).toMatchObject({
+        status: "active",
+        trigger: { targetSessionId, sourceMessageId: first.message.id },
+      });
+
       const secondResponse = await fetch(`${origin}/api/sessions/${sourceSessionId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           author: "user",
-          text: "duplicate wait",
+          text: "later wait after stuck first",
           targetSessionId,
           notifyOnCompletion: true,
         }),
       });
       expect(secondResponse.status).toBe(201);
-      const second = await json<{ message: { id: number }; targetMessage: { id: number } }>(
-        secondResponse,
-      );
+      const second = await json<{
+        message: { id: number; text: string };
+        targetMessage: { id: number; completionWatchStatus: string | null };
+      }>(secondResponse);
 
-      expect(findSessionIdleRoutineBySourceMessageId(first.message.id)).toMatchObject({
+      // Still one active wait, but rebound to the later source + armed on the new target.
+      expect(findSessionIdleRoutineBySourceMessageId(first.message.id)).toBeNull();
+      expect(findSessionIdleRoutineBySourceMessageId(second.message.id)).toMatchObject({
         status: "active",
-        trigger: { targetSessionId, sourceMessageId: first.message.id },
+        trigger: { targetSessionId, sourceMessageId: second.message.id },
       });
-      expect(findSessionIdleRoutineBySourceMessageId(second.message.id)).toBeNull();
+      expect(second.targetMessage.completionWatchStatus).toBe("watching");
+      expect(second.message.text).toContain("You will be notified once the session is idle");
 
       const forA = await json<{ routines: Routine[] }>(
         await fetch(`${origin}/api/routines?sessionId=${encodeURIComponent(sourceSessionId)}`),
@@ -152,6 +161,7 @@ describe("say API: session_idle routines (phase 2)", () => {
             routine.status === "firing"),
       );
       expect(idleWaits).toHaveLength(1);
+      expect(idleWaits[0]?.trigger).toMatchObject({ sourceMessageId: second.message.id });
     } finally {
       await closeTestServer(server);
     }

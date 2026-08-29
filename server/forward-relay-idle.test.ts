@@ -37,7 +37,7 @@ describe("forward relay + session_idle atomic create", () => {
     });
   });
 
-  it("no-ops a second idle wait for the same owner and target", async () => {
+  it("rebinds an existing idle wait to the new source instead of stacking duplicates", async () => {
     const sourceSessionId = "ses_atomicOwnerA3WaitDup03";
     const targetSessionId = "ses_atomicTargetB3WaitDup3";
     await createTestSession(sourceSessionId);
@@ -58,7 +58,9 @@ describe("forward relay + session_idle atomic create", () => {
       sessionId: sourceSessionId,
       targetSessionId,
       sourceText: "<say-to-me-system>relay 2</say-to-me-system>",
-      targetText: "duplicate wait must no-op",
+      armedSourceText:
+        "<say-to-me-system>relay 2. You will be notified once the session is idle.</say-to-me-system>",
+      targetText: "duplicate wait must rebind",
       links: null,
       sourceSessionRefs: JSON.stringify([{ id: targetSessionId }]),
       targetSessionRefs: JSON.stringify([{ id: sourceSessionId }]),
@@ -66,15 +68,77 @@ describe("forward relay + session_idle atomic create", () => {
       notifyOnCompletion: true,
     });
 
-    expect(findSessionIdleRoutineBySourceMessageId(first.sourceMessage.id)).toMatchObject({
+    expect(first.idleWaitArmed).toBe(true);
+    expect(second.idleWaitArmed).toBe(true);
+    expect(findSessionIdleRoutineBySourceMessageId(first.sourceMessage.id)).toBeNull();
+    expect(findSessionIdleRoutineBySourceMessageId(second.sourceMessage.id)).toMatchObject({
       status: "active",
-      trigger: { sourceMessageId: first.sourceMessage.id },
+      trigger: { sourceMessageId: second.sourceMessage.id, targetSessionId },
     });
-    expect(findSessionIdleRoutineBySourceMessageId(second.sourceMessage.id)).toBeNull();
-    expect(second.targetMessage.completionWatchStatus).toBeNull();
+    expect(first.targetMessage.completionWatchStatus).toBe("watching");
+    const firstTargetAfter = drizzleDb
+      .select()
+      .from(messages)
+      .where(eq(messages.id, first.targetMessage.id))
+      .get();
+    expect(firstTargetAfter?.completionWatchStatus).toBe("cancelled");
+    expect(second.targetMessage.completionWatchStatus).toBe("watching");
+    expect(second.sourceMessage.text).toContain("You will be notified once the session is idle");
     expect(
       drizzleDb.select().from(routines).where(eq(routines.ownerSessionId, sourceSessionId)).all(),
     ).toHaveLength(1);
+  });
+
+  it("rebinding a stuck active wait lets a later relay arm a fresh watch", async () => {
+    // Voice/none targets never complete work_seen; without rebind the first wait
+    // would permanently swallow later notify relays to the same target.
+    const sourceSessionId = "ses_atomicOwnerA5WaitStuck5";
+    const targetSessionId = "ses_atomicTargetB5WaitStuck";
+    await createTestSession(sourceSessionId);
+    await createTestSession(targetSessionId);
+
+    const stuck = createForwardRelayWithOptionalIdleWait({
+      sessionId: sourceSessionId,
+      targetSessionId,
+      sourceText: "<say-to-me-system>stuck wait</say-to-me-system>",
+      targetText: "voice target never idles after work",
+      links: null,
+      sourceSessionRefs: JSON.stringify([{ id: targetSessionId }]),
+      targetSessionRefs: JSON.stringify([{ id: sourceSessionId }]),
+      clientMessageId: null,
+      notifyOnCompletion: true,
+    });
+    expect(stuck.idleWaitArmed).toBe(true);
+    expect(stuck.targetMessage.completionWatchStatus).toBe("watching");
+
+    const later = createForwardRelayWithOptionalIdleWait({
+      sessionId: sourceSessionId,
+      targetSessionId,
+      sourceText: "<say-to-me-system>later relay</say-to-me-system>",
+      armedSourceText:
+        "<say-to-me-system>later relay. You will be notified once the session is idle.</say-to-me-system>",
+      targetText: "must not be blocked by stuck wait",
+      links: null,
+      sourceSessionRefs: JSON.stringify([{ id: targetSessionId }]),
+      targetSessionRefs: JSON.stringify([{ id: sourceSessionId }]),
+      clientMessageId: null,
+      notifyOnCompletion: true,
+    });
+
+    expect(later.idleWaitArmed).toBe(true);
+    expect(later.targetMessage.completionWatchStatus).toBe("watching");
+    expect(later.targetMessage.completionSourceMessageId).toBe(later.sourceMessage.id);
+    expect(findSessionIdleRoutineBySourceMessageId(stuck.sourceMessage.id)).toBeNull();
+    expect(findSessionIdleRoutineBySourceMessageId(later.sourceMessage.id)).toMatchObject({
+      status: "active",
+      trigger: { sourceMessageId: later.sourceMessage.id },
+    });
+    const stuckTarget = drizzleDb
+      .select()
+      .from(messages)
+      .where(eq(messages.id, stuck.targetMessage.id))
+      .get();
+    expect(stuckTarget?.completionWatchStatus).toBe("cancelled");
   });
 
   it("still creates a distinct idle wait for a different target", async () => {

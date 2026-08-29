@@ -11,28 +11,9 @@ import { useElevatorMusic } from "../elevator-music.tsx";
 import { card, misc } from "../styles/chrome.stylex.ts";
 import { controls } from "../styles/controls.stylex.ts";
 import type { Message, OpenCodeStatus, Session } from "../types.ts";
-import { ImageUploadPayload, ErrorPayload, RoutinesPayload } from "../types.ts";
+import { ImageUploadPayload, ErrorPayload } from "../types.ts";
 import { composerSubmitIntent, createPendingMessage, type AgentReplyMode } from "../utils.ts";
 import { openCodeSessionModelLabel, SessionModelControls } from "./SessionModelControls.tsx";
-
-/** Active owner→target idle waits already cover notify-on-idle for these targets. */
-export function ownsActiveIdleWaitForTarget(
-  routines: ReadonlyArray<{
-    ownerSessionId: string;
-    status: string;
-    trigger: { kind: string; targetSessionId?: string };
-  }>,
-  ownerSessionId: string,
-  targetSessionId: string,
-): boolean {
-  return routines.some(
-    (routine) =>
-      routine.ownerSessionId === ownerSessionId &&
-      (routine.status === "active" || routine.status === "paused" || routine.status === "firing") &&
-      routine.trigger.kind === "session_idle" &&
-      routine.trigger.targetSessionId === targetSessionId,
-  );
-}
 
 const forceSendLongPressMs = 650;
 
@@ -189,8 +170,6 @@ export function MessageComposer({
   sessionId,
   useCli,
   appendTextRef,
-  /** Test/override: target session ids that already have an active idle wait from this owner. */
-  activeIdleTargetSessionIds,
 }: {
   agentReplyMode?: AgentReplyMode;
   initialText?: string;
@@ -208,7 +187,6 @@ export function MessageComposer({
   sessionId: string | undefined;
   useCli?: boolean;
   appendTextRef?: React.MutableRefObject<((text: string) => void) | null>;
-  activeIdleTargetSessionIds?: ReadonlyArray<string>;
 }) {
   const modelSummary = openCodeSessionModelLabel(session);
   const elevatorMusic = useElevatorMusic();
@@ -255,7 +233,6 @@ export function MessageComposer({
   const [author, setAuthor] = useState<"agent" | "user">("user");
   const [images, setImages] = useState<string[]>([]);
   const [notifyOnCompletion, setNotifyOnCompletion] = useState(true);
-  const [fetchedIdleTargetIds, setFetchedIdleTargetIds] = useState<string[]>([]);
   const dingPlayedForSubmit = useRef(false);
   const keyboardForceRef = useRef(false);
   const longPressForceRef = useRef(false);
@@ -269,11 +246,6 @@ export function MessageComposer({
   const leadingSessionMentions = extractLeadingSessionMentions(text);
   const relayPreview =
     author === "user" && images.length === 0 ? extractLeadingSessionMessage(text.trim()) : null;
-  const idleTargetIds = activeIdleTargetSessionIds ?? fetchedIdleTargetIds;
-  const alreadyWaitingForRelayTarget = Boolean(
-    sessionId && relayPreview && idleTargetIds.includes(relayPreview.session.id),
-  );
-  const offerIdleNotify = Boolean(relayPreview) && !alreadyWaitingForRelayTarget;
 
   useEffect(() => {
     const requestedCaretPosition = requestedCaretPositionRef.current;
@@ -284,41 +256,6 @@ export function MessageComposer({
     textarea.focus();
     textarea.setSelectionRange(requestedCaretPosition, requestedCaretPosition);
   }, [text]);
-
-  const relayTargetId = relayPreview?.session.id;
-  useEffect(() => {
-    if (activeIdleTargetSessionIds !== undefined || !sessionId || !relayTargetId) {
-      if (activeIdleTargetSessionIds === undefined) setFetchedIdleTargetIds([]);
-      return;
-    }
-    let cancelled = false;
-    async function refreshIdleTargets() {
-      const response = await fetch(`/api/routines?sessionId=${encodeURIComponent(sessionId!)}`);
-      const payload = await safeResponseJson(response, RoutinesPayload);
-      if (!response.ok || cancelled) return;
-      const targets = payload.routines
-        .filter((routine) => routine.trigger.kind === "session_idle")
-        .map((routine) =>
-          routine.trigger.kind === "session_idle" ? routine.trigger.targetSessionId : "",
-        )
-        .filter(
-          (targetId): targetId is string =>
-            Boolean(targetId) &&
-            ownsActiveIdleWaitForTarget(payload.routines, sessionId!, targetId),
-        );
-      setFetchedIdleTargetIds([...new Set(targets)]);
-    }
-    void refreshIdleTargets().catch(() => {
-      if (!cancelled) setFetchedIdleTargetIds([]);
-    });
-    const interval = window.setInterval(() => {
-      void refreshIdleTargets().catch(() => {});
-    }, 5_000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, [activeIdleTargetSessionIds, relayTargetId, sessionId]);
 
   useEffect(() => {
     const update = (event: KeyboardEvent) => {
@@ -441,7 +378,7 @@ export function MessageComposer({
         images: images.length > 0 ? images : undefined,
         useCli: author === "user" ? useCli : undefined,
         forceOpencode: author === "user" && force ? true : undefined,
-        notifyOnCompletion: relay ? offerIdleNotify && notifyOnCompletion : undefined,
+        notifyOnCompletion: relay ? notifyOnCompletion : undefined,
         targetSessionId: relay?.session.id,
       }),
     );
@@ -556,7 +493,7 @@ export function MessageComposer({
           ))}
         </div>
       ) : null}
-      {offerIdleNotify ? (
+      {relayPreview ? (
         <label {...stylex.props(composer.checkboxLabel)}>
           <input
             {...stylex.props(controls.checkboxInput)}
@@ -567,10 +504,6 @@ export function MessageComposer({
           />
           Notify when target session becomes idle
         </label>
-      ) : alreadyWaitingForRelayTarget ? (
-        <p {...stylex.props(composer.checkboxLabel)} aria-live="polite">
-          Already waiting for this session to go idle
-        </p>
       ) : null}
       <div {...stylex.props(composer.actions)}>
         {onStopSpeech ? (

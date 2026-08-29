@@ -266,7 +266,7 @@ function sessionIdleListWhere(sessionId: string) {
 
 const ACTIVE_SESSION_IDLE_STATUSES = ["active", "paused", "firing"] as const;
 
-/** One live idle route per owner→target pair; used to no-op duplicate creates. */
+/** One live idle route per owner→target pair. */
 export function findActiveSessionIdleRoutineByOwnerAndTarget(
   ownerSessionId: string,
   targetSessionId: string,
@@ -293,6 +293,43 @@ export function findActiveSessionIdleRoutineByOwnerAndTarget(
     : null;
 }
 
+/**
+ * Point an existing owner→target idle wait at a new source message.
+ * Callers that own message watches must disarm the previous source separately
+ * (forward-relay does this atomically with the rebind).
+ */
+export function rebindSessionIdleRoutineSourceMessage(
+  routineId: number,
+  sourceMessageId: number | null,
+  targetSessionId: string,
+): Routine | null {
+  const trigger: SessionIdleTrigger = {
+    kind: "session_idle",
+    targetSessionId,
+    sourceMessageId,
+    afterWorkSeen: true,
+  };
+  const row = drizzleDb
+    .update(routines)
+    .set({
+      trigger: sessionIdleTriggerJson(trigger),
+      title: `Wait for ${targetSessionId}`,
+      updatedAt: nowSql(),
+    })
+    .where(
+      and(
+        eq(routines.id, routineId),
+        eq(routines.triggerKind, "session_idle"),
+        inArray(routines.status, [...ACTIVE_SESSION_IDLE_STATUSES]),
+      ),
+    )
+    .returning(routineSelectColumns)
+    .get();
+  return row
+    ? toRoutine(validateRoutineRow(row, "rebindSessionIdleRoutine"), "rebindSessionIdleRoutine")
+    : null;
+}
+
 export function createSessionIdleRoutine(input: CreateSessionIdleRoutineInput): Routine {
   ensureSession(input.ownerSessionId);
   ensureSession(input.trigger.targetSessionId);
@@ -300,7 +337,19 @@ export function createSessionIdleRoutine(input: CreateSessionIdleRoutineInput): 
     input.ownerSessionId,
     input.trigger.targetSessionId,
   );
-  if (existing) return existing;
+  if (existing && isSessionIdleRoutine(existing)) {
+    // Rebind rather than return a stuck wait that permanently blocks later creates.
+    if (existing.trigger.sourceMessageId !== input.trigger.sourceMessageId) {
+      return (
+        rebindSessionIdleRoutineSourceMessage(
+          existing.id,
+          input.trigger.sourceMessageId,
+          input.trigger.targetSessionId,
+        ) ?? existing
+      );
+    }
+    return existing;
+  }
   const trigger: SessionIdleTrigger = {
     kind: "session_idle",
     targetSessionId: input.trigger.targetSessionId,

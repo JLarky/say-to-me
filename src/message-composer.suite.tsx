@@ -174,44 +174,6 @@ describe("MessageComposer", () => {
     });
   });
 
-  it("does not offer notify-on-idle when an active idle wait already exists for the target", async () => {
-    container = document.createElement("div");
-    document.body.append(container);
-    root = createRoot(container);
-    const targetSessionId = "ses_12f94ae96ffepCN7Wdi3ZUA7zl";
-    let sentMessage: Message | undefined;
-
-    await act(async () => {
-      root!.render(
-        <MessageComposer
-          activeIdleTargetSessionIds={[targetSessionId]}
-          initialText={`${targetSessionId} please sleep 5 seconds`}
-          onSend={(message) => {
-            sentMessage = message;
-          }}
-          pendingId={() => "pending-relay-already-waiting"}
-          sessionId="default"
-        />,
-      );
-    });
-
-    expect(
-      container.querySelector('input[aria-label="Notify when target session becomes idle"]'),
-    ).toBeNull();
-    expect(container.textContent).toContain("Already waiting for this session to go idle");
-
-    await act(async () => {
-      container!.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true }));
-    });
-
-    expect(sentMessage).toMatchObject({
-      id: "pending-relay-already-waiting",
-      text: "please sleep 5 seconds",
-      notifyOnCompletion: false,
-      targetSessionId,
-    });
-  });
-
   it("submits forwarded messages with notify-on-completion disabled when unchecked", async () => {
     container = document.createElement("div");
     document.body.append(container);
