@@ -11,6 +11,7 @@ import type { ReactNode } from "react";
 
 import { parseJson, safeResponseJson } from "@say-to-me/runtime-validation";
 import { NotificationsPayload, type AppNotification } from "./types.ts";
+import { subscribeNotificationsRealtime } from "./notifications-realtime.ts";
 
 type LiveRefreshContextValue = {
   notifications: AppNotification[];
@@ -112,15 +113,14 @@ export function DashboardLiveRefreshProvider({
       return;
     }
 
-    const notificationEvents = new EventSource("/api/notifications/events");
-    // Signal-only: snapshot bodies are ignored (we bump refreshToken and refetch
-    // /api/spaces). Omit includeCachedStatus / jarvisOverviewDetails so list
-    // broadcasts stay cheap.
+    // Signal-only for sessions: snapshot bodies are ignored (we bump refreshToken
+    // and refetch /api/spaces). Omit includeCachedStatus / jarvisOverviewDetails
+    // so list broadcasts stay cheap. Notifications use the shared-worker tracer.
     const sessionEvents = new EventSource("/api/sessions/events");
 
-    function applyNotificationSnapshot(event: MessageEvent) {
+    function applyNotificationSnapshot(data: string) {
       try {
-        const payload = parseJson(NotificationsPayload, event.data);
+        const payload = parseJson(NotificationsPayload, data);
         setNotifications(payload.notifications);
         setNotificationsLoaded(true);
         setNotificationsError("");
@@ -130,19 +130,22 @@ export function DashboardLiveRefreshProvider({
       }
     }
 
-    notificationEvents.addEventListener("snapshot", applyNotificationSnapshot);
-    notificationEvents.onmessage = applyNotificationSnapshot;
-    notificationEvents.onerror = () => {
-      setNotificationsError("Live notifications disconnected.");
-      void reloadNotifications();
-    };
+    const stopNotifications = subscribeNotificationsRealtime({
+      onEvent: (_eventType, data) => {
+        applyNotificationSnapshot(data);
+      },
+      onError: () => {
+        setNotificationsError("Live notifications disconnected.");
+        void reloadNotifications();
+      },
+    });
 
     sessionEvents.addEventListener("snapshot", () => scheduleRefreshBump());
     sessionEvents.onmessage = () => scheduleRefreshBump();
     sessionEvents.onerror = () => scheduleRefreshBump();
 
     return () => {
-      notificationEvents.close();
+      stopNotifications();
       sessionEvents.close();
       if (sessionRefreshTimer.current !== null) {
         window.clearTimeout(sessionRefreshTimer.current);

@@ -46,6 +46,11 @@ describe("dispatchSseApiRequest", () => {
     ).toBeInstanceOf(Response);
     expect(
       await dispatchSseApiRequest(
+        new Request("http://say.local/api/session-queues/events?ids=vo_voice-a,vo_voice-b"),
+      ),
+    ).toBeInstanceOf(Response);
+    expect(
+      await dispatchSseApiRequest(
         new Request("http://say.local/api/sessions/ses_9a996d7dfb9881WALflfJllWuP/events"),
       ),
     ).toBeInstanceOf(Response);
@@ -72,6 +77,29 @@ describe("dispatchSseApiRequest", () => {
         new Request("http://say.local/api/sessions/ses_9a996d7dfb9881WALflfJllWuP/events"),
       ),
     ).toBeNull();
+  });
+
+  it("returns 400 when multiplex queue SSE has no session ids", async () => {
+    const response = await dispatchSseApiRequest(
+      new Request("http://say.local/api/session-queues/events?ids="),
+    );
+    expect(response?.status).toBe(400);
+  });
+
+  it("returns 400 when multiplex queue SSE exceeds the session id cap", async () => {
+    const { SESSION_QUEUE_MULTIPLEX_MAX_IDS } =
+      await import("../../src/session-queue-realtime-protocol.ts");
+    const ids = Array.from(
+      { length: SESSION_QUEUE_MULTIPLEX_MAX_IDS + 1 },
+      (_, index) => `vo_cap-${index + 1}`,
+    );
+    const response = await dispatchSseApiRequest(
+      new Request(`http://say.local/api/session-queues/events?ids=${ids.join(",")}`),
+    );
+    expect(response?.status).toBe(400);
+    expect(await response?.json()).toEqual({
+      error: `At most ${SESSION_QUEUE_MULTIPLEX_MAX_IDS} session ids are allowed.`,
+    });
   });
 
   it("returns 400 for malformed session ids on session SSE routes", async () => {
@@ -169,6 +197,7 @@ describe("dispatchSseApiRequest", () => {
 
       expect(text).toContain("event: snapshot");
       expect(text).toContain("externalCliActivity");
+      expect(text).toContain(`"targetSessionId":"${sessionId}"`);
       expect(text).toContain("Cursor on session stream.");
     } finally {
       shutdownCursorActivityHub();

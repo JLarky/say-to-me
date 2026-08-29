@@ -18,6 +18,7 @@ import { ensureSession } from "../sessions.ts";
 import { formatSseEvent, sseSnapshotFrame, startSseHeartbeat } from "../sse/client.ts";
 import { createSseWebResponse } from "../sse/stream.ts";
 import type { SseClient } from "../sse/client.ts";
+import { SESSION_QUEUE_MULTIPLEX_MAX_IDS } from "../../src/session-queue-realtime-protocol.ts";
 
 type QueueSnapshotWriter = (client: SseClient, sessionId?: string) => Promise<void>;
 
@@ -37,10 +38,20 @@ export function startQueueSseClient(
   let stopHeartbeat: (() => void) | undefined;
   const unsubscribeActivity = subscribeExternalCliActivity(sessionId, 8, {
     onSnapshot: (externalCliActivity) => {
-      if (!closed) writeSessionSseFrame(client, sseSnapshotFrame({ externalCliActivity }));
+      if (!closed) {
+        writeSessionSseFrame(
+          client,
+          sseSnapshotFrame({ externalCliActivity, targetSessionId: sessionId }),
+        );
+      }
     },
     onError: () => {
-      if (!closed) writeSessionSseFrame(client, sseSnapshotFrame({ externalCliActivity: null }));
+      if (!closed) {
+        writeSessionSseFrame(
+          client,
+          sseSnapshotFrame({ externalCliActivity: null, targetSessionId: sessionId }),
+        );
+      }
     },
   });
   void writeSnapshot(client, sessionId)
@@ -73,6 +84,40 @@ function sessionListEventsResponse(url: URL): Response {
       };
     },
     { kind: "session-list" },
+  );
+}
+
+function multiSessionQueueEventsResponse(url: URL): Response {
+  const rawIds = (url.searchParams.get("ids") || "").split(",");
+  const sessionIds: string[] = [];
+  for (const raw of rawIds) {
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    const sessionId = normalizeSessionId(trimmed);
+    if (sessionId && !sessionIds.includes(sessionId)) sessionIds.push(sessionId);
+  }
+  if (sessionIds.length === 0) {
+    return Response.json({ error: "At least one session id is required." }, { status: 400 });
+  }
+  if (sessionIds.length > SESSION_QUEUE_MULTIPLEX_MAX_IDS) {
+    return Response.json(
+      { error: `At most ${SESSION_QUEUE_MULTIPLEX_MAX_IDS} session ids are allowed.` },
+      { status: 400 },
+    );
+  }
+
+  return createSseWebResponse(
+    (client) => {
+      const stops = sessionIds.map((sessionId, index) =>
+        startQueueSseClient(client, sessionId, {
+          heartbeat: index === 0,
+        }),
+      );
+      return () => {
+        for (const stop of stops) stop();
+      };
+    },
+    { kind: "queue" },
   );
 }
 
@@ -129,6 +174,7 @@ export async function dispatchSseApiRequest(request: Request): Promise<Response 
   const { pathname } = url;
 
   if (pathname === "/api/sessions/events") return sessionListEventsResponse(url);
+  if (pathname === "/api/session-queues/events") return multiSessionQueueEventsResponse(url);
   if (pathname === "/api/notifications/events") return notificationEventsResponse();
   if (pathname === "/api/events") {
     return createSseWebResponse(

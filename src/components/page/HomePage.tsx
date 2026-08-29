@@ -8,6 +8,7 @@ import { card, misc, text as textStyles } from "../../styles/chrome.stylex.ts";
 import { composer as composerStyles, controls } from "../../styles/controls.stylex.ts";
 import { queue } from "../../styles/feed.stylex.ts";
 import { useSessions } from "../../use-sessions.ts";
+import { MULTI_TAB_CAPACITY_NOTICE } from "../../notifications-realtime.ts";
 
 function hrefForSession(sessionId: string | null | undefined): string {
   if (!sessionId) return "/";
@@ -79,6 +80,9 @@ export function HomePage() {
           <h2 {...stylex.props(queue.headingH2)}>Sessions</h2>
           <span {...stylex.props(queue.headingCount)}>{sessions.length}</span>
         </div>
+        <p {...stylex.props(misc.notice)} data-multi-tab-capacity-notice role="note">
+          {MULTI_TAB_CAPACITY_NOTICE}
+        </p>
         <SessionList
           sessions={sessions}
           onOpen={(id) => navigate(hrefForSession(id))}
