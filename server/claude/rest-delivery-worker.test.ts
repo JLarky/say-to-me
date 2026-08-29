@@ -14,8 +14,12 @@ const { drizzleDb } = await import("../db/index.ts");
 const { messages: messagesTable } = await import("../db/drizzle-schema.ts");
 const { setSessionCwd } = await import("../sessions.ts");
 const { enqueueClaudeDeliveryJob } = await import("./durable-delivery.ts");
-const { claudeCommandArgs, parseClaudeStreamLine, runClaudeRestDeliveryOnce } =
-  await import("./rest-delivery-worker.ts");
+const {
+  claudeCommandArgs,
+  claudeDeliveryPrompt,
+  parseClaudeStreamLine,
+  runClaudeRestDeliveryOnce,
+} = await import("./rest-delivery-worker.ts");
 
 describe("Claude REST delivery worker", () => {
   let server: Awaited<ReturnType<typeof listen>>["server"] | null = null;
@@ -129,5 +133,19 @@ describe("Claude REST delivery worker", () => {
         JSON.stringify({ type: "result", is_error: false, result: "Final answer." }),
       ),
     ).toEqual({ isError: false, text: "Final answer." });
+  });
+
+  it("includes the isolated CLI origin", () => {
+    expect(
+      claudeDeliveryPrompt(
+        { claudeSessionId: "cc_abc" },
+        { text: "hello" },
+        {
+          env: { SAY_TO_ME_URL: "http://127.0.0.1:5412" },
+          existsSync: () => false,
+          readFileSync: () => "",
+        },
+      ),
+    ).toContain("say-to-me api --server http://127.0.0.1:5412");
   });
 });

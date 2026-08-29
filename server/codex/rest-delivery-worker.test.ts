@@ -13,7 +13,7 @@ const { drizzleDb } = await import("../db/index.ts");
 const { messages: messagesTable } = await import("../db/drizzle-schema.ts");
 const { setSessionCwd } = await import("../sessions.ts");
 const { enqueueCodexDeliveryJob } = await import("./durable-delivery.ts");
-const { codexCommandArgs, parseCodexLastMessage, runCodexRestDeliveryOnce } =
+const { codexCommandArgs, codexDeliveryPrompt, parseCodexLastMessage, runCodexRestDeliveryOnce } =
   await import("./rest-delivery-worker.ts");
 
 describe("Codex REST delivery worker", () => {
@@ -108,5 +108,19 @@ describe("Codex REST delivery worker", () => {
 
   it("trims codex last-message output", () => {
     expect(parseCodexLastMessage("  hello  \n")).toBe("hello");
+  });
+
+  it("includes the isolated CLI origin", () => {
+    expect(
+      codexDeliveryPrompt(
+        { codexSessionId: "cx_abc" },
+        { text: "hello" },
+        {
+          env: { SAY_TO_ME_URL: "http://127.0.0.1:5412" },
+          existsSync: () => false,
+          readFileSync: () => "",
+        },
+      ),
+    ).toContain("say-to-me api --server http://127.0.0.1:5412");
   });
 });

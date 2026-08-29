@@ -14,8 +14,13 @@ const { drizzleDb } = await import("../db/index.ts");
 const { messages: messagesTable } = await import("../db/drizzle-schema.ts");
 const { setSessionCwd } = await import("../sessions.ts");
 const { enqueueCursorDeliveryJob } = await import("./durable-delivery.ts");
-const { cursorAssistantText, cursorCommandArgs, parseCursorJsonOutput, runCursorRestDeliveryOnce } =
-  await import("./rest-delivery-worker.ts");
+const {
+  cursorAssistantText,
+  cursorCommandArgs,
+  cursorDeliveryPrompt,
+  parseCursorJsonOutput,
+  runCursorRestDeliveryOnce,
+} = await import("./rest-delivery-worker.ts");
 
 describe("Cursor REST delivery worker", () => {
   let server: Awaited<ReturnType<typeof listen>>["server"] | null = null;
@@ -153,5 +158,19 @@ describe("Cursor REST delivery worker", () => {
         ].join("\n"),
       ),
     ).toEqual({ isError: false, text: "pirate ahoy" });
+  });
+
+  it("includes the isolated CLI origin", () => {
+    expect(
+      cursorDeliveryPrompt(
+        { cursorSessionId: "cur_abc" },
+        { text: "hello" },
+        {
+          env: { SAY_TO_ME_URL: "http://127.0.0.1:5412" },
+          existsSync: () => false,
+          readFileSync: () => "",
+        },
+      ),
+    ).toContain("say-to-me api --server http://127.0.0.1:5412");
   });
 });

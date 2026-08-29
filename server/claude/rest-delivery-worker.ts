@@ -9,6 +9,7 @@ import {
 } from "@say-to-me/external-cli-delivery/workflow";
 import { createExternalCliRestDeliveryWorker } from "../external-cli/rest-delivery-worker.ts";
 import { workerBin, workerMode, workerVersion } from "../external-cli/worker-env.ts";
+import type { ResolveWorkerInternalUrlOptions } from "../external-cli/worker-internal-url.ts";
 import { safeJsonParse, UnknownJson } from "@say-to-me/runtime-validation";
 import { resolveClaudeSessionFlag, type ClaudeSessionFlag } from "./delivery.ts";
 
@@ -22,8 +23,12 @@ type ClaimedJob = {
 
 type ClaimedJobWithMessage = ClaimedJob & { message: DbMessage };
 
-function deliveryPrompt(job: DbClaudeDeliveryJob, message: DbMessage): string {
-  return buildAgentVoicePrompt(job.claudeSessionId, message.text);
+export function claudeDeliveryPrompt(
+  job: Pick<DbClaudeDeliveryJob, "claudeSessionId">,
+  message: Pick<DbMessage, "text">,
+  options?: ResolveWorkerInternalUrlOptions,
+): string {
+  return buildAgentVoicePrompt(job.claudeSessionId, message.text, options);
 }
 
 export function parseClaudeStreamLine(line: string): { isError?: boolean; text?: string } {
@@ -96,7 +101,7 @@ function runClaudePrompt(
       resolveClaudeSpawnArgs(
         claimed.claude.cwd,
         job.claudeSessionId,
-        deliveryPrompt(job, claimed.message),
+        claudeDeliveryPrompt(job, claimed.message),
         claimed.claude.model,
       ),
       { cwd: claimed.claude.cwd, stdio: ["ignore", "pipe", "pipe"] },
@@ -184,7 +189,7 @@ const claudeRestWorker = createExternalCliRestDeliveryWorker<DbClaudeDeliveryJob
   sessionIdRequestField: "claudeSessionId",
   workerVersion: workerVersion("CLAUDE"),
   echoReplyLabel: "Echo from Claude worker",
-  deliveryPrompt,
+  deliveryPrompt: claudeDeliveryPrompt,
   runPrompt: runClaudePrompt,
 });
 

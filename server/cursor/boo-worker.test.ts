@@ -6,12 +6,15 @@ import { cursorBooWorkerName, ensureCursorBooWorker } from "../external-cli/prov
 describe("ensureCursorBooWorker", () => {
   const sessionId = "cur_00000000-0000-0000-0000-000000000000";
   let previousInternalUrl: string | undefined;
+  let previousCliUrl: string | undefined;
 
   beforeEach(() => {
     delete process.env.SAY_TO_ME_CURSOR_WORKER_AUTOSTART;
     delete process.env.SAY_TO_ME_CURSOR_WORKER_MODE;
     previousInternalUrl = process.env.SAY_TO_ME_INTERNAL_URL;
+    previousCliUrl = process.env.SAY_TO_ME_URL;
     delete process.env.SAY_TO_ME_INTERNAL_URL;
+    delete process.env.SAY_TO_ME_URL;
   });
 
   afterEach(() => {
@@ -19,6 +22,8 @@ describe("ensureCursorBooWorker", () => {
     delete process.env.SAY_TO_ME_CURSOR_WORKER_MODE;
     if (previousInternalUrl === undefined) delete process.env.SAY_TO_ME_INTERNAL_URL;
     else process.env.SAY_TO_ME_INTERNAL_URL = previousInternalUrl;
+    if (previousCliUrl === undefined) delete process.env.SAY_TO_ME_URL;
+    else process.env.SAY_TO_ME_URL = previousCliUrl;
   });
 
   it("autostarts with real cursor mode and without disabling TLS verification", async () => {
@@ -34,6 +39,7 @@ describe("ensureCursorBooWorker", () => {
     expect(started).toHaveLength(1);
     const { resolveWorkerInternalUrl } = await import("../external-cli/worker-internal-url.ts");
     expect(started[0]?.args).toContain(`SAY_TO_ME_INTERNAL_URL=${resolveWorkerInternalUrl()}`);
+    expect(started[0]?.args?.some((arg) => arg.startsWith("SAY_TO_ME_URL="))).toBe(false);
     expect(started[0]?.args).toContain("SAY_TO_ME_CURSOR_WORKER_MODE=cursor");
     expect(started[0]?.args?.some((arg) => arg.startsWith("NODE_TLS_REJECT_UNAUTHORIZED="))).toBe(
       false,
