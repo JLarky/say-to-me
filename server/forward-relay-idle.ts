@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzleDb } from "./db/index.ts";
 import { messages as messagesTable, routines } from "./db/drizzle-schema.ts";
 import { DbMessage, validateDb, type DbMessage as DbMessageRow } from "./db/schemas.ts";
@@ -38,6 +38,24 @@ export function createForwardRelayWithOptionalIdleWait(
   ensureSession(input.targetSessionId);
 
   return drizzleDb.transaction((tx) => {
+    // One active idle route per owner→target. Duplicate notify relays no-op the wait.
+    const existingIdleWait = input.notifyOnCompletion
+      ? tx
+          .select({ id: routines.id })
+          .from(routines)
+          .where(
+            and(
+              eq(routines.ownerSessionId, input.sessionId),
+              eq(routines.triggerKind, "session_idle"),
+              inArray(routines.status, ["active", "paused", "firing"]),
+              sql`json_extract(${routines.trigger}, '$.targetSessionId') = ${input.targetSessionId}`,
+            ),
+          )
+          .limit(1)
+          .get()
+      : null;
+    const armIdleWait = input.notifyOnCompletion && !existingIdleWait;
+
     const sourceMessage = validateDb(
       DbMessage,
       tx
@@ -80,9 +98,9 @@ export function createForwardRelayWithOptionalIdleWait(
           forwardTargetSessionId: input.targetSessionId,
           forwardTargetMessageId: null,
           forwardStatus: "pending",
-          completionWatchStatus: input.notifyOnCompletion ? "watching" : null,
-          completionSourceSessionId: input.notifyOnCompletion ? input.sessionId : null,
-          completionSourceMessageId: input.notifyOnCompletion ? sourceMessage.id : null,
+          completionWatchStatus: armIdleWait ? "watching" : null,
+          completionSourceSessionId: armIdleWait ? input.sessionId : null,
+          completionSourceMessageId: armIdleWait ? sourceMessage.id : null,
         })
         .returning(messageSelectColumns)
         .get(),
@@ -102,7 +120,7 @@ export function createForwardRelayWithOptionalIdleWait(
       .where(eq(messagesTable.id, targetMessage.id))
       .run();
 
-    if (input.notifyOnCompletion) {
+    if (armIdleWait) {
       options?.failBeforeRoutineCommit?.();
       const trigger = {
         kind: "session_idle" as const,

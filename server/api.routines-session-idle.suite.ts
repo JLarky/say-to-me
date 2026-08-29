@@ -98,6 +98,65 @@ describe("say API: session_idle routines (phase 2)", () => {
     }
   });
 
+  it("does not create a duplicate session_idle routine for the same owner and target", async () => {
+    const app = createApiMiddleware();
+    const { origin, server } = await listen(app);
+    try {
+      const sourceSessionId = "ses_adadadadadadOwnerA1Dup0001";
+      const targetSessionId = "ses_bdbdbdbdbdbdTargetB1Dup001";
+      await createTestSession(sourceSessionId);
+      await createTestSession(targetSessionId);
+
+      const first = await json<{ message: { id: number } }>(
+        await fetch(`${origin}/api/sessions/${sourceSessionId}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            author: "user",
+            text: "first wait",
+            targetSessionId,
+            notifyOnCompletion: true,
+          }),
+        }),
+      );
+      const secondResponse = await fetch(`${origin}/api/sessions/${sourceSessionId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          author: "user",
+          text: "duplicate wait",
+          targetSessionId,
+          notifyOnCompletion: true,
+        }),
+      });
+      expect(secondResponse.status).toBe(201);
+      const second = await json<{ message: { id: number }; targetMessage: { id: number } }>(
+        secondResponse,
+      );
+
+      expect(findSessionIdleRoutineBySourceMessageId(first.message.id)).toMatchObject({
+        status: "active",
+        trigger: { targetSessionId, sourceMessageId: first.message.id },
+      });
+      expect(findSessionIdleRoutineBySourceMessageId(second.message.id)).toBeNull();
+
+      const forA = await json<{ routines: Routine[] }>(
+        await fetch(`${origin}/api/routines?sessionId=${encodeURIComponent(sourceSessionId)}`),
+      );
+      const idleWaits = forA.routines.filter(
+        (routine) =>
+          routine.trigger.kind === "session_idle" &&
+          routine.trigger.targetSessionId === targetSessionId &&
+          (routine.status === "active" ||
+            routine.status === "paused" ||
+            routine.status === "firing"),
+      );
+      expect(idleWaits).toHaveLength(1);
+    } finally {
+      await closeTestServer(server);
+    }
+  });
+
   it("does not create a session_idle routine when notifyOnCompletion is false", async () => {
     const app = createApiMiddleware();
     const { origin, server } = await listen(app);

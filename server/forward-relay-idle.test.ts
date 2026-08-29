@@ -37,6 +37,86 @@ describe("forward relay + session_idle atomic create", () => {
     });
   });
 
+  it("no-ops a second idle wait for the same owner and target", async () => {
+    const sourceSessionId = "ses_atomicOwnerA3WaitDup03";
+    const targetSessionId = "ses_atomicTargetB3WaitDup3";
+    await createTestSession(sourceSessionId);
+    await createTestSession(targetSessionId);
+
+    const first = createForwardRelayWithOptionalIdleWait({
+      sessionId: sourceSessionId,
+      targetSessionId,
+      sourceText: "<say-to-me-system>relay 1</say-to-me-system>",
+      targetText: "first wait",
+      links: null,
+      sourceSessionRefs: JSON.stringify([{ id: targetSessionId }]),
+      targetSessionRefs: JSON.stringify([{ id: sourceSessionId }]),
+      clientMessageId: null,
+      notifyOnCompletion: true,
+    });
+    const second = createForwardRelayWithOptionalIdleWait({
+      sessionId: sourceSessionId,
+      targetSessionId,
+      sourceText: "<say-to-me-system>relay 2</say-to-me-system>",
+      targetText: "duplicate wait must no-op",
+      links: null,
+      sourceSessionRefs: JSON.stringify([{ id: targetSessionId }]),
+      targetSessionRefs: JSON.stringify([{ id: sourceSessionId }]),
+      clientMessageId: null,
+      notifyOnCompletion: true,
+    });
+
+    expect(findSessionIdleRoutineBySourceMessageId(first.sourceMessage.id)).toMatchObject({
+      status: "active",
+      trigger: { sourceMessageId: first.sourceMessage.id },
+    });
+    expect(findSessionIdleRoutineBySourceMessageId(second.sourceMessage.id)).toBeNull();
+    expect(second.targetMessage.completionWatchStatus).toBeNull();
+    expect(
+      drizzleDb.select().from(routines).where(eq(routines.ownerSessionId, sourceSessionId)).all(),
+    ).toHaveLength(1);
+  });
+
+  it("still creates a distinct idle wait for a different target", async () => {
+    const sourceSessionId = "ses_atomicOwnerA4WaitFan04";
+    const targetOne = "ses_atomicTargetB4WaitFan41";
+    const targetTwo = "ses_atomicTargetB4WaitFan42";
+    await createTestSession(sourceSessionId);
+    await createTestSession(targetOne);
+    await createTestSession(targetTwo);
+
+    createForwardRelayWithOptionalIdleWait({
+      sessionId: sourceSessionId,
+      targetSessionId: targetOne,
+      sourceText: "<say-to-me-system>relay a</say-to-me-system>",
+      targetText: "wait a",
+      links: null,
+      sourceSessionRefs: JSON.stringify([{ id: targetOne }]),
+      targetSessionRefs: JSON.stringify([{ id: sourceSessionId }]),
+      clientMessageId: null,
+      notifyOnCompletion: true,
+    });
+    const second = createForwardRelayWithOptionalIdleWait({
+      sessionId: sourceSessionId,
+      targetSessionId: targetTwo,
+      sourceText: "<say-to-me-system>relay b</say-to-me-system>",
+      targetText: "wait b",
+      links: null,
+      sourceSessionRefs: JSON.stringify([{ id: targetTwo }]),
+      targetSessionRefs: JSON.stringify([{ id: sourceSessionId }]),
+      clientMessageId: null,
+      notifyOnCompletion: true,
+    });
+
+    expect(findSessionIdleRoutineBySourceMessageId(second.sourceMessage.id)).toMatchObject({
+      status: "active",
+      trigger: { targetSessionId: targetTwo },
+    });
+    expect(
+      drizzleDb.select().from(routines).where(eq(routines.ownerSessionId, sourceSessionId)).all(),
+    ).toHaveLength(2);
+  });
+
   it("rolls back watching target when routine create fails", async () => {
     const sourceSessionId = "ses_atomicOwnerA2WaitFail02";
     const targetSessionId = "ses_atomicTargetB2WaitFail2";

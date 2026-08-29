@@ -264,9 +264,43 @@ function sessionIdleListWhere(sessionId: string) {
   );
 }
 
+const ACTIVE_SESSION_IDLE_STATUSES = ["active", "paused", "firing"] as const;
+
+/** One live idle route per owner→target pair; used to no-op duplicate creates. */
+export function findActiveSessionIdleRoutineByOwnerAndTarget(
+  ownerSessionId: string,
+  targetSessionId: string,
+): Routine | null {
+  const row = drizzleDb
+    .select(routineSelectColumns)
+    .from(routines)
+    .where(
+      and(
+        eq(routines.ownerSessionId, ownerSessionId),
+        eq(routines.triggerKind, "session_idle"),
+        inArray(routines.status, [...ACTIVE_SESSION_IDLE_STATUSES]),
+        sql`json_extract(${routines.trigger}, '$.targetSessionId') = ${targetSessionId}`,
+      ),
+    )
+    .orderBy(asc(routines.id))
+    .limit(1)
+    .get();
+  return row
+    ? toRoutine(
+        validateRoutineRow(row, "findActiveSessionIdleByOwnerAndTarget"),
+        "findActiveSessionIdleByOwnerAndTarget",
+      )
+    : null;
+}
+
 export function createSessionIdleRoutine(input: CreateSessionIdleRoutineInput): Routine {
   ensureSession(input.ownerSessionId);
   ensureSession(input.trigger.targetSessionId);
+  const existing = findActiveSessionIdleRoutineByOwnerAndTarget(
+    input.ownerSessionId,
+    input.trigger.targetSessionId,
+  );
+  if (existing) return existing;
   const trigger: SessionIdleTrigger = {
     kind: "session_idle",
     targetSessionId: input.trigger.targetSessionId,
@@ -307,7 +341,7 @@ export function findActiveSessionIdleRoutineBySourceMessageId(
     .where(
       and(
         eq(routines.triggerKind, "session_idle"),
-        inArray(routines.status, ["active", "paused", "firing"]),
+        inArray(routines.status, [...ACTIVE_SESSION_IDLE_STATUSES]),
         sql`json_extract(${routines.trigger}, '$.sourceMessageId') = ${sourceMessageId}`,
       ),
     )
