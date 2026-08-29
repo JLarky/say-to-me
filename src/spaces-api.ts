@@ -168,6 +168,22 @@ export function archiveSession(sessionId: string) {
   );
 }
 
+/** Pin / unpin / Jarvis / archive via the same `sessions.state` column as Home. */
+export function setSessionState(
+  sessionId: string,
+  state: "important" | "general" | "archived" | "jarvis",
+) {
+  return sessionRequest(
+    `/api/sessions/${encodeURIComponent(sessionId)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ state }),
+    },
+    "Unable to update session",
+  );
+}
+
 /** Delete Say To Me session data (OpenCode session is kept). */
 export function deleteSession(sessionId: string) {
   return sessionRequest(

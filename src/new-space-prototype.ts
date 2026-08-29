@@ -583,6 +583,22 @@ export function archivePrototypeSession(
   };
 }
 
+export function setPrototypeSessionState(
+  state: PrototypeSpacesState,
+  sessionId: string,
+  sessionState: PrototypeSession["state"],
+): PrototypeSpacesState {
+  return {
+    ...state,
+    spaces: state.spaces.map((space) => ({
+      ...space,
+      sessions: space.sessions.map((session) =>
+        session.id === sessionId ? { ...session, state: sessionState } : session,
+      ),
+    })),
+  };
+}
+
 export function attachPrototypeRepo(
   state: PrototypeSpacesState,
   spaceId: string,

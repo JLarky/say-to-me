@@ -41,6 +41,17 @@ export function pinAttentionState(state: SessionState | null | undefined): PinAt
   return "general";
 }
 
+/** Home and session-menu Pin/Unpin: important ↔ everything else. Same `sessions.state` store. */
+export function nextSessionPinState(
+  state: SessionState | null | undefined,
+): "important" | "general" {
+  return state === "important" ? "general" : "important";
+}
+
+export function sessionPinActionLabel(state: SessionState | null | undefined): "Unpin" | "Pin" {
+  return state === "important" ? "Unpin" : "Pin";
+}
+
 export type SessionRow = {
   id: string;
   alias?: string | null;

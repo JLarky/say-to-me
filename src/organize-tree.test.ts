@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { backendOf, buildNodes, pinAttentionState, titleOf } from "./organize-tree.ts";
+import {
+  backendOf,
+  buildNodes,
+  nextSessionPinState,
+  pinAttentionState,
+  sessionPinActionLabel,
+  titleOf,
+} from "./organize-tree.ts";
 
 describe("organize-tree", () => {
   it("maps session id prefixes to backends", () => {
@@ -18,6 +25,15 @@ describe("organize-tree", () => {
     expect(pinAttentionState("jarvis")).toBe("jarvis");
     expect(pinAttentionState("archived")).toBe("general");
     expect(pinAttentionState(null)).toBe("general");
+  });
+
+  it("toggles pin the same way Home Pin/Unpin does", () => {
+    expect(nextSessionPinState("general")).toBe("important");
+    expect(nextSessionPinState("important")).toBe("general");
+    expect(nextSessionPinState("jarvis")).toBe("important");
+    expect(nextSessionPinState(null)).toBe("important");
+    expect(sessionPinActionLabel("important")).toBe("Unpin");
+    expect(sessionPinActionLabel("general")).toBe("Pin");
   });
 
   it("prefers alias for session titles", () => {
