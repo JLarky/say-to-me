@@ -98,6 +98,75 @@ describe("say API: session_idle routines (phase 2)", () => {
     }
   });
 
+  it("rebinds a stuck owner→target idle wait so a later relay is not permanently blocked", async () => {
+    const app = createApiMiddleware();
+    const { origin, server } = await listen(app);
+    try {
+      const sourceSessionId = "ses_adadadadadadOwnerA1Dup0001";
+      const targetSessionId = "ses_bdbdbdbdbdbdTargetB1Dup001";
+      await createTestSession(sourceSessionId);
+      await createTestSession(targetSessionId);
+
+      const first = await json<{ message: { id: number }; targetMessage: { id: number } }>(
+        await fetch(`${origin}/api/sessions/${sourceSessionId}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            author: "user",
+            text: "first wait",
+            targetSessionId,
+            notifyOnCompletion: true,
+          }),
+        }),
+      );
+      expect(findSessionIdleRoutineBySourceMessageId(first.message.id)).toMatchObject({
+        status: "active",
+        trigger: { targetSessionId, sourceMessageId: first.message.id },
+      });
+
+      const secondResponse = await fetch(`${origin}/api/sessions/${sourceSessionId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          author: "user",
+          text: "later wait after stuck first",
+          targetSessionId,
+          notifyOnCompletion: true,
+        }),
+      });
+      expect(secondResponse.status).toBe(201);
+      const second = await json<{
+        message: { id: number; text: string };
+        targetMessage: { id: number; completionWatchStatus: string | null };
+      }>(secondResponse);
+
+      // Still one active wait, but rebound to the later source + armed on the new target.
+      expect(findSessionIdleRoutineBySourceMessageId(first.message.id)).toBeNull();
+      expect(findSessionIdleRoutineBySourceMessageId(second.message.id)).toMatchObject({
+        status: "active",
+        trigger: { targetSessionId, sourceMessageId: second.message.id },
+      });
+      expect(second.targetMessage.completionWatchStatus).toBe("watching");
+      expect(second.message.text).toContain("You will be notified once the session is idle");
+
+      const forA = await json<{ routines: Routine[] }>(
+        await fetch(`${origin}/api/routines?sessionId=${encodeURIComponent(sourceSessionId)}`),
+      );
+      const idleWaits = forA.routines.filter(
+        (routine) =>
+          routine.trigger.kind === "session_idle" &&
+          routine.trigger.targetSessionId === targetSessionId &&
+          (routine.status === "active" ||
+            routine.status === "paused" ||
+            routine.status === "firing"),
+      );
+      expect(idleWaits).toHaveLength(1);
+      expect(idleWaits[0]?.trigger).toMatchObject({ sourceMessageId: second.message.id });
+    } finally {
+      await closeTestServer(server);
+    }
+  });
+
   it("does not create a session_idle routine when notifyOnCompletion is false", async () => {
     const app = createApiMiddleware();
     const { origin, server } = await listen(app);

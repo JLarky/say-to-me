@@ -226,10 +226,14 @@ export function createSessionMessageEffect(
         }
       }
 
+      const sanitizedForwarded = forwardedText.replace(/[<>]/g, "").trim();
+      const receivedPrefix = `${targetSessionId} received message: ${sanitizedForwarded}`;
+      // Promise an idle notify only when createForwardRelay actually arms/rebinds a wait.
       const { sourceMessage, targetMessage } = yield* service.createForwardRelay({
         sessionId,
         targetSessionId,
-        sourceText: `<say-to-me-system>${targetSessionId} received message: ${forwardedText.replace(/[<>]/g, "").trim()}. You will be notified once the session is idle.</say-to-me-system>`,
+        sourceText: `<say-to-me-system>${receivedPrefix}.</say-to-me-system>`,
+        armedSourceText: `<say-to-me-system>${receivedPrefix}. You will be notified once the session is idle.</say-to-me-system>`,
         targetText: forwardedText,
         links: linksJson,
         sourceSessionRefs: JSON.stringify([
