@@ -125,4 +125,23 @@ describe("message-delivery", () => {
     expect(systemMessageText("<say-to-me-system>hello</say-to-me-system>")).toBe("hello");
     expect(systemMessageText("plain")).toBeNull();
   });
+
+  it("does not treat a normal message that mentions idle as an idle notification", () => {
+    expect(
+      idleNotificationSessionId(
+        message({
+          text: "example wording: e2e target 2 [cursor] is now idle",
+          sessions: [{ id: "cur_other", alias: "e2e target 2" }],
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      idleNotificationSessionId(
+        message({
+          text: "Session is now idle.",
+          sessions: [{ id: "cur_other", alias: "review" }],
+        }),
+      ),
+    ).toBe("cur_other");
+  });
 });

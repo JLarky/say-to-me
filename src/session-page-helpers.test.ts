@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   browserSpeechText,
   buildPaseoAgentNameMap,
+  isIdleNotificationMessage,
   paseoChatListenerStatus,
   preferredBrowserSpeechVoice,
   sessionIdWithDisplayName,
@@ -81,6 +82,26 @@ describe("session page helpers", () => {
     expect(shouldAutoplayMessage(idle, new Set())).toBe(false);
     expect(shouldAutoplayMessage(idle, new Set([12]))).toBe(true);
     expect(shouldAutoplayMessage(message({ id: 13, status: "queued" }), new Set())).toBe(true);
+  });
+
+  it("does not treat a normal message that mentions idle as an idle notification", () => {
+    const falseIdle = message({
+      id: 13,
+      author: "user",
+      status: "received",
+      text: "example wording: e2e target 2 [cursor] is now idle",
+      sessions: [{ id: "cur_other", alias: "e2e target 2" }],
+    });
+    expect(isIdleNotificationMessage(falseIdle)).toBe(false);
+    expect(shouldAutoplayMessage(falseIdle, new Set([13]))).toBe(false);
+    expect(
+      isIdleNotificationMessage(
+        message({
+          text: "Session is now idle.",
+          sessions: [{ id: "cur_other", alias: "review" }],
+        }),
+      ),
+    ).toBe(true);
   });
 
   it("formats the session subtitle with the display alias", () => {

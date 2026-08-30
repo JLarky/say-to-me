@@ -1,3 +1,4 @@
+import { isIdleNoticeText } from "@say-to-me/session-utils/idle-notices";
 import type { Message } from "./types.ts";
 import { formatMessageTime } from "./utils.ts";
 
@@ -106,7 +107,7 @@ export function idleNotificationSessionId(message: Message): string | null {
   }
   const legacy = message.text.match(/^<say-to-me-system>([^<]+) is idle now/);
   if (legacy?.[1]) return legacy[1];
-  if (!/\bis now idle\b/i.test(message.text) && !/\bcould not be delivered\b/i.test(message.text)) {
+  if (!isIdleNoticeText(message.text)) {
     return null;
   }
   const sessions = message.sessions ?? [];
