@@ -1,3 +1,4 @@
+import { isIdleNoticeText } from "@say-to-me/session-utils/idle-notices";
 import { speechTextWithAgentNames } from "./paseo-mentions.ts";
 import { resolveListDisplayName } from "./session-display.ts";
 import type { Message, Session } from "./types.ts";
@@ -71,15 +72,7 @@ export function browserSpeechText(
 
 export function isIdleNotificationMessage(message: Message): boolean {
   if (message.routineEvent?.kind === "watcher_completed") return true;
-  if (message.text.startsWith("<say-to-me-system>") && message.text.includes(" is idle now")) {
-    return true;
-  }
-  return (
-    (/\bis now idle\b/i.test(message.text) || /\bcould not be delivered\b/i.test(message.text)) &&
-    ((message.sessions?.length ?? 0) > 0 ||
-      message.forwardTargetSessionId != null ||
-      message.forwardSourceMessageId != null)
-  );
+  return isIdleNoticeText(message.text);
 }
 
 export function idleNotificationSpeechText(message: Message): string {
