@@ -84,6 +84,13 @@ export function parseCursorJsonOutput(stdout: string): { isError?: boolean; text
   return { isError, text };
 }
 
+/** A final successful result is Cursor's trustworthy end-of-turn signal. */
+export function cursorTurnEndedOnClose(stdout: string, code: number | null): boolean {
+  if (code !== 0) return false;
+  const parsed = parseCursorJsonOutput(stdout);
+  return parsed.isError !== true && parsed.text != null && parsed.text.trim() !== "";
+}
+
 export function cursorCommandArgs(resumeId: string, prompt: string, model?: string): string[] {
   const args = ["-p", "--output-format", "stream-json", "--resume", resumeId, "--force", prompt];
   if (model) args.push("--model", model);
@@ -168,11 +175,13 @@ function runCursorPrompt(
     );
     child.on("close", (code) => {
       if (pending.trim()) consumeLine(pending);
+      const turnEnded = cursorTurnEndedOnClose(stdout, code);
       if (code !== 0) {
         settle(
           Effect.fail(
             new ProviderFailedError({
               message: `Cursor agent exited with code ${code}: ${stderr.trim()}`,
+              turnEnded,
             }),
           ),
         );
@@ -182,7 +191,21 @@ function runCursorPrompt(
       if (parsed.isError) {
         settle(
           Effect.fail(
-            new ProviderFailedError({ message: parsed.text ?? "Cursor delivery failed." }),
+            new ProviderFailedError({
+              message: parsed.text ?? "Cursor delivery failed.",
+              turnEnded,
+            }),
+          ),
+        );
+        return;
+      }
+      if (!turnEnded) {
+        settle(
+          Effect.fail(
+            new ProviderFailedError({
+              message: "Cursor agent closed without a final result event.",
+              turnEnded: false,
+            }),
           ),
         );
         return;

@@ -70,6 +70,9 @@ function writeFakeProvider(name: string): string {
       '  prev="$arg"',
       "done",
       'if [ -n "$out" ]; then printf ok > "$out"; fi',
+      ...(name === "cursor"
+        ? ['printf \'{"type":"result","is_error":false,"result":"ok"}\\n\'']
+        : []),
       "exit 0",
       "",
     ].join("\n"),
@@ -126,6 +129,9 @@ function writeSleepingProvider(name: string): string {
       '  prev="$arg"',
       "done",
       'if [ -n "$out" ]; then printf ok > "$out"; fi',
+      ...(name === "cursor"
+        ? ['printf \'{"type":"result","is_error":false,"result":"ok"}\\n\'']
+        : []),
       "exit 0",
       "",
     ].join("\n"),

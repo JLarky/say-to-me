@@ -18,6 +18,7 @@ const {
   cursorAssistantText,
   cursorCommandArgs,
   cursorDeliveryPrompt,
+  cursorTurnEndedOnClose,
   parseCursorJsonOutput,
   runCursorRestDeliveryOnce,
 } = await import("./rest-delivery-worker.ts");
@@ -158,6 +159,23 @@ describe("Cursor REST delivery worker", () => {
         ].join("\n"),
       ),
     ).toEqual({ isError: false, text: "pirate ahoy" });
+  });
+
+  it("does not treat an early Cursor close without a final result as turn end", () => {
+    const progressOnly = JSON.stringify({
+      type: "assistant",
+      message: { content: [{ type: "text", text: "I am still working" }] },
+    });
+    expect(cursorTurnEndedOnClose(progressOnly, 0)).toBe(false);
+    expect(cursorTurnEndedOnClose(progressOnly, 1)).toBe(false);
+    expect(
+      cursorTurnEndedOnClose(
+        [progressOnly, JSON.stringify({ type: "result", is_error: false, result: "done" })].join(
+          "\n",
+        ),
+        0,
+      ),
+    ).toBe(true);
   });
 
   it("includes the isolated CLI origin", () => {

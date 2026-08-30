@@ -68,6 +68,8 @@ export class ProviderNotStartedError extends Data.TaggedError("ExternalCliProvid
 export class ProviderFailedError extends Data.TaggedError("ExternalCliProviderFailed")<{
   readonly message: string;
   readonly cause?: unknown;
+  /** Whether the provider emitted a trustworthy end-of-turn signal. */
+  readonly turnEnded?: boolean;
 }> {}
 
 /**

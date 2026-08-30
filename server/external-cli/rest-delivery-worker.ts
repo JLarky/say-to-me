@@ -306,9 +306,14 @@ export function createExternalCliRestDeliveryWorker<
         runDelivery({ ...claimed, job, message } as ClaimedJobWithMessage),
       ).pipe(Effect.ensuring(Fiber.interrupt(heartbeat)));
 
-      // Process settled (success or fail after spawn). Queue-empty must not
-      // mean idle until this marker is set — including when complete() CAS fails.
-      yield* markTurnEnded(job);
+      // Process close is normally the turn-end signal. Providers may opt out
+      // when they know close happened before a trustworthy final event; keep
+      // that turn pending so an early exit cannot produce a false idle ding.
+      const turnEnded =
+        Either.isRight(outcome) ||
+        (Either.isLeft(outcome) &&
+          (outcome.left._tag !== "ExternalCliProviderFailed" || outcome.left.turnEnded !== false));
+      if (turnEnded) yield* markTurnEnded(job);
 
       if (Either.isRight(outcome)) {
         // Even a worker that saw a renewal failure tries to complete: the
