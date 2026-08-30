@@ -416,7 +416,12 @@ describe("confirm OpenCode delivery from observed agent work", () => {
   it("confirms a failed OpenCode job when an intervening user idle notice sits before the agent reply", async () => {
     const sessionId = "ses_aaaaaaaaaaaaIdleNotice0002";
     const user = seedUser(sessionId, "yes, do that");
-    updateOpencodeDelivery(user.id, "failed", "OpenCode delivery lease expired after prompt dispatch.", null);
+    updateOpencodeDelivery(
+      user.id,
+      "failed",
+      "OpenCode delivery lease expired after prompt dispatch.",
+      null,
+    );
     drizzleDb
       .insert(opencodeDeliveryJobs)
       .values({
@@ -461,7 +466,12 @@ describe("confirm OpenCode delivery from observed agent work", () => {
   it("does not confirm when a delivered idle-continue user row sits before the agent reply", async () => {
     const sessionId = "ses_aaaaaaaaaaaaIdleContinue03";
     const user = seedUser(sessionId, "yes, do that");
-    updateOpencodeDelivery(user.id, "failed", "OpenCode delivery lease expired after prompt dispatch.", null);
+    updateOpencodeDelivery(
+      user.id,
+      "failed",
+      "OpenCode delivery lease expired after prompt dispatch.",
+      null,
+    );
     drizzleDb
       .insert(opencodeDeliveryJobs)
       .values({
