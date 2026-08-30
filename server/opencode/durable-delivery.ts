@@ -96,6 +96,8 @@ const jobSelectColumns = {
   lockedBy: opencodeDeliveryJobs.lockedBy,
   lastError: opencodeDeliveryJobs.lastError,
   opencodeMessageId: opencodeDeliveryJobs.opencodeMessageId,
+  promptDispatchedAt: opencodeDeliveryJobs.promptDispatchedAt,
+  cliTurnEndedAt: opencodeDeliveryJobs.cliTurnEndedAt,
   createdAt: opencodeDeliveryJobs.createdAt,
   updatedAt: opencodeDeliveryJobs.updatedAt,
 };
@@ -185,9 +187,17 @@ export function enqueueOpenCodeDeliveryJob(
           lockedAt: null,
           lockedBy: null,
           lastError: null,
+          promptDispatchedAt: null,
+          cliTurnEndedAt: null,
           updatedAt: nowSql(),
         })
-        .where(and(eq(opencodeDeliveryJobs.id, job.id), eq(opencodeDeliveryJobs.status, "failed")))
+        .where(
+          and(
+            eq(opencodeDeliveryJobs.id, job.id),
+            eq(opencodeDeliveryJobs.status, "failed"),
+            sql`${opencodeDeliveryJobs.promptDispatchedAt} IS NULL`,
+          ),
+        )
         .run();
       if (cas.changes === 1) {
         updateOpencodeDelivery(input.messageId, "queued", null, null);
@@ -229,6 +239,8 @@ export function retryOpenCodeDeliveryJob(
       lockedAt: null,
       lockedBy: null,
       lastError: null,
+      promptDispatchedAt: null,
+      cliTurnEndedAt: null,
       // A force-send retry keeps forcing; otherwise preserve the job's flag.
       force: force ? 1 : job.force,
       updatedAt: nowSql(),
@@ -253,17 +265,70 @@ export const OpenCodeDeliveryQueueLive = Layer.succeed(OpenCodeDeliveryQueue, {
     tryDeliveryQueue(() => {
       const now = Date.now();
       const staleBefore = now - JOB_LEASE_MS;
-      drizzleDb
-        .update(opencodeDeliveryJobs)
-        .set({ status: "retrying", lockedAt: null, lockedBy: null, updatedAt: nowSql() })
+      const expired = drizzleDb
+        .select({
+          id: opencodeDeliveryJobs.id,
+          promptDispatchedAt: opencodeDeliveryJobs.promptDispatchedAt,
+        })
+        .from(opencodeDeliveryJobs)
         .where(
           and(
             eq(opencodeDeliveryJobs.status, "running"),
             lte(opencodeDeliveryJobs.lockedAt, staleBefore),
           ),
         )
-        .run();
-
+        .all();
+      const undispatched = expired
+        .filter((row) => row.promptDispatchedAt == null)
+        .map((row) => row.id);
+      if (undispatched.length > 0) {
+        drizzleDb
+          .update(opencodeDeliveryJobs)
+          .set({ status: "retrying", lockedAt: null, lockedBy: null, updatedAt: nowSql() })
+          .where(
+            and(
+              inArray(opencodeDeliveryJobs.id, undispatched),
+              eq(opencodeDeliveryJobs.status, "running"),
+            ),
+          )
+          .run();
+      }
+      const dispatched = expired
+        .filter((row) => row.promptDispatchedAt != null)
+        .map((row) => row.id);
+      if (dispatched.length > 0) {
+        drizzleDb
+          .update(opencodeDeliveryJobs)
+          .set({
+            status: "failed",
+            lockedAt: null,
+            lockedBy: null,
+            lastError: "OpenCode delivery lease expired after prompt dispatch.",
+            cliTurnEndedAt: sql`COALESCE(${opencodeDeliveryJobs.cliTurnEndedAt}, ${now})`,
+            updatedAt: nowSql(),
+          })
+          .where(
+            and(
+              inArray(opencodeDeliveryJobs.id, dispatched),
+              eq(opencodeDeliveryJobs.status, "running"),
+            ),
+          )
+          .run();
+        for (const id of dispatched) {
+          const row = drizzleDb
+            .select({ messageId: opencodeDeliveryJobs.messageId })
+            .from(opencodeDeliveryJobs)
+            .where(eq(opencodeDeliveryJobs.id, id))
+            .get();
+          if (row)
+            updateOpencodeDelivery(
+              row.messageId,
+              "failed",
+              "OpenCode delivery lease expired after prompt dispatch.",
+              null,
+            );
+        }
+      }
       const candidate = drizzleDb.transaction((tx) => {
         const rows = tx
           .select(jobSelectColumns)
@@ -274,17 +339,15 @@ export const OpenCodeDeliveryQueueLive = Layer.succeed(OpenCodeDeliveryQueue, {
               lte(opencodeDeliveryJobs.nextAttemptAt, now),
             ),
           )
-          // Forced jobs first (so a user force-send jumps ahead of a
-          // busy-deferred job monopolizing the queue), then oldest first.
           .orderBy(desc(opencodeDeliveryJobs.force), asc(opencodeDeliveryJobs.id))
           .all();
-        const row = rows.find((candidate) => {
+        const row = rows.find((candidateRow) => {
           const running = tx
             .select({ count: sql<number>`COUNT(*)` })
             .from(opencodeDeliveryJobs)
             .where(
               and(
-                eq(opencodeDeliveryJobs.opencodeSessionId, candidate.opencodeSessionId),
+                eq(opencodeDeliveryJobs.opencodeSessionId, candidateRow.opencodeSessionId),
                 eq(opencodeDeliveryJobs.status, "running"),
               ),
             )
@@ -389,6 +452,31 @@ export const OpenCodeDeliveryQueueLive = Layer.succeed(OpenCodeDeliveryQueue, {
           updatedAt: nowSql(),
         })
         .where(leasedJobWhere(job))
+        .run();
+      return result.changes > 0;
+    }),
+  markDispatched: (job) =>
+    tryDeliveryQueue(() => {
+      const result = drizzleDb
+        .update(opencodeDeliveryJobs)
+        .set({
+          promptDispatchedAt: sql`COALESCE(${opencodeDeliveryJobs.promptDispatchedAt}, ${Date.now()})`,
+          cliTurnEndedAt: null,
+          updatedAt: nowSql(),
+        })
+        .where(leasedJobWhere(job))
+        .run();
+      return result.changes > 0;
+    }),
+  markCliTurnEnded: (job) =>
+    tryDeliveryQueue(() => {
+      const result = drizzleDb
+        .update(opencodeDeliveryJobs)
+        .set({
+          cliTurnEndedAt: sql`COALESCE(${opencodeDeliveryJobs.cliTurnEndedAt}, ${Date.now()})`,
+          updatedAt: nowSql(),
+        })
+        .where(eq(opencodeDeliveryJobs.id, job.id))
         .run();
       return result.changes > 0;
     }),

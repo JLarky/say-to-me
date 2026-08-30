@@ -299,6 +299,10 @@ export const opencodeDeliveryJobs = sqliteTable(
     lockedBy: text("locked_by"),
     lastError: text("last_error"),
     opencodeMessageId: text("opencode_message_id"),
+    /** Set when the OpenCode prompt is handed to the provider. */
+    promptDispatchedAt: integer("prompt_dispatched_at"),
+    /** Set when the worker observes the OpenCode turn end. */
+    cliTurnEndedAt: integer("cli_turn_ended_at"),
     createdAt: text("created_at")
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),

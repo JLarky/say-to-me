@@ -267,6 +267,13 @@
       "when": 1787500000037,
       "tag": "0037_cli_force_send",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1787600000038,
+      "tag": "0038_opencode_dispatch_markers",
+      "breakpoints": true
     }
   ]
 }

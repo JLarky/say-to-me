@@ -107,6 +107,8 @@ function directJob(messageId: number, sessionId: string): DeliveryJob {
     lockedBy: "unit-worker",
     lastError: null,
     opencodeMessageId: null,
+    promptDispatchedAt: null,
+    cliTurnEndedAt: null,
     createdAt: "2026-06-29 00:00:00",
     updatedAt: "2026-06-29 00:00:00",
   };
@@ -201,6 +203,51 @@ describe("runOpenCodeDeliveryOnce (package, in-memory)", () => {
     expect(returned).toBe(true);
     expect(store.get(7)?.opencodeDeliveryStatus).toBe("queued");
     expect(fx.broadcasts).toEqual([]);
+  });
+
+  it("marks the prompt before sending and the turn after it settles", async () => {
+    const sessionId = "ses_markers";
+    const job = directJob(9, sessionId);
+    const store = inMemoryMessageStore([userMessage({ id: 9, sessionId })]);
+    const markers: string[] = [];
+    const queue = Layer.succeed(OpenCodeDeliveryQueue, {
+      enqueue: () => Effect.die("unused"),
+      claimNext: () => Effect.succeed(job),
+      complete: () => Effect.succeed(true),
+      retry: () => Effect.die("unused"),
+      fail: () => Effect.die("unused"),
+      cancel: () => Effect.die("unused"),
+      returnToPending: () => Effect.die("unused"),
+      markDispatched: () =>
+        Effect.sync(() => {
+          markers.push("dispatched");
+          return true;
+        }),
+      markCliTurnEnded: () =>
+        Effect.sync(() => {
+          markers.push("ended");
+          return true;
+        }),
+    } satisfies OpenCodeDeliveryQueueService);
+    const prompt = Layer.succeed(OpenCodePromptClient, {
+      sendPrompt: () =>
+        Effect.sync(() => {
+          markers.push("prompt");
+          return "sent" as const;
+        }),
+    });
+    const status = Layer.succeed(OpenCodeDeliveryStatus, {
+      getStatus: () => Effect.succeed("idle"),
+    });
+    const worker = Layer.succeed(WorkerIdentity, { id: "unit-worker" });
+
+    await Effect.runPromise(
+      runOpenCodeDeliveryOnce().pipe(
+        Effect.provide(Layer.mergeAll(queue, prompt, status, worker, store.layer, unusedEffects())),
+      ),
+    );
+
+    expect(markers).toEqual(["dispatched", "prompt", "ended"]);
   });
 
   it("handles a typed store failure instead of dying the worker", async () => {

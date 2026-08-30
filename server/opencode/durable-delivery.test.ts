@@ -111,6 +111,8 @@ describe("OpenCode delivery runtime", () => {
       lockedBy: "old-worker",
       lastError: null,
       opencodeMessageId: null,
+      promptDispatchedAt: null,
+      cliTurnEndedAt: null,
       createdAt: "2026-06-28 00:00:00",
       updatedAt: "2026-06-28 00:00:00",
     };
@@ -226,6 +228,8 @@ describe("OpenCode delivery runtime", () => {
       lockedBy: "sent-worker",
       lastError: null,
       opencodeMessageId: null,
+      promptDispatchedAt: null,
+      cliTurnEndedAt: null,
       createdAt: "2026-06-28 00:00:00",
       updatedAt: "2026-06-28 00:00:00",
     };
@@ -294,6 +298,8 @@ describe("OpenCode delivery runtime", () => {
       lockedBy: "force-worker",
       lastError: null,
       opencodeMessageId: null,
+      promptDispatchedAt: null,
+      cliTurnEndedAt: null,
       createdAt: "2026-06-28 00:00:00",
       updatedAt: "2026-06-28 00:00:00",
     };
