@@ -56,4 +56,8 @@ describe("OpenCode interrupted API delivery classification", () => {
   it("marks failed when OpenCode is idle and there is no later activity", () => {
     expect(classifyInterruptedApiDelivery(null, 1000, "idle")).toBe("failed");
   });
+
+  it("marks sent when OpenCode is idle but an agent already replied", () => {
+    expect(classifyInterruptedApiDelivery(null, 1000, "idle", true)).toBe("sent");
+  });
 });

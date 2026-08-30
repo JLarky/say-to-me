@@ -1,17 +1,4 @@
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  gt,
-  inArray,
-  isNotNull,
-  isNull,
-  lt,
-  lte,
-  sql,
-  type SQL,
-} from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, lte, sql, type SQL } from "drizzle-orm";
 import { Effect, Layer, Schedule } from "effect";
 import { randomUUID } from "node:crypto";
 import {
@@ -54,7 +41,7 @@ import {
   startIdleNotificationWatch,
 } from "../notifications.ts";
 import { echoReplyDelayMs, workerMode, type ExternalCliWorkerEnvPrefix } from "./worker-env.ts";
-import { isIdleNoticeText } from "@say-to-me/session-utils/idle-notices";
+import { sessionHasLaterAgentReply } from "../session-has-later-agent-reply.ts";
 import { isLiveCompletionWatchStatus } from "@say-to-me/completion-watch/workflow";
 
 export type { ExternalCliDeliveryJobKind } from "@say-to-me/external-cli-delivery/workflow";
@@ -304,60 +291,6 @@ export function createExternalCliDurableDelivery<
 
   function getSessionId(job: TJob): string {
     return job[config.sessionIdField];
-  }
-
-  function sqliteUtcFromUnixMs(ms: number): string {
-    return new Date(ms).toISOString().slice(0, 19).replace("T", " ");
-  }
-
-  /**
-   * True when this delivery, not some later turn in the same session, produced
-   * an agent reply. A higher message id is not proof: leftover HTTP, an idle
-   * watch row, or the next prompt's answer must not mark a failed job sent.
-   */
-  function sessionHasLaterAgentReply(message: DbMessage, promptDispatchedAt: number): boolean {
-    const dispatchedAt = sqliteUtcFromUnixMs(promptDispatchedAt);
-    const laterAgents = drizzleDb
-      .select({
-        id: messagesTable.id,
-        text: messagesTable.text,
-        parentId: messagesTable.parentId,
-        createdAt: messagesTable.createdAt,
-        opencodeDeliveryStatus: messagesTable.opencodeDeliveryStatus,
-      })
-      .from(messagesTable)
-      .where(
-        and(
-          eq(messagesTable.sessionId, message.sessionId),
-          eq(messagesTable.author, "agent"),
-          gt(messagesTable.id, message.id),
-        ),
-      )
-      .orderBy(asc(messagesTable.id))
-      .all();
-
-    for (const row of laterAgents) {
-      if (row.opencodeDeliveryStatus === "ui_only") continue;
-      if (isIdleNoticeText(row.text)) continue;
-      if (row.parentId === message.id) return true;
-      if (row.createdAt < dispatchedAt) continue;
-      const interveningUser = drizzleDb
-        .select({ id: messagesTable.id })
-        .from(messagesTable)
-        .where(
-          and(
-            eq(messagesTable.sessionId, message.sessionId),
-            eq(messagesTable.author, "user"),
-            gt(messagesTable.id, message.id),
-            lt(messagesTable.id, row.id),
-          ),
-        )
-        .limit(1)
-        .get();
-      if (interveningUser) continue;
-      return true;
-    }
-    return false;
   }
 
   /**

@@ -2,6 +2,7 @@ import { confirmClaudeDeliveriesForSessionFromObservedWork } from "../claude/dur
 import { confirmCodexDeliveriesForSessionFromObservedWork } from "../codex/durable-delivery.ts";
 import { confirmCursorDeliveriesForSessionFromObservedWork } from "../cursor/durable-delivery.ts";
 import { confirmGrokDeliveriesForSessionFromObservedWork } from "../grok/durable-delivery.ts";
+import { confirmOpenCodeDeliveriesForSessionFromObservedWork } from "../opencode/durable-delivery.ts";
 import { detectSessionBackend } from "../session-id.ts";
 
 /**
@@ -18,6 +19,8 @@ export function confirmObservedDeliveriesForSession(sessionId: string): number {
       return confirmCodexDeliveriesForSessionFromObservedWork(sessionId);
     case "grok":
       return confirmGrokDeliveriesForSessionFromObservedWork(sessionId);
+    case "opencode":
+      return confirmOpenCodeDeliveriesForSessionFromObservedWork(sessionId);
     default:
       return 0;
   }

@@ -1,9 +1,9 @@
 import { and, asc, desc, eq, inArray, lte, sql } from "drizzle-orm";
-import { Effect, Fiber, Layer, Scope } from "effect";
+import { Effect, Fiber, Layer, Schedule, Scope } from "effect";
 import { randomUUID } from "node:crypto";
 import { broadcastQueue } from "../broadcast.ts";
 import { drizzleDb } from "../db/index.ts";
-import { opencodeDeliveryJobs } from "../db/drizzle-schema.ts";
+import { messages as messagesTable, opencodeDeliveryJobs } from "../db/drizzle-schema.ts";
 import {
   DbOpenCodeDeliveryJob,
   validateDb,
@@ -21,6 +21,7 @@ import {
   startIdleNotificationWatch,
 } from "../notifications.ts";
 import { getOpenCodeStatus } from "./client.ts";
+import { sessionHasLaterAgentReply } from "../session-has-later-agent-reply.ts";
 import { startCompletionWatch } from "./completion-watch.ts";
 import { deliverReplyToOpencode } from "./delivery.ts";
 import {
@@ -35,7 +36,6 @@ import {
   OpenCodeDeliveryStatus,
   OpenCodePromptClient,
   WorkerIdentity,
-  openCodeDeliveryWorkerLoop,
   runOpenCodeDeliveryOnce,
   type DeliveryEffectsService,
   type DeliveryOutcome,
@@ -135,8 +135,175 @@ function leasedJobWhere(job: DbOpenCodeDeliveryJobRow) {
   );
 }
 
+function loadLatestOpenCodeJobForMessage(messageId: number): DbOpenCodeDeliveryJobRow | null {
+  const row = drizzleDb
+    .select(jobSelectColumns)
+    .from(opencodeDeliveryJobs)
+    .where(eq(opencodeDeliveryJobs.messageId, messageId))
+    .orderBy(desc(opencodeDeliveryJobs.id))
+    .limit(1)
+    .get();
+  return row ? validateJob(row, "opencodeDeliveryJob") : null;
+}
+
+/**
+ * Mark a terminal/running job succeeded without clearing the dispatch marker
+ * or creating a new attempt — confirmation only, never a re-prompt.
+ */
+function markOpenCodeJobConfirmedWithoutReprompt(job: DbOpenCodeDeliveryJobRow): void {
+  drizzleDb
+    .update(opencodeDeliveryJobs)
+    .set({
+      status: "succeeded",
+      lastError: null,
+      lockedAt: null,
+      lockedBy: null,
+      updatedAt: nowSql(),
+    })
+    .where(
+      and(
+        eq(opencodeDeliveryJobs.id, job.id),
+        inArray(opencodeDeliveryJobs.status, [
+          "failed",
+          "running",
+          "retrying",
+          "cancelled",
+          "succeeded",
+          "pending",
+        ]),
+      ),
+    )
+    .run();
+}
+
+function markOpenCodeDeliveryConfirmed(
+  job: DbOpenCodeDeliveryJobRow,
+  message: NonNullable<ReturnType<typeof getMessage>>,
+): void {
+  markOpenCodeJobConfirmedWithoutReprompt(job);
+  if (message.forwardRole === "target" && message.forwardSourceMessageId != null) {
+    updateForwardTarget(message.forwardSourceMessageId, message.id, "sent");
+    updateForwardStatus(message.id, "sent");
+  }
+  updateOpencodeDelivery(message.id, "sent", null, message.opencodeMessageId);
+  broadcastQueue(message.sessionId);
+  startIdleNotificationWatch({
+    sessionId: job.opencodeSessionId,
+    triggerMessageId: message.id,
+    seenWorking: true,
+  });
+}
+
+/**
+ * If the prompt was dispatched and the session later shows agent work, treat
+ * delivery as confirmed (`sent`) without enqueueing again.
+ */
+export function confirmOpenCodeDeliveryFromObservedWork(messageId: number): boolean {
+  const message = getMessage(messageId);
+  if (!message) return false;
+  if (message.opencodeDeliveryStatus === "sent") return false;
+  if (
+    message.opencodeDeliveryStatus !== "failed" &&
+    message.opencodeDeliveryStatus !== "pending" &&
+    message.opencodeDeliveryStatus !== "queued"
+  ) {
+    return false;
+  }
+  const job = loadLatestOpenCodeJobForMessage(messageId);
+  if (job == null || job.promptDispatchedAt == null) return false;
+  if (job.status === "running") return false;
+  if (!sessionHasLaterAgentReply(message, job.promptDispatchedAt)) return false;
+  markOpenCodeDeliveryConfirmed(job, message);
+  return true;
+}
+
+export function confirmOpenCodeDeliveriesForSessionFromObservedWork(sessionId: string): number {
+  const candidates = drizzleDb
+    .select({ id: messagesTable.id })
+    .from(messagesTable)
+    .where(
+      and(
+        eq(messagesTable.sessionId, sessionId),
+        inArray(messagesTable.opencodeDeliveryStatus, ["failed", "pending", "queued"]),
+      ),
+    )
+    .all();
+  let confirmed = 0;
+  for (const candidate of candidates) {
+    if (confirmOpenCodeDeliveryFromObservedWork(candidate.id)) confirmed += 1;
+  }
+  return confirmed;
+}
+
+/**
+ * Pending can stick after HTTP dies: the badge still counts as working even
+ * when OpenCode is idle. Promote observed replies to sent, and fail leftovers
+ * once OpenCode is known idle with no agent reply.
+ */
+export async function settleOrphanOpenCodeDeliveryMessages(
+  getStatus: (sessionId: string) => Promise<string | null> = (sessionId) =>
+    getOpenCodeStatus(sessionId),
+): Promise<void> {
+  const candidates = drizzleDb
+    .select({
+      id: messagesTable.id,
+      sessionId: messagesTable.sessionId,
+    })
+    .from(messagesTable)
+    .where(inArray(messagesTable.opencodeDeliveryStatus, ["pending", "failed", "queued"]))
+    .all();
+  const sessions = new Set<string>();
+  for (const row of candidates) {
+    if (confirmOpenCodeDeliveryFromObservedWork(row.id)) continue;
+    const message = getMessage(row.id);
+    if (message?.opencodeDeliveryStatus !== "pending") continue;
+    const job = loadLatestOpenCodeJobForMessage(row.id);
+    if (job == null || job.promptDispatchedAt == null || job.status === "running") continue;
+    sessions.add(job.opencodeSessionId);
+  }
+  for (const sessionId of sessions) {
+    const status = await getStatus(sessionId);
+    if (status !== "idle") continue;
+    const pending = drizzleDb
+      .select({ id: messagesTable.id })
+      .from(messagesTable)
+      .where(
+        and(
+          eq(messagesTable.sessionId, sessionId),
+          eq(messagesTable.opencodeDeliveryStatus, "pending"),
+        ),
+      )
+      .all();
+    for (const candidate of pending) {
+      if (confirmOpenCodeDeliveryFromObservedWork(candidate.id)) continue;
+      const job = loadLatestOpenCodeJobForMessage(candidate.id);
+      if (job == null || job.promptDispatchedAt == null || job.status === "running") continue;
+      const message = getMessage(candidate.id);
+      updateOpencodeDelivery(
+        candidate.id,
+        "failed",
+        "OpenCode went idle with no agent reply after dispatch.",
+        null,
+      );
+      if (message?.forwardRole) updateForwardStatus(message.id, "failed");
+      if (message?.forwardRole === "target" && message.forwardSourceMessageId != null) {
+        updateForwardTarget(message.forwardSourceMessageId, message.id, "failed");
+      }
+      broadcastQueue(sessionId);
+    }
+  }
+}
+
+function settleThenRunOnce(): Effect.Effect<boolean, never, OpenCodeDeliveryEnv> {
+  return Effect.tryPromise(() => settleOrphanOpenCodeDeliveryMessages()).pipe(
+    Effect.orElseSucceed(() => undefined),
+    Effect.zipRight(runOpenCodeDeliveryOnce()),
+  );
+}
+
 /** Lease expiry must not paint a working turn as failed — OpenCode may still be on it. */
 function failDispatchedJobMessageIfNotInFlight(messageId: number): void {
+  if (confirmOpenCodeDeliveryFromObservedWork(messageId)) return;
   const message = getMessage(messageId);
   if (
     message?.opencodeDeliveryStatus === "pending" ||
@@ -513,6 +680,8 @@ export const MessageStoreLive = Layer.succeed(MessageStore, {
   updateForwardStatus: (id, status) => tryMessageStore(() => updateForwardStatus(id, status)),
   updateForwardTarget: (sourceMessageId, targetMessageId, status) =>
     tryMessageStore(() => updateForwardTarget(sourceMessageId, targetMessageId, status)),
+  hasLaterAgentReply: (message, promptDispatchedAt) =>
+    tryMessageStore(() => sessionHasLaterAgentReply(message, promptDispatchedAt)),
 } satisfies MessageStoreService);
 
 export const WorkerIdentityLive = Layer.succeed(WorkerIdentity, {
@@ -561,8 +730,11 @@ type DeliveryFiber = ReturnType<typeof Effect.runFork>;
 
 export function makeOpenCodeDeliveryRuntime({
   deliveryLayer = DurableDeliveryLive,
-  workerLoop = openCodeDeliveryWorkerLoop(WORKER_POLL_MS),
-  kickProgram = runOpenCodeDeliveryOnce().pipe(Effect.asVoid),
+  workerLoop = settleThenRunOnce().pipe(
+    Effect.zipRight(Effect.void),
+    Effect.repeat(Schedule.spaced(`${WORKER_POLL_MS} millis`)),
+  ),
+  kickProgram = settleThenRunOnce().pipe(Effect.asVoid),
 }: {
   deliveryLayer?: Layer.Layer<OpenCodeDeliveryEnv>;
   workerLoop?: Effect.Effect<void, never, OpenCodeDeliveryEnv>;

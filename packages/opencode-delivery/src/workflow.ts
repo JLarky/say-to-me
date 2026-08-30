@@ -110,6 +110,10 @@ export type MessageStoreService = {
     targetMessageId: number,
     status: string,
   ) => Effect.Effect<void, MessageStoreError>;
+  hasLaterAgentReply: (
+    message: DeliveryMessage,
+    promptDispatchedAt: number,
+  ) => Effect.Effect<boolean, MessageStoreError>;
 };
 
 export type IdleNotificationWatchInput = {
@@ -269,11 +273,8 @@ export function runOpenCodeDeliveryOnce(): Effect.Effect<boolean, never, OpenCod
     }
     if (job.promptDispatchedAt != null) {
       const ocStatus = yield* statusClient.getStatus(job.opencodeSessionId);
-      const stillWorking =
-        message.opencodeDeliveryStatus === "pending" ||
-        ocStatus === "pending" ||
-        ocStatus === "retrying";
-      if (stillWorking) {
+      const ocBusy = ocStatus === "pending" || ocStatus === "retrying";
+      if (ocBusy) {
         if (message.opencodeDeliveryStatus !== "pending") {
           yield* store.updateOpencodeDelivery(
             message.id,
@@ -290,6 +291,23 @@ export function runOpenCodeDeliveryOnce(): Effect.Effect<boolean, never, OpenCod
         }
         return true;
       }
+      const observed = yield* store.hasLaterAgentReply(message, job.promptDispatchedAt);
+      if (observed) {
+        yield* store.updateOpencodeDelivery(message.id, "sent", null, message.opencodeMessageId);
+        const completed = yield* queue.complete(job, "sent", message.opencodeMessageId);
+        if (completed) {
+          const delivered = (yield* store.getMessage(message.id)) ?? message;
+          yield* afterDelivery(job, delivered, "sent", store, fx);
+          yield* fx.broadcastQueue(delivered.sessionId);
+        }
+        return true;
+      }
+      yield* store.updateOpencodeDelivery(
+        message.id,
+        "failed",
+        job.lastError ?? "OpenCode went idle with no agent reply after dispatch.",
+        null,
+      );
       const failed = yield* queue.fail(
         job,
         job.lastError ?? "OpenCode delivery was already dispatched before the lease expired.",

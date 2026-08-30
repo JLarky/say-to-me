@@ -39,8 +39,9 @@ export function classifyInterruptedApiDelivery(
   activity: Pick<SessionRuntimeInspection, "latestActivityAt" | "latestActivitySnapshot"> | null,
   deliveryStartedAt: number,
   currentStatus?: typeof OpenCodeStatus.infer | null,
-): "pending" | "failed" {
-  return openCodeDeliveryLooksInFlight(activity, deliveryStartedAt, currentStatus)
-    ? "pending"
-    : "failed";
+  observedWork = false,
+): "pending" | "failed" | "sent" {
+  if (openCodeDeliveryLooksInFlight(activity, deliveryStartedAt, currentStatus)) return "pending";
+  if (observedWork) return "sent";
+  return "failed";
 }

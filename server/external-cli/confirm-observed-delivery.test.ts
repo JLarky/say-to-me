@@ -13,7 +13,7 @@ process.env.SAY_TO_ME_GROK_WORKER_AUTOSTART = "0";
 
 const { teardownApi } = await import("../api.harness.ts");
 const { drizzleDb } = await import("../db/index.ts");
-const { cursorDeliveryJobs } = await import("../db/drizzle-schema.ts");
+const { cursorDeliveryJobs, opencodeDeliveryJobs } = await import("../db/drizzle-schema.ts");
 const { getMessage, insertMessageRow, updateOpencodeDelivery } = await import("../messages.ts");
 const { setSessionCwd } = await import("../sessions.ts");
 const {
@@ -25,6 +25,7 @@ const {
   markCursorDeliveryJobUnconfirmedFromWorker,
 } = await import("../cursor/durable-delivery.ts");
 const { confirmObservedDeliveriesForSession } = await import("./confirm-observed-delivery.ts");
+const { confirmOpenCodeDeliveryFromObservedWork } = await import("../opencode/durable-delivery.ts");
 const { createMessageResult } = await import("../create-message.ts");
 
 const UNCONFIRMED = "Couldn't confirm this reached Cursor — check the session before retrying";
@@ -320,5 +321,55 @@ describe("confirm delivery from observed agent work", () => {
     });
     expect(confirmCursorDeliveryFromObservedWork(user.id)).toBe(true);
     expect(getMessage(user.id)?.opencodeDeliveryStatus).toBe("sent");
+  });
+});
+
+describe("confirm OpenCode delivery from observed agent work", () => {
+  it("createMessage agent path confirms without creating another delivery job", async () => {
+    const sessionId = "ses_aaaaaaaaaaaaCreateMsg00001";
+    const user = seedUser(sessionId, "relay target");
+    updateOpencodeDelivery(user.id, "pending", null, null);
+    drizzleDb
+      .insert(opencodeDeliveryJobs)
+      .values({
+        messageId: user.id,
+        messageSessionId: sessionId,
+        opencodeSessionId: sessionId,
+        kind: "direct_user_message",
+        status: "failed",
+        attemptCount: 1,
+        nextAttemptAt: 0,
+        promptDispatchedAt: Date.now() - 2_000,
+        lastError: "OpenCode delivery lease expired after prompt dispatch.",
+      })
+      .run();
+    expect(getMessage(user.id)?.opencodeDeliveryStatus).toBe("pending");
+
+    const jobCountBefore = drizzleDb
+      .select({ n: sql<number>`count(*)` })
+      .from(opencodeDeliveryJobs)
+      .where(eq(opencodeDeliveryJobs.opencodeSessionId, sessionId))
+      .get()?.n;
+
+    const result = await createMessageResult({
+      sessionId,
+      text: "experiment-ack",
+      author: "agent",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+      extractInlineImages: false,
+    });
+    expect(result.status).toBe(201);
+    expect(confirmObservedDeliveriesForSession(sessionId)).toBe(0); // already confirmed
+    expect(getMessage(user.id)?.opencodeDeliveryStatus).toBe("sent");
+    expect(confirmOpenCodeDeliveryFromObservedWork(user.id)).toBe(false);
+
+    const jobCountAfter = drizzleDb
+      .select({ n: sql<number>`count(*)` })
+      .from(opencodeDeliveryJobs)
+      .where(eq(opencodeDeliveryJobs.opencodeSessionId, sessionId))
+      .get()?.n;
+    expect(jobCountAfter).toBe(jobCountBefore);
   });
 });
