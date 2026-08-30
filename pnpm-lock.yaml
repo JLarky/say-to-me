@@ -220,6 +220,9 @@ importers:
 
   packages/completion-watch:
     dependencies:
+      '@say-to-me/session-utils':
+        specifier: 0.1.0
+        version: link:../session-utils
       effect:
         specifier: ^3.21.0
         version: 3.22.1
