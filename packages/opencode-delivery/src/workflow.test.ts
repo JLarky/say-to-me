@@ -299,6 +299,58 @@ describe("runOpenCodeDeliveryOnce (package, in-memory)", () => {
     expect(failures).toBe(1);
   });
 
+  it("keeps a dispatched in-flight prompt pending instead of failing the message", async () => {
+    const sessionId = "ses_inFlightPending";
+    const job = { ...directJob(11, sessionId), promptDispatchedAt: 123 };
+    const store = inMemoryMessageStore([
+      userMessage({ id: 11, sessionId, opencodeDeliveryStatus: "pending" }),
+    ]);
+    let prompts = 0;
+    let completions: string[] = [];
+    let failures = 0;
+    const queue = Layer.succeed(OpenCodeDeliveryQueue, {
+      enqueue: () => Effect.die("unused"),
+      claimNext: () => Effect.succeed(job),
+      complete: (_job, outcome) =>
+        Effect.sync(() => {
+          completions.push(outcome);
+          return true;
+        }),
+      retry: () => Effect.die("unused"),
+      fail: () =>
+        Effect.sync(() => {
+          failures++;
+          return true;
+        }),
+      cancel: () => Effect.die("unused"),
+      returnToPending: () => Effect.die("unused"),
+      markDispatched: () => Effect.die("unused"),
+      markCliTurnEnded: () => Effect.die("unused"),
+    } satisfies OpenCodeDeliveryQueueService);
+    const prompt = Layer.succeed(OpenCodePromptClient, {
+      sendPrompt: () =>
+        Effect.sync(() => {
+          prompts++;
+          return "failed" as const;
+        }),
+    });
+    const status = Layer.succeed(OpenCodeDeliveryStatus, {
+      getStatus: () => Effect.succeed("pending"),
+    });
+    const worker = Layer.succeed(WorkerIdentity, { id: "unit-worker" });
+
+    await Effect.runPromise(
+      runOpenCodeDeliveryOnce().pipe(
+        Effect.provide(Layer.mergeAll(queue, prompt, status, worker, store.layer, unusedEffects())),
+      ),
+    );
+
+    expect(prompts).toBe(0);
+    expect(failures).toBe(0);
+    expect(completions).toEqual(["pending"]);
+    expect(store.get(11)?.opencodeDeliveryStatus).toBe("pending");
+  });
+
   it("handles a typed store failure instead of dying the worker", async () => {
     const job = directJob(99, "ses_storeBoom");
     const boom = new Error("sqlite exploded");

@@ -255,6 +255,49 @@ describe("OpenCode delivery runtime", () => {
       promptDispatchedAt: 123,
     });
     expect(getMessage(message.id)).toMatchObject({
+      opencodeDeliveryStatus: "pending",
+      opencodeDeliveryError: null,
+    });
+  });
+
+  it("fails a queued message when an expired dispatched lease never started work", async () => {
+    const sessionId = "ses_expired_queued";
+    const message = insertMessageRow({
+      sessionId,
+      text: "expired queued prompt",
+      extraMarkdown: null,
+      author: "user",
+      status: "received",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+    updateOpencodeDelivery(message.id, "queued", null, null);
+    drizzleDb
+      .insert(opencodeDeliveryJobs)
+      .values({
+        messageId: message.id,
+        messageSessionId: sessionId,
+        opencodeSessionId: sessionId,
+        kind: "direct_user_message",
+        status: "running",
+        attemptCount: 1,
+        force: 1,
+        lockedAt: 0,
+        lockedBy: "waiting-worker",
+        nextAttemptAt: 0,
+        promptDispatchedAt: 123,
+      })
+      .run();
+
+    const claimed = await Effect.runPromise(
+      Effect.flatMap(OpenCodeDeliveryQueue, (queue) => queue.claimNext("second-worker")).pipe(
+        Effect.provide(OpenCodeDeliveryQueueLive),
+      ),
+    );
+
+    expect(claimed).toBeNull();
+    expect(getMessage(message.id)).toMatchObject({
       opencodeDeliveryStatus: "failed",
       opencodeDeliveryError: "OpenCode delivery lease expired after prompt dispatch.",
     });

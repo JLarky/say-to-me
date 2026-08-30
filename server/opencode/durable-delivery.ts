@@ -135,6 +135,24 @@ function leasedJobWhere(job: DbOpenCodeDeliveryJobRow) {
   );
 }
 
+/** Lease expiry must not paint a working turn as failed — OpenCode may still be on it. */
+function failDispatchedJobMessageIfNotInFlight(messageId: number): void {
+  const message = getMessage(messageId);
+  if (
+    message?.opencodeDeliveryStatus === "pending" ||
+    message?.opencodeDeliveryStatus === "sent" ||
+    message?.opencodeMessageId
+  ) {
+    return;
+  }
+  updateOpencodeDelivery(
+    messageId,
+    "failed",
+    "OpenCode delivery lease expired after prompt dispatch.",
+    null,
+  );
+}
+
 export function enqueueOpenCodeDeliveryJob(
   input: EnqueueOpenCodeDeliveryInput,
 ): DbOpenCodeDeliveryJobRow {
@@ -322,13 +340,7 @@ export const OpenCodeDeliveryQueueLive = Layer.succeed(OpenCodeDeliveryQueue, {
             .from(opencodeDeliveryJobs)
             .where(eq(opencodeDeliveryJobs.id, id))
             .get();
-          if (row)
-            updateOpencodeDelivery(
-              row.messageId,
-              "failed",
-              "OpenCode delivery lease expired after prompt dispatch.",
-              null,
-            );
+          if (row) failDispatchedJobMessageIfNotInFlight(row.messageId);
         }
       }
       const candidate = drizzleDb.transaction((tx) => {

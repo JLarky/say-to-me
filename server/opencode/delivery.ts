@@ -31,7 +31,10 @@ import { getOpenCodeStatus } from "./client.ts";
 import { resumeCompletionWatches, startCompletionWatch } from "./completion-watch.ts";
 import { isLiveCompletionWatchStatus } from "@say-to-me/completion-watch/workflow";
 import { createOpenCodeClient, openCodeBaseUrl, openCodeFetch } from "./http.ts";
-import { classifyCliTimeoutFromActivity } from "./timeout-classification.ts";
+import {
+  classifyCliTimeoutFromActivity,
+  classifyInterruptedApiDelivery,
+} from "./timeout-classification.ts";
 import { buildAgentVoicePromptFromMessage, idleTargetFromMessage } from "../agent-voice-prompt.ts";
 import { opencodeReasoningEffortCliArg, readOpenCodeSessionVariant } from "./reasoning-effort.ts";
 
@@ -143,12 +146,15 @@ export async function deliverReplyToOpencode(
       return;
     }
 
-    updateOpencodeDelivery(
-      reply.id,
-      "failed",
-      (error as Error).message || "OpenCode delivery failed",
-      null,
+    const currentStatus = await getOpenCodeStatus(sessionId, { baseUrl });
+    const status = classifyInterruptedApiDelivery(
+      inspectOpenCodeActivityRuntime(sessionId),
+      deliveryStartedAt,
+      currentStatus,
     );
+    const errorText =
+      error instanceof Error && error.message ? error.message : "OpenCode delivery failed";
+    updateOpencodeDelivery(reply.id, status, status === "pending" ? null : errorText, null);
   }
 
   const delivered = getMessage(reply.id);
