@@ -59,8 +59,8 @@ describe("say API: OpenCode delivery and status", () => {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const body = promptRequest!.body as { parts: { type: string; text: string }[] };
       expect(body.parts[0]).toMatchObject({ type: "text" });
-      expect(body.parts[0].text).toBe(
-        "you have to reply to this message with voice (cli `say-to-me usage` to learn how/why)\n\nses_1dd864100ffes6uqv2NbJatAKt says: user",
+      expect(body.parts[0].text).toMatch(
+        /^you have to reply to this message with voice \(cli `say-to-me usage` to learn how\/why\)\n\nat \d{2}:\d{2} ses_1dd864100ffes6uqv2NbJatAKt said: user$/,
       );
       await waitFor(async () => {
         const queue = await fetch(

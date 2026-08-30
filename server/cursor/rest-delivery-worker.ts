@@ -2,7 +2,10 @@ import { spawn } from "node:child_process";
 import { Effect } from "effect";
 import { type as arktype } from "arktype";
 import { isIdleNoticeText } from "@say-to-me/session-utils/idle-notices";
-import { buildAgentVoicePrompt } from "../agent-voice-prompt.ts";
+import {
+  buildAgentVoicePromptFromMessage,
+  type VoicePromptMessage,
+} from "../agent-voice-prompt.ts";
 import type { DbCursorDeliveryJob, DbMessage } from "../db/schemas.ts";
 import {
   ProviderFailedError,
@@ -27,10 +30,10 @@ const OkResponse = arktype({ ok: "boolean" });
 
 export function cursorDeliveryPrompt(
   job: Pick<DbCursorDeliveryJob, "cursorSessionId">,
-  message: Pick<DbMessage, "text">,
+  message: VoicePromptMessage,
   options?: ResolveWorkerInternalUrlOptions,
 ): string {
-  return buildAgentVoicePrompt(job.cursorSessionId, message.text, options);
+  return buildAgentVoicePromptFromMessage(job.cursorSessionId, message, options);
 }
 
 function isJsonRecord(value: unknown): value is Record<string, unknown> {

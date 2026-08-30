@@ -1,4 +1,10 @@
 import { Clock, Context, Data, Effect } from "effect";
+import {
+  appendCoalescedIdleStoredText,
+  isAttributedIdleStoredText,
+  SOURCE_IDLE_FAILED_NOTICE_TEXT,
+  SOURCE_IDLE_NOTICE_TEXT,
+} from "@say-to-me/session-utils/idle-notices";
 
 export const DEFAULT_COMPLETION_WATCH_POLL_MS = 250;
 /**
@@ -55,6 +61,7 @@ export type WatchedMessage = {
   completionSourceMessageId: number | null;
   completionTargetNotificationMessageId: number | null;
   completionSourceNotificationMessageId: number | null;
+  createdAt?: string | null;
 };
 
 export type InsertMessageRowInput = {
@@ -180,6 +187,9 @@ export type CompletionWatchEffectsService = {
     targetMessageId: number;
     reason: "idle" | "failed";
   }) => Effect.Effect<void, CompletionWatchEffectsError>;
+  getSessionAlias?: (
+    sessionId: string,
+  ) => Effect.Effect<string | null, CompletionWatchEffectsError>;
 };
 
 export const CompletionWatchEffects = Context.GenericTag<CompletionWatchEffectsService>(
@@ -247,7 +257,70 @@ function sourceCompletionEntry(watched: WatchedMessage): string {
 }
 
 function sourceFailureNoticeText(): string {
-  return "Your relay could not be delivered.";
+  return SOURCE_IDLE_FAILED_NOTICE_TEXT;
+}
+
+function sourceNoticeText(): string {
+  return SOURCE_IDLE_NOTICE_TEXT;
+}
+
+function sourceNoticeEntries(text: string): string[] {
+  const legacy = text.match(
+    /^<say-to-me-system>.*? is idle now after forwarded messages?: ([\s\S]*?)<\/say-to-me-system>$/,
+  );
+  if (legacy?.[1]) {
+    return legacy[1]
+      .split(";")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+  if (isAttributedIdleStoredText(text)) {
+    return text
+      .trim()
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+  }
+  // Speakable notices do not embed entry lists; synthesize counts for coalescing.
+  if (text.trim() === "Sessions are now idle.") return ["prior-a", "prior-b"];
+  if (text.trim() === SOURCE_IDLE_NOTICE_TEXT) return ["prior"];
+  return [];
+}
+
+function idleTargetFromWatched(watched: WatchedMessage): string {
+  return watched.sessionId;
+}
+
+function appendSourceNoticeEntry(
+  store: CompletionWatchStoreService,
+  effects: CompletionWatchEffectsService,
+  notification: WatchedMessage,
+  watched: WatchedMessage,
+): Effect.Effect<void, CompletionWatchStoreError | CompletionWatchEffectsError> {
+  return Effect.gen(function* () {
+    const entry = sourceCompletionEntry(watched);
+    const entries = sourceNoticeEntries(notification.text);
+    if (entries.includes(entry)) return;
+    const now = yield* Clock.currentTimeMillis;
+    const existingAt = notification.createdAt ? notification.createdAt : now;
+    const existingTarget = notification.forwardTargetSessionId ?? idleTargetFromWatched(watched);
+    const nextTarget = idleTargetFromWatched(watched);
+    const existingAlias = yield* effects.getSessionAlias?.(existingTarget) ?? Effect.succeed(null);
+    const nextAlias = yield* effects.getSessionAlias?.(nextTarget) ?? Effect.succeed(null);
+    yield* store.updateMessageText(
+      notification.id,
+      appendCoalescedIdleStoredText({
+        recipientId: notification.sessionId,
+        existingText: notification.text,
+        existingAt,
+        existingTargetSessionId: existingTarget,
+        existingTargetAlias: existingAlias,
+        nextAt: now,
+        nextTargetSessionId: nextTarget,
+        nextTargetAlias: nextAlias,
+      }),
+    );
+  });
 }
 
 function notifyNeverDispatchedFailure(
@@ -293,42 +366,6 @@ function notifyNeverDispatchedFailure(
     });
     yield* effects.stopWatch(watched.id);
     yield* effects.broadcastQueue(watched.sessionId);
-  });
-}
-
-function sourceNoticeText(
-  _watched: WatchedMessage,
-  entries = [sourceCompletionEntry(_watched)],
-): string {
-  return entries.length > 1 ? "Sessions are now idle." : "Session is now idle.";
-}
-
-function sourceNoticeEntries(text: string): string[] {
-  const legacy = text.match(
-    /^<say-to-me-system>.*? is idle now after forwarded messages?: ([\s\S]*?)<\/say-to-me-system>$/,
-  );
-  if (legacy?.[1]) {
-    return legacy[1]
-      .split(";")
-      .map((entry) => entry.trim())
-      .filter(Boolean);
-  }
-  // Speakable notices do not embed entry lists; synthesize counts for coalescing.
-  if (text.trim() === "Sessions are now idle.") return ["prior-a", "prior-b"];
-  if (text.trim() === "Session is now idle.") return ["prior"];
-  return [];
-}
-
-function appendSourceNoticeEntry(
-  store: CompletionWatchStoreService,
-  notification: WatchedMessage,
-  watched: WatchedMessage,
-): Effect.Effect<void, CompletionWatchStoreError> {
-  return Effect.gen(function* () {
-    const entry = sourceCompletionEntry(watched);
-    const entries = sourceNoticeEntries(notification.text);
-    if (entries.includes(entry)) return;
-    yield* store.updateMessageText(notification.id, sourceNoticeText(watched, [...entries, entry]));
   });
 }
 
@@ -388,20 +425,24 @@ function deliverSourceNotification(
         watched.sessionId,
       ))[0];
       if (existingQueued) {
-        yield* appendSourceNoticeEntry(store, existingQueued, watched);
+        yield* appendSourceNoticeEntry(store, effects, existingQueued, watched);
         notification = (yield* store.getMessage(existingQueued.id)) ?? existingQueued;
         yield* store.setCompletionSourceNotification(watched.id, notification.id);
         yield* effects.broadcastQueue(sourceSessionId);
       }
     }
     if (!notification) {
+      const alias = yield* effects.getSessionAlias?.(watched.sessionId) ?? Effect.succeed(null);
+      const sessionRefs = JSON.stringify(
+        alias ? [{ id: watched.sessionId, alias }] : [{ id: watched.sessionId }],
+      );
       notification = sourceMessageId
         ? yield* store.insertForwardMessageRow({
             sessionId: sourceSessionId,
-            text: sourceNoticeText(watched),
+            text: sourceNoticeText(),
             author: "user",
             status: "received",
-            sessionRefs: JSON.stringify([{ id: watched.sessionId }]),
+            sessionRefs,
             clientMessageId: null,
             forwardRole: "source",
             forwardSourceSessionId: sourceSessionId,
@@ -412,12 +453,12 @@ function deliverSourceNotification(
           })
         : yield* store.insertMessageRow({
             sessionId: sourceSessionId,
-            text: sourceNoticeText(watched),
+            text: sourceNoticeText(),
             extraMarkdown: null,
             author: "user",
             status: "received",
             links: null,
-            sessionRefs: JSON.stringify([{ id: watched.sessionId }]),
+            sessionRefs,
             clientMessageId: null,
           });
       yield* store.setCompletionSourceNotification(watched.id, notification.id);

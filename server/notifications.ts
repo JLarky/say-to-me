@@ -10,7 +10,10 @@ import {
   messages as messagesTable,
   opencodeDeliveryJobs,
 } from "./db/drizzle-schema.ts";
-import { TARGET_IDLE_NOTICE_TEXT } from "@say-to-me/session-utils/idle-notices";
+import {
+  appendCoalescedIdleStoredText,
+  TARGET_IDLE_NOTICE_TEXT,
+} from "@say-to-me/session-utils/idle-notices";
 import {
   enqueueSourceCompletionNotice,
   getSessionWorkStatus,
@@ -21,9 +24,11 @@ import {
   getExistingForwardIdleNotification,
   insertForwardMessageRow,
   insertMessageRow,
+  parseSessionRefs,
   setCompletionWatchStatus,
   updateForwardStatus,
   updateForwardTarget,
+  updateMessageText,
   updateOpencodeDelivery,
 } from "./messages.ts";
 import { promptReachedTarget, stopCompletionWatch } from "./opencode/completion-watch.ts";
@@ -38,6 +43,7 @@ import {
   retryOpenCodeDeliveryJob,
 } from "./opencode/durable-delivery.ts";
 import { detectSessionBackend } from "./session-id.ts";
+import { getSession } from "./sessions.ts";
 
 const forwardCompletionPollMs = Number(process.env.SAY_TO_ME_FORWARD_COMPLETION_POLL_MS || 5_000);
 
@@ -368,6 +374,26 @@ export async function checkForwardCompletionNotification(
   const coalescedSourceNotification = !existingSourceNotification
     ? getExistingForwardIdleNotification(watch.sourceSessionId, watch.targetSessionId)
     : null;
+  const targetAlias = getSession(watch.targetSessionId)?.alias ?? null;
+  if (coalescedSourceNotification) {
+    const existingRef = parseSessionRefs(coalescedSourceNotification.sessionRefs)[0];
+    updateMessageText(
+      coalescedSourceNotification.id,
+      appendCoalescedIdleStoredText({
+        recipientId: watch.sourceSessionId,
+        existingText: coalescedSourceNotification.text,
+        existingAt: coalescedSourceNotification.createdAt,
+        existingTargetSessionId:
+          coalescedSourceNotification.forwardSourceSessionId ??
+          existingRef?.id ??
+          watch.targetSessionId,
+        existingTargetAlias: existingRef?.alias ?? targetAlias,
+        nextAt: Date.now(),
+        nextTargetSessionId: watch.targetSessionId,
+        nextTargetAlias: targetAlias,
+      }),
+    );
+  }
   const sourceNotification =
     existingSourceNotification ??
     coalescedSourceNotification ??
@@ -376,7 +402,11 @@ export async function checkForwardCompletionNotification(
       text: sourceIdleNotificationText(watch.targetSessionId, watch.targetMessageId),
       author: "user",
       status: "received",
-      sessionRefs: JSON.stringify([{ id: watch.targetSessionId }]),
+      sessionRefs: JSON.stringify(
+        targetAlias
+          ? [{ id: watch.targetSessionId, alias: targetAlias }]
+          : [{ id: watch.targetSessionId }],
+      ),
       clientMessageId: sourceClientMessageId,
       forwardRole: "target",
       forwardSourceSessionId: watch.targetSessionId,

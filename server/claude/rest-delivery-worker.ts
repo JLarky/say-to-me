@@ -1,6 +1,9 @@
 import { spawn } from "node:child_process";
 import { Effect } from "effect";
-import { buildAgentVoicePrompt } from "../agent-voice-prompt.ts";
+import {
+  buildAgentVoicePromptFromMessage,
+  type VoicePromptMessage,
+} from "../agent-voice-prompt.ts";
 import type { DbClaudeDeliveryJob, DbMessage } from "../db/schemas.ts";
 import {
   ProviderFailedError,
@@ -25,10 +28,10 @@ type ClaimedJobWithMessage = ClaimedJob & { message: DbMessage };
 
 export function claudeDeliveryPrompt(
   job: Pick<DbClaudeDeliveryJob, "claudeSessionId">,
-  message: Pick<DbMessage, "text">,
+  message: VoicePromptMessage,
   options?: ResolveWorkerInternalUrlOptions,
 ): string {
-  return buildAgentVoicePrompt(job.claudeSessionId, message.text, options);
+  return buildAgentVoicePromptFromMessage(job.claudeSessionId, message, options);
 }
 
 export function parseClaudeStreamLine(line: string): { isError?: boolean; text?: string } {

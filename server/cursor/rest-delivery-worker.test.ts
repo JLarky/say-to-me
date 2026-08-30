@@ -84,7 +84,7 @@ describe("Cursor REST delivery worker", () => {
       )
       .all();
     expect(replies.map((row) => row.extraMarkdown)).toContain(
-      `Echo from Cursor worker: you have to reply to this message with voice (cli \`say-to-me usage\` to learn how/why)\n\n${sessionId} says: rest worker echo`,
+      `Echo from Cursor worker: ${cursorDeliveryPrompt({ cursorSessionId: sessionId }, message)}`,
     );
   });
 

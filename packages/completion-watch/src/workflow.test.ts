@@ -70,6 +70,7 @@ function inMemoryCompletionStore(seed: WatchedMessage[]): {
           sessionRefs: input.sessionRefs ?? null,
           clientMessageId: input.clientMessageId ?? null,
           completionWatchStatus: null,
+          createdAt: new Date().toISOString().slice(0, 19).replace("T", " "),
         });
         rows.set(row.id, row);
         return row;
@@ -91,6 +92,7 @@ function inMemoryCompletionStore(seed: WatchedMessage[]): {
           forwardTargetMessageId: input.forwardTargetMessageId ?? null,
           forwardStatus: input.forwardStatus ?? null,
           completionWatchStatus: null,
+          createdAt: new Date().toISOString().slice(0, 19).replace("T", " "),
         });
         rows.set(row.id, row);
         return row;
@@ -463,6 +465,89 @@ describe("completion-watch workflow (in-memory, no DB)", () => {
     );
     expect(notice).toMatchObject({ opencodeDeliveryStatus: "queued" });
     expect(enqueued).toEqual([notice!.id]);
+  });
+
+  it("stores per-event clocks when coalescing two idle source notices", async () => {
+    const sourceSessionId = "ses_coalesceOwner";
+    const targetSessionId = "cur_coalesceTarget";
+    const store = inMemoryCompletionStore([
+      baseMessage({
+        id: 21,
+        sessionId: targetSessionId,
+        text: "first relay",
+        opencodeDeliveryStatus: "sent",
+        completionWatchWorkSeen: 1,
+        completionSourceSessionId: sourceSessionId,
+        completionSourceMessageId: 101,
+        forwardSourceMessageId: 101,
+        forwardTargetSessionId: targetSessionId,
+        forwardTargetMessageId: 21,
+      }),
+      baseMessage({
+        id: 22,
+        sessionId: targetSessionId,
+        text: "second relay",
+        opencodeDeliveryStatus: "sent",
+        completionWatchWorkSeen: 1,
+        completionSourceSessionId: sourceSessionId,
+        completionSourceMessageId: 102,
+        forwardSourceMessageId: 102,
+        forwardTargetSessionId: targetSessionId,
+        forwardTargetMessageId: 22,
+      }),
+      baseMessage({
+        id: 101,
+        sessionId: sourceSessionId,
+        text: "original first",
+        completionWatchStatus: null,
+      }),
+      baseMessage({
+        id: 102,
+        sessionId: sourceSessionId,
+        text: "original second",
+        completionWatchStatus: null,
+      }),
+    ]);
+    const effects = Layer.succeed(CompletionWatchEffects, {
+      broadcastQueue: () => Effect.void,
+      getSessionWorkStatus: () => Effect.succeed("pending"),
+      enqueueSourceCompletionNotice: (input) =>
+        Effect.sync(() => {
+          const row = store.rows.get(input.messageId);
+          if (row) store.rows.set(input.messageId, { ...row, opencodeDeliveryStatus: "queued" });
+        }),
+      stopWatch: () => Effect.void,
+      getActiveBaseUrl: () => Effect.succeed(undefined),
+      getSessionIdleGate: () => Effect.succeed("continue"),
+      completeSessionIdle: () => Effect.void,
+      getSessionAlias: (sessionId) =>
+        Effect.succeed(sessionId === targetSessionId ? "review" : null),
+    } satisfies CompletionWatchEffectsService);
+    const fakeOpenCode = Layer.succeed(CompletionWatchOpenCode, {
+      getStatus: () => Effect.succeed("idle" as const),
+    });
+
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse("2026-08-29T20:02:00Z"));
+        yield* runCompletionWatchTickEffect(21);
+        yield* TestClock.setTime(Date.parse("2026-08-29T20:05:00Z"));
+        yield* runCompletionWatchTickEffect(22);
+      }).pipe(
+        Effect.provide(fakeOpenCode),
+        Effect.provide(store.layer),
+        Effect.provide(effects),
+        Effect.provide(TestContext.TestContext),
+      ),
+    );
+
+    const notices = [...store.rows.values()].filter(
+      (row) => row.sessionId === sourceSessionId && row.text.includes("is now idle"),
+    );
+    expect(notices).toHaveLength(1);
+    expect(notices[0]?.text).toContain("said: say-to-me(cur_coalesceTarget, review) is now idle.");
+    expect(notices[0]?.text.split("\n")).toHaveLength(2);
+    expect(notices[0]?.text).toMatch(/^at \d{2}:\d{2} /);
   });
 
   it("handles a typed store failure instead of dying the tick", async () => {

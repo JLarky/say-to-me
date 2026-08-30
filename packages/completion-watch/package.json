@@ -9,6 +9,9 @@
       "default": "./src/workflow.ts"
     }
   },
+  "dependencies": {
+    "@say-to-me/session-utils": "0.1.0"
+  },
   "peerDependencies": {
     "effect": "^3.21.0"
   }
