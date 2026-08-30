@@ -272,14 +272,15 @@ message is guaranteed to appear in messages, including idle system notices.
 Idle notifications:
 
 When a worker you forwarded work to goes idle through the default completion
-notification path, the coordinator session receives a message that starts with:
+notification path, read the idle header at the start of the coordinator message:
 
   you got idle notification (cli `say-to-me usage jarvis` to learn when they happen)
 
-User messages begin with the voice-reply instructions (`say-to-me usage`).
-Attribution is `at HH:MM <your-session-id> said:` for both. The idle body names
-the worker: `say-to-me(<id>, <alias>) is now idle.` The alias comes from the
-worker's session details. If the worker has no alias: `say-to-me(<id>) is now idle.`
+User messages include the voice-reply instructions (`say-to-me usage`).
+Attribution is `at HH:MM <your-session-id> said:` for user and idle messages.
+The idle body names the worker: `say-to-me(<id>, <alias>) is now idle.` The
+alias comes from the worker's session details. If the worker has no alias:
+`say-to-me(<id>) is now idle.`
 
 Several idle notifications can appear in one message. Each keeps its own
 `at HH:MM`.
@@ -289,10 +290,12 @@ idle-notification messages (omit on 5411):
 
   This session requires `say-to-me api --server http://127.0.0.1:<port>` on every call. Otherwise it will use port 5411.
 
-The worker's own chat dings `Session is now idle.` for humans/TTS. That ding is
-not model input. Failed relays stay distinct: `Your relay could not be delivered.`
+The worker's own chat dings `Session is now idle.` for humans and text-to-speech.
+That worker ding is not model input. A failed relay is distinct and says:
+`Your relay could not be delivered.`
 
-Routines (formerly timers) are scheduled prompts for sessions. To manage routines, run:
+Routines (formerly timers) are scheduled prompts for sessions. To manage
+routines, run:
 
   say-to-me usage routines
 
