@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, lt } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, lt, ne, or } from "drizzle-orm";
 import { isIdleNoticeText } from "@say-to-me/session-utils/idle-notices";
 import { drizzleDb } from "./db/index.ts";
 import { messages as messagesTable } from "./db/drizzle-schema.ts";
@@ -50,6 +50,10 @@ export function sessionHasLaterAgentReply(
           eq(messagesTable.author, "user"),
           gt(messagesTable.id, message.id),
           lt(messagesTable.id, row.id),
+          or(
+            isNull(messagesTable.opencodeDeliveryStatus),
+            ne(messagesTable.opencodeDeliveryStatus, "ui_only"),
+          ),
         ),
       )
       .limit(1)
