@@ -322,6 +322,46 @@ describe("confirm delivery from observed agent work", () => {
     expect(confirmCursorDeliveryFromObservedWork(user.id)).toBe(true);
     expect(getMessage(user.id)?.opencodeDeliveryStatus).toBe("sent");
   });
+
+  it("confirms a failed job when an intervening user idle notice sits before the agent reply", async () => {
+    const sessionId = "cur_00000000-0000-4000-8000-000000000009";
+    const user = seedUser(sessionId, "yes, do that");
+    enqueueCursorDeliveryJob({
+      messageId: user.id,
+      messageSessionId: sessionId,
+      cursorSessionId: sessionId,
+      kind: "direct_user_message",
+    });
+    const claimed = await claimCursorDeliveryJobForWorker("worker-user-idle", sessionId);
+    await markCursorDeliveryJobDispatchedFromWorker(claimed!.job);
+    await markCursorDeliveryJobUnconfirmedFromWorker(claimed!.job, UNCONFIRMED);
+    expect(getMessage(user.id)?.opencodeDeliveryStatus).toBe("failed");
+
+    const idle = insertMessageRow({
+      sessionId,
+      text: "Session is now idle.",
+      extraMarkdown: null,
+      author: "user",
+      status: "played",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+    updateOpencodeDelivery(idle.id, "ui_only", null, null);
+    insertMessageRow({
+      sessionId,
+      text: "I will review pull request 53 now.",
+      extraMarkdown: null,
+      author: "agent",
+      status: "queued",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+
+    expect(confirmCursorDeliveryFromObservedWork(user.id)).toBe(true);
+    expect(getMessage(user.id)?.opencodeDeliveryStatus).toBe("sent");
+  });
 });
 
 describe("confirm OpenCode delivery from observed agent work", () => {
@@ -371,5 +411,50 @@ describe("confirm OpenCode delivery from observed agent work", () => {
       .where(eq(opencodeDeliveryJobs.opencodeSessionId, sessionId))
       .get()?.n;
     expect(jobCountAfter).toBe(jobCountBefore);
+  });
+
+  it("confirms a failed OpenCode job when an intervening user idle notice sits before the agent reply", async () => {
+    const sessionId = "ses_aaaaaaaaaaaaIdleNotice0002";
+    const user = seedUser(sessionId, "yes, do that");
+    updateOpencodeDelivery(user.id, "failed", "OpenCode delivery lease expired after prompt dispatch.", null);
+    drizzleDb
+      .insert(opencodeDeliveryJobs)
+      .values({
+        messageId: user.id,
+        messageSessionId: sessionId,
+        opencodeSessionId: sessionId,
+        kind: "direct_user_message",
+        status: "failed",
+        attemptCount: 1,
+        nextAttemptAt: 0,
+        promptDispatchedAt: Date.now() - 2_000,
+        lastError: "OpenCode delivery lease expired after prompt dispatch.",
+      })
+      .run();
+
+    const idle = insertMessageRow({
+      sessionId,
+      text: "Session is now idle.",
+      extraMarkdown: null,
+      author: "user",
+      status: "played",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+    updateOpencodeDelivery(idle.id, "ui_only", null, null);
+    insertMessageRow({
+      sessionId,
+      text: "Pending while busy is intended.",
+      extraMarkdown: null,
+      author: "agent",
+      status: "queued",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+
+    expect(confirmOpenCodeDeliveryFromObservedWork(user.id)).toBe(true);
+    expect(getMessage(user.id)?.opencodeDeliveryStatus).toBe("sent");
   });
 });

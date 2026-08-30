@@ -41,8 +41,12 @@ export function sessionHasLaterAgentReply(
     if (isIdleNoticeText(row.text)) continue;
     if (row.parentId === message.id) return true;
     if (row.createdAt < dispatchedAt) continue;
-    const interveningUser = drizzleDb
-      .select({ id: messagesTable.id })
+    const interveningUsers = drizzleDb
+      .select({
+        id: messagesTable.id,
+        text: messagesTable.text,
+        opencodeDeliveryStatus: messagesTable.opencodeDeliveryStatus,
+      })
       .from(messagesTable)
       .where(
         and(
@@ -52,9 +56,11 @@ export function sessionHasLaterAgentReply(
           lt(messagesTable.id, row.id),
         ),
       )
-      .limit(1)
-      .get();
-    if (interveningUser) continue;
+      .all();
+    const hasLaterUserTurn = interveningUsers.some(
+      (user) => user.opencodeDeliveryStatus !== "ui_only" && !isIdleNoticeText(user.text),
+    );
+    if (hasLaterUserTurn) continue;
     return true;
   }
   return false;
