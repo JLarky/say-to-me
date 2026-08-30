@@ -69,7 +69,7 @@ function dispatchTypedMessage(sessionId: string, text: string) {
 async function dispatchTurn(sessionId: string, messageId: number) {
   const claimed = await claimCursorDeliveryJobForWorker(`worker-${sessionId}`, sessionId);
   expect(claimed).not.toBeNull();
-  await markCursorDeliveryJobDispatchedFromWorker(claimed!.job);
+  expect(await markCursorDeliveryJobDispatchedFromWorker(claimed!.job)).toBe(true);
   expect(claimed!.job.messageId).toBe(messageId);
   return claimed!.job;
 }
@@ -171,6 +171,44 @@ describe("busy during the turn, one idle notice after process end", () => {
     expect(notices[0]?.author).toBe("agent");
     expect(notices[0]?.extraMarkdown).toBe("3 plus 4 is 7");
     expect(getMessage(message.id)).toBeTruthy();
+  });
+
+  it("closes an abandoned earlier turn when a later turn ends", async () => {
+    const sessionId = nextSessionId();
+    const first = dispatchTypedMessage(sessionId, "early exit");
+    const firstJob = await dispatchTurn(sessionId, first.id);
+    drainQueueKeepTurnOpen(firstJob.id);
+    expect(await getSessionWorkStatus(sessionId)).toBe("pending");
+
+    const second = insertMessageRow({
+      sessionId,
+      text: "second turn",
+      extraMarkdown: null,
+      author: "user",
+      status: "received",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+    enqueueCursorDeliveryJob({
+      messageId: second.id,
+      messageSessionId: sessionId,
+      cursorSessionId: sessionId,
+      kind: "direct_user_message",
+      force: true,
+    });
+    const secondJob = await dispatchTurn(sessionId, second.id);
+
+    const abandoned = drizzleDb
+      .select({ endedAt: cursorDeliveryJobs.cliTurnEndedAt })
+      .from(cursorDeliveryJobs)
+      .where(eq(cursorDeliveryJobs.id, firstJob.id))
+      .get();
+    expect(abandoned?.endedAt).not.toBeNull();
+    expect(await getSessionWorkStatus(sessionId)).toBe("pending");
+
+    expect(await completeCursorDeliveryJobFromWorker(secondJob, "done")).toBe(true);
+    expect(await getSessionWorkStatus(sessionId)).toBe("idle");
   });
 
   it("direct: without a worker reply the watch itself posts the single idle notice", async () => {

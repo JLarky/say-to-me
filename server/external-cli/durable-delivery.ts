@@ -1,4 +1,16 @@
-import { and, asc, desc, eq, inArray, isNotNull, isNull, lte, sql, type SQL } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  ne,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import { Effect, Layer, Schedule } from "effect";
 import { randomUUID } from "node:crypto";
 import {
@@ -741,6 +753,26 @@ export function createExternalCliDurableDelivery<
       .run();
   }
 
+  // A later prompt or trustworthy process-end observation proves that older
+  // open markers in this session can no longer represent the active turn.
+  function closeOlderOpenTurns(sessionId: string, exceptJobId: number, now: number): void {
+    drizzleDb
+      .update(config.jobsTable)
+      .set({
+        cliTurnEndedAt: sql`COALESCE(${config.jobsTable.cliTurnEndedAt}, ${now})`,
+        updatedAt: nowSql(),
+      })
+      .where(
+        and(
+          eq(sessionIdColumn, sessionId),
+          ne(config.jobsTable.id, exceptJobId),
+          isNotNull(config.jobsTable.promptDispatchedAt),
+          isNull(config.jobsTable.cliTurnEndedAt),
+        ),
+      )
+      .run();
+  }
+
   function reclaimExpiredLeases(staleBefore: number): void {
     closeStaleOpenTurns(Date.now());
     const expired = drizzleDb
@@ -897,17 +929,22 @@ export function createExternalCliDurableDelivery<
           })
           .where(leaseHeld(job))
           .run();
-        if (result.changes > 0) startIdleWatchForDispatchedJob(job);
+        if (result.changes > 0) {
+          closeOlderOpenTurns(job.externalSessionId, job.id, Date.now());
+          startIdleWatchForDispatchedJob(job);
+        }
         return result.changes > 0;
       }),
     markCliTurnEnded: (job) =>
       tryQueue(() => {
         // No lease CAS: the worker observed the process settle even if renewal
         // already lost the row. COALESCE keeps the first observation.
+        const now = Date.now();
+        closeOlderOpenTurns(job.externalSessionId, job.id, now);
         const result = drizzleDb
           .update(config.jobsTable)
           .set({
-            cliTurnEndedAt: sql`COALESCE(${config.jobsTable.cliTurnEndedAt}, ${Date.now()})`,
+            cliTurnEndedAt: sql`COALESCE(${config.jobsTable.cliTurnEndedAt}, ${now})`,
             updatedAt: nowSql(),
           })
           .where(eq(config.jobsTable.id, job.id))
