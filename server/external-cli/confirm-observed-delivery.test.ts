@@ -457,4 +457,48 @@ describe("confirm OpenCode delivery from observed agent work", () => {
     expect(confirmOpenCodeDeliveryFromObservedWork(user.id)).toBe(true);
     expect(getMessage(user.id)?.opencodeDeliveryStatus).toBe("sent");
   });
+
+  it("does not confirm when a delivered idle-continue user row sits before the agent reply", async () => {
+    const sessionId = "ses_aaaaaaaaaaaaIdleContinue03";
+    const user = seedUser(sessionId, "yes, do that");
+    updateOpencodeDelivery(user.id, "failed", "OpenCode delivery lease expired after prompt dispatch.", null);
+    drizzleDb
+      .insert(opencodeDeliveryJobs)
+      .values({
+        messageId: user.id,
+        messageSessionId: sessionId,
+        opencodeSessionId: sessionId,
+        kind: "direct_user_message",
+        status: "failed",
+        attemptCount: 1,
+        nextAttemptAt: 0,
+        promptDispatchedAt: Date.now() - 2_000,
+        lastError: "OpenCode delivery lease expired after prompt dispatch.",
+      })
+      .run();
+
+    insertMessageRow({
+      sessionId,
+      text: "at 12:09 ses_aaaaaaaaaaaaIdleContinue03 said: say-to-me(ses_bbbbbbbbbbbbIdleContinue04, review) is now idle.",
+      extraMarkdown: null,
+      author: "user",
+      status: "received",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+    insertMessageRow({
+      sessionId,
+      text: "I will pick up the idle continue now.",
+      extraMarkdown: null,
+      author: "agent",
+      status: "queued",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+
+    expect(confirmOpenCodeDeliveryFromObservedWork(user.id)).toBe(false);
+    expect(getMessage(user.id)?.opencodeDeliveryStatus).toBe("failed");
+  });
 });

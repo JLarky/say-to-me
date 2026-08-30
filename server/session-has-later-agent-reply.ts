@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, lt } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, lt, ne, or } from "drizzle-orm";
 import { isIdleNoticeText } from "@say-to-me/session-utils/idle-notices";
 import { drizzleDb } from "./db/index.ts";
 import { messages as messagesTable } from "./db/drizzle-schema.ts";
@@ -41,12 +41,8 @@ export function sessionHasLaterAgentReply(
     if (isIdleNoticeText(row.text)) continue;
     if (row.parentId === message.id) return true;
     if (row.createdAt < dispatchedAt) continue;
-    const interveningUsers = drizzleDb
-      .select({
-        id: messagesTable.id,
-        text: messagesTable.text,
-        opencodeDeliveryStatus: messagesTable.opencodeDeliveryStatus,
-      })
+    const interveningUser = drizzleDb
+      .select({ id: messagesTable.id })
       .from(messagesTable)
       .where(
         and(
@@ -54,13 +50,15 @@ export function sessionHasLaterAgentReply(
           eq(messagesTable.author, "user"),
           gt(messagesTable.id, message.id),
           lt(messagesTable.id, row.id),
+          or(
+            isNull(messagesTable.opencodeDeliveryStatus),
+            ne(messagesTable.opencodeDeliveryStatus, "ui_only"),
+          ),
         ),
       )
-      .all();
-    const hasLaterUserTurn = interveningUsers.some(
-      (user) => user.opencodeDeliveryStatus !== "ui_only" && !isIdleNoticeText(user.text),
-    );
-    if (hasLaterUserTurn) continue;
+      .limit(1)
+      .get();
+    if (interveningUser) continue;
     return true;
   }
   return false;

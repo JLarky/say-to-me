@@ -469,32 +469,26 @@ function describeBackend<TJob extends Lease>(backend: BackendSuite<TJob>): void 
       expect(getMessage(queuedId)?.opencodeDeliveryStatus).toBe("sent");
     });
 
-    // Grok flakes here: claim returns undefined after a successful force retry
-    // even though Cursor/Claude/Codex pass the same case. Drop the Grok copy so
-    // it cannot fail the suite until the provider-specific race is fixed.
-    it.skipIf(backend.label === "Grok")(
-      "force send through the retry-delivery route promotes a queued job while busy",
-      async () => {
-        const sessionId = nextSessionId(backend.prefix);
-        await seedBusyTurn(backend, sessionId);
+    it("force send through the retry-delivery route promotes a queued job while busy", async () => {
+      const sessionId = nextSessionId(backend.prefix);
+      await seedBusyTurn(backend, sessionId);
 
-        const queuedId = seedMessage(sessionId, "route-forced");
-        backend.enqueue(queuedId, sessionId);
+      const queuedId = seedMessage(sessionId, "route-forced");
+      backend.enqueue(queuedId, sessionId);
 
-        const response = await retryRequest(queuedId);
-        expect(response.status).toBe(200);
+      const response = await retryRequest(queuedId);
+      expect(response.status).toBe(200);
 
-        // The route's force flag promoted the held job instead of duplicating it.
-        expect(jobRowForMessage(backend.table, queuedId)).toMatchObject({
-          status: "pending",
-          force: 1,
-          promptDispatchedAt: null,
-        });
+      // The route's force flag promoted the held job instead of duplicating it.
+      expect(jobRowForMessage(backend.table, queuedId)).toMatchObject({
+        status: "pending",
+        force: 1,
+        promptDispatchedAt: null,
+      });
 
-        const claimed = await backend.claim("route-worker", sessionId);
-        expect(claimed?.job.messageId).toBe(queuedId);
-      },
-    );
+      const claimed = await backend.claim("route-worker", sessionId);
+      expect(claimed?.job.messageId).toBe(queuedId);
+    });
 
     it("retry without force stays an idempotent no-op that never flips the flag", async () => {
       const sessionId = nextSessionId(backend.prefix);
