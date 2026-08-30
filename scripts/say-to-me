@@ -276,7 +276,6 @@ notification path, read the idle header at the start of the coordinator message:
 
   you got idle notification (cli `say-to-me usage jarvis` to learn when they happen)
 
-User messages include the voice-reply instructions (`say-to-me usage`).
 Attribution is `at HH:MM <your-session-id> said:` for user and idle messages.
 The idle body names the worker: `say-to-me(<id>, <alias>) is now idle.` The
 alias comes from the worker's session details. If the worker has no alias:
