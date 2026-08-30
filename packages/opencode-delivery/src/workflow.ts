@@ -288,13 +288,13 @@ export function runOpenCodeDeliveryOnce(): Effect.Effect<boolean, never, OpenCod
       return true;
     }
 
+    const promptDispatched = yield* queue.markDispatched?.(job) ?? Effect.succeed(true);
+    if (!promptDispatched) return true;
     yield* store.updateOpencodeDelivery(message.id, "pending", null, null);
     if (isLiveCompletionWatchStatus(message.completionWatchStatus)) {
       yield* store.markCompletionWorkSeen(message.id);
     }
     yield* fx.broadcastQueue(message.sessionId);
-    const promptDispatched = yield* queue.markDispatched?.(job) ?? Effect.succeed(true);
-    if (!promptDispatched) return true;
     const outcome = yield* prompt
       .sendPrompt(job, message)
       .pipe(Effect.catchAll(() => Effect.succeed("failed" as const)));

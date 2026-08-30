@@ -213,7 +213,9 @@ export function enqueueOpenCodeDeliveryJob(
     }
     return job;
   });
-  kickOpenCodeDeliveryWorker();
+  if (result.status !== "succeeded" && result.status !== "cancelled") {
+    kickOpenCodeDeliveryWorker();
+  }
   return result;
 }
 
