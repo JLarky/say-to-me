@@ -17,7 +17,10 @@ import {
   WorkerIdentity,
 } from "./workflow.ts";
 
-function inMemoryMessageStore(seed: DeliveryMessage[]): {
+function inMemoryMessageStore(
+  seed: DeliveryMessage[],
+  { laterAgentReply = false }: { laterAgentReply?: boolean } = {},
+): {
   layer: Layer.Layer<MessageStoreService>;
   get: (id: number) => DeliveryMessage | undefined;
 } {
@@ -45,6 +48,7 @@ function inMemoryMessageStore(seed: DeliveryMessage[]): {
         patch(id, { forwardStatus: status });
       }),
     updateForwardTarget: () => Effect.void,
+    hasLaterAgentReply: () => Effect.succeed(laterAgentReply),
   };
   return { layer: Layer.succeed(MessageStore, service), get: (id) => rows.get(id) };
 }
@@ -299,6 +303,145 @@ describe("runOpenCodeDeliveryOnce (package, in-memory)", () => {
     expect(failures).toBe(1);
   });
 
+  it("keeps a dispatched in-flight prompt pending instead of failing the message", async () => {
+    const sessionId = "ses_inFlightPending";
+    const job = { ...directJob(11, sessionId), promptDispatchedAt: 123 };
+    const store = inMemoryMessageStore([
+      userMessage({ id: 11, sessionId, opencodeDeliveryStatus: "pending" }),
+    ]);
+    let prompts = 0;
+    let completions: string[] = [];
+    let failures = 0;
+    const queue = Layer.succeed(OpenCodeDeliveryQueue, {
+      enqueue: () => Effect.die("unused"),
+      claimNext: () => Effect.succeed(job),
+      complete: (_job, outcome) =>
+        Effect.sync(() => {
+          completions.push(outcome);
+          return true;
+        }),
+      retry: () => Effect.die("unused"),
+      fail: () =>
+        Effect.sync(() => {
+          failures++;
+          return true;
+        }),
+      cancel: () => Effect.die("unused"),
+      returnToPending: () => Effect.die("unused"),
+      markDispatched: () => Effect.die("unused"),
+      markCliTurnEnded: () => Effect.die("unused"),
+    } satisfies OpenCodeDeliveryQueueService);
+    const prompt = Layer.succeed(OpenCodePromptClient, {
+      sendPrompt: () =>
+        Effect.sync(() => {
+          prompts++;
+          return "failed" as const;
+        }),
+    });
+    const status = Layer.succeed(OpenCodeDeliveryStatus, {
+      getStatus: () => Effect.succeed("pending"),
+    });
+    const worker = Layer.succeed(WorkerIdentity, { id: "unit-worker" });
+
+    await Effect.runPromise(
+      runOpenCodeDeliveryOnce().pipe(
+        Effect.provide(Layer.mergeAll(queue, prompt, status, worker, store.layer, unusedEffects())),
+      ),
+    );
+
+    expect(prompts).toBe(0);
+    expect(failures).toBe(0);
+    expect(completions).toEqual(["pending"]);
+    expect(store.get(11)?.opencodeDeliveryStatus).toBe("pending");
+  });
+
+  it("promotes a dispatched idle turn to sent when an agent already replied", async () => {
+    const sessionId = "ses_idleWithReply";
+    const job = { ...directJob(12, sessionId), promptDispatchedAt: 123 };
+    const store = inMemoryMessageStore(
+      [userMessage({ id: 12, sessionId, opencodeDeliveryStatus: "pending" })],
+      { laterAgentReply: true },
+    );
+    let prompts = 0;
+    let completions: string[] = [];
+    const queue = Layer.succeed(OpenCodeDeliveryQueue, {
+      enqueue: () => Effect.die("unused"),
+      claimNext: () => Effect.succeed(job),
+      complete: (_job, outcome) =>
+        Effect.sync(() => {
+          completions.push(outcome);
+          return true;
+        }),
+      retry: () => Effect.die("unused"),
+      fail: () => Effect.die("unused"),
+      cancel: () => Effect.die("unused"),
+      returnToPending: () => Effect.die("unused"),
+      markDispatched: () => Effect.die("unused"),
+      markCliTurnEnded: () => Effect.die("unused"),
+    } satisfies OpenCodeDeliveryQueueService);
+    const prompt = Layer.succeed(OpenCodePromptClient, {
+      sendPrompt: () =>
+        Effect.sync(() => {
+          prompts++;
+          return "failed" as const;
+        }),
+    });
+    const status = Layer.succeed(OpenCodeDeliveryStatus, {
+      getStatus: () => Effect.succeed("idle"),
+    });
+    const worker = Layer.succeed(WorkerIdentity, { id: "unit-worker" });
+
+    await Effect.runPromise(
+      runOpenCodeDeliveryOnce().pipe(
+        Effect.provide(Layer.mergeAll(queue, prompt, status, worker, store.layer, unusedEffects())),
+      ),
+    );
+
+    expect(prompts).toBe(0);
+    expect(completions).toEqual(["sent"]);
+    expect(store.get(12)?.opencodeDeliveryStatus).toBe("sent");
+  });
+
+  it("fails a pending dispatched job when OpenCode is idle with no agent reply", async () => {
+    const sessionId = "ses_idleNoReply";
+    const job = { ...directJob(13, sessionId), promptDispatchedAt: 123 };
+    const store = inMemoryMessageStore([
+      userMessage({ id: 13, sessionId, opencodeDeliveryStatus: "pending" }),
+    ]);
+    let failures = 0;
+    const queue = Layer.succeed(OpenCodeDeliveryQueue, {
+      enqueue: () => Effect.die("unused"),
+      claimNext: () => Effect.succeed(job),
+      complete: () => Effect.die("unused"),
+      retry: () => Effect.die("unused"),
+      fail: () =>
+        Effect.sync(() => {
+          failures++;
+          return true;
+        }),
+      cancel: () => Effect.die("unused"),
+      returnToPending: () => Effect.die("unused"),
+      markDispatched: () => Effect.die("unused"),
+      markCliTurnEnded: () => Effect.die("unused"),
+    } satisfies OpenCodeDeliveryQueueService);
+    const prompt = Layer.succeed(OpenCodePromptClient, {
+      sendPrompt: () => Effect.die("unused"),
+    });
+    const status = Layer.succeed(OpenCodeDeliveryStatus, {
+      getStatus: () => Effect.succeed("idle"),
+    });
+    const worker = Layer.succeed(WorkerIdentity, { id: "unit-worker" });
+
+    await Effect.runPromise(
+      runOpenCodeDeliveryOnce().pipe(
+        Effect.provide(Layer.mergeAll(queue, prompt, status, worker, store.layer, unusedEffects())),
+      ),
+    );
+
+    expect(failures).toBe(1);
+    expect(store.get(13)?.opencodeDeliveryStatus).toBe("failed");
+  });
+
   it("handles a typed store failure instead of dying the worker", async () => {
     const job = directJob(99, "ses_storeBoom");
     const boom = new Error("sqlite exploded");
@@ -314,6 +457,7 @@ describe("runOpenCodeDeliveryOnce (package, in-memory)", () => {
       markCompletionWorkSeen: () => Effect.die("unused"),
       updateForwardStatus: () => Effect.die("unused"),
       updateForwardTarget: () => Effect.die("unused"),
+      hasLaterAgentReply: () => Effect.die("unused"),
     } satisfies MessageStoreService);
     const queue = Layer.succeed(OpenCodeDeliveryQueue, {
       enqueue: () => Effect.die("unused"),

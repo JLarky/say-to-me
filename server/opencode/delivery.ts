@@ -28,10 +28,14 @@ import {
   waitForOpenCodeWorkingActivity,
 } from "./activity-routes.ts";
 import { getOpenCodeStatus } from "./client.ts";
+import { sessionHasLaterAgentReply } from "../session-has-later-agent-reply.ts";
 import { resumeCompletionWatches, startCompletionWatch } from "./completion-watch.ts";
 import { isLiveCompletionWatchStatus } from "@say-to-me/completion-watch/workflow";
 import { createOpenCodeClient, openCodeBaseUrl, openCodeFetch } from "./http.ts";
-import { classifyCliTimeoutFromActivity } from "./timeout-classification.ts";
+import {
+  classifyCliTimeoutFromActivity,
+  classifyInterruptedApiDelivery,
+} from "./timeout-classification.ts";
 import { buildAgentVoicePromptFromMessage, idleTargetFromMessage } from "../agent-voice-prompt.ts";
 import { opencodeReasoningEffortCliArg, readOpenCodeSessionVariant } from "./reasoning-effort.ts";
 
@@ -143,12 +147,17 @@ export async function deliverReplyToOpencode(
       return;
     }
 
-    updateOpencodeDelivery(
-      reply.id,
-      "failed",
-      (error as Error).message || "OpenCode delivery failed",
-      null,
+    const currentStatus = await getOpenCodeStatus(sessionId, { baseUrl });
+    const observedWork = sessionHasLaterAgentReply(reply, deliveryStartedAt);
+    const status = classifyInterruptedApiDelivery(
+      inspectOpenCodeActivityRuntime(sessionId),
+      deliveryStartedAt,
+      currentStatus,
+      observedWork,
     );
+    const errorText =
+      error instanceof Error && error.message ? error.message : "OpenCode delivery failed";
+    updateOpencodeDelivery(reply.id, status, status === "failed" ? errorText : null, null);
   }
 
   const delivered = getMessage(reply.id);

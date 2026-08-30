@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
-import { classifyCliTimeoutFromActivity } from "./opencode/timeout-classification.ts";
+import {
+  classifyCliTimeoutFromActivity,
+  classifyInterruptedApiDelivery,
+} from "./opencode/timeout-classification.ts";
 
 describe("OpenCode CLI timeout classification", () => {
   it.each(["busy", "pending", "retrying"])(
@@ -22,6 +25,10 @@ describe("OpenCode CLI timeout classification", () => {
     expect(classifyCliTimeoutFromActivity(null, 1000, "pending")).toBe("pending");
   });
 
+  it("treats current retrying status as pending confirmation", () => {
+    expect(classifyCliTimeoutFromActivity(null, 1000, "retrying")).toBe("pending");
+  });
+
   it("keeps CLI timeout when activity predates the delivery", () => {
     expect(
       classifyCliTimeoutFromActivity(
@@ -38,5 +45,19 @@ describe("OpenCode CLI timeout classification", () => {
         1000,
       ),
     ).toBe("cli_timed_out");
+  });
+});
+
+describe("OpenCode interrupted API delivery classification", () => {
+  it("keeps the message pending when OpenCode is busy", () => {
+    expect(classifyInterruptedApiDelivery(null, 1000, "pending")).toBe("pending");
+  });
+
+  it("marks failed when OpenCode is idle and there is no later activity", () => {
+    expect(classifyInterruptedApiDelivery(null, 1000, "idle")).toBe("failed");
+  });
+
+  it("marks sent when OpenCode is idle but an agent already replied", () => {
+    expect(classifyInterruptedApiDelivery(null, 1000, "idle", true)).toBe("sent");
   });
 });

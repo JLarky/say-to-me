@@ -21,6 +21,9 @@ const {
   WorkerIdentity,
   MessageStoreLive,
   DeliveryEffectsLive,
+  confirmOpenCodeDeliveryFromObservedWork,
+  confirmOpenCodeDeliveriesForSessionFromObservedWork,
+  settleOrphanOpenCodeDeliveryMessages,
 } = await import("./durable-delivery.ts");
 import {
   type OpenCodeDeliveryQueueService,
@@ -254,6 +257,49 @@ describe("OpenCode delivery runtime", () => {
       lockedBy: null,
       promptDispatchedAt: 123,
     });
+    expect(getMessage(message.id)).toMatchObject({
+      opencodeDeliveryStatus: "pending",
+      opencodeDeliveryError: null,
+    });
+  });
+
+  it("fails a queued message when an expired dispatched lease never started work", async () => {
+    const sessionId = "ses_expired_queued";
+    const message = insertMessageRow({
+      sessionId,
+      text: "expired queued prompt",
+      extraMarkdown: null,
+      author: "user",
+      status: "received",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+    updateOpencodeDelivery(message.id, "queued", null, null);
+    drizzleDb
+      .insert(opencodeDeliveryJobs)
+      .values({
+        messageId: message.id,
+        messageSessionId: sessionId,
+        opencodeSessionId: sessionId,
+        kind: "direct_user_message",
+        status: "running",
+        attemptCount: 1,
+        force: 1,
+        lockedAt: 0,
+        lockedBy: "waiting-worker",
+        nextAttemptAt: 0,
+        promptDispatchedAt: 123,
+      })
+      .run();
+
+    const claimed = await Effect.runPromise(
+      Effect.flatMap(OpenCodeDeliveryQueue, (queue) => queue.claimNext("second-worker")).pipe(
+        Effect.provide(OpenCodeDeliveryQueueLive),
+      ),
+    );
+
+    expect(claimed).toBeNull();
     expect(getMessage(message.id)).toMatchObject({
       opencodeDeliveryStatus: "failed",
       opencodeDeliveryError: "OpenCode delivery lease expired after prompt dispatch.",
@@ -514,5 +560,330 @@ describe("OpenCode delivery enqueue races", () => {
     });
     expect(loser.status).toBe("succeeded");
     expect(getMessage(message.id)?.opencodeDeliveryStatus).toBe("sent");
+  });
+});
+
+describe("OpenCode confirm from observed agent work", () => {
+  it("promotes a pending dispatched delivery to sent when an agent replies later", () => {
+    const sessionId = "ses_aaaaaaaaaaaaConfirmOpn0001";
+    const user = insertMessageRow({
+      sessionId,
+      text: "calculate 2+2",
+      extraMarkdown: null,
+      author: "user",
+      status: "received",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+    updateOpencodeDelivery(user.id, "pending", null, null);
+    drizzleDb
+      .insert(opencodeDeliveryJobs)
+      .values({
+        messageId: user.id,
+        messageSessionId: sessionId,
+        opencodeSessionId: sessionId,
+        kind: "direct_user_message",
+        status: "failed",
+        attemptCount: 1,
+        nextAttemptAt: 0,
+        promptDispatchedAt: Date.now() - 2_000,
+        lastError: "OpenCode delivery lease expired after prompt dispatch.",
+      })
+      .run();
+    insertMessageRow({
+      sessionId,
+      text: "2 plus 2 is 4",
+      extraMarkdown: null,
+      author: "agent",
+      status: "queued",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+      parentId: user.id,
+    });
+
+    expect(confirmOpenCodeDeliveryFromObservedWork(user.id)).toBe(true);
+    expect(getMessage(user.id)).toMatchObject({
+      opencodeDeliveryStatus: "sent",
+      opencodeDeliveryError: null,
+    });
+    expect(
+      drizzleDb
+        .select({ status: opencodeDeliveryJobs.status })
+        .from(opencodeDeliveryJobs)
+        .where(eq(opencodeDeliveryJobs.messageId, user.id))
+        .get(),
+    ).toMatchObject({ status: "succeeded" });
+  });
+
+  it("does not confirm when the job was never dispatched", () => {
+    const sessionId = "ses_bbbbbbbbbbbbConfirmOpn0002";
+    const user = insertMessageRow({
+      sessionId,
+      text: "never dispatched",
+      extraMarkdown: null,
+      author: "user",
+      status: "received",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+    updateOpencodeDelivery(user.id, "failed", "spawn failed before dispatch", null);
+    drizzleDb
+      .insert(opencodeDeliveryJobs)
+      .values({
+        messageId: user.id,
+        messageSessionId: sessionId,
+        opencodeSessionId: sessionId,
+        kind: "direct_user_message",
+        status: "failed",
+        attemptCount: 1,
+        nextAttemptAt: 0,
+        lastError: "spawn failed before dispatch",
+      })
+      .run();
+    insertMessageRow({
+      sessionId,
+      text: "unrelated agent chatter",
+      extraMarkdown: null,
+      author: "agent",
+      status: "queued",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+    expect(confirmOpenCodeDeliveryFromObservedWork(user.id)).toBe(false);
+    expect(getMessage(user.id)?.opencodeDeliveryStatus).toBe("failed");
+  });
+
+  it("session scan confirms pending dispatched deliveries", () => {
+    const sessionId = "ses_ccccccccccccccccConfirmOpn0003";
+    const user = insertMessageRow({
+      sessionId,
+      text: "scan me",
+      extraMarkdown: null,
+      author: "user",
+      status: "received",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+    updateOpencodeDelivery(user.id, "pending", null, null);
+    drizzleDb
+      .insert(opencodeDeliveryJobs)
+      .values({
+        messageId: user.id,
+        messageSessionId: sessionId,
+        opencodeSessionId: sessionId,
+        kind: "direct_user_message",
+        status: "failed",
+        attemptCount: 1,
+        nextAttemptAt: 0,
+        promptDispatchedAt: Date.now() - 2_000,
+      })
+      .run();
+    insertMessageRow({
+      sessionId,
+      text: "done",
+      extraMarkdown: null,
+      author: "agent",
+      status: "queued",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+      parentId: user.id,
+    });
+    expect(confirmOpenCodeDeliveriesForSessionFromObservedWork(sessionId)).toBe(1);
+    expect(getMessage(user.id)?.opencodeDeliveryStatus).toBe("sent");
+  });
+
+  it("promotes an expired dispatched lease to sent when an agent already replied", async () => {
+    const sessionId = "ses_ddddddddddddConfirmOpn0004";
+    const message = insertMessageRow({
+      sessionId,
+      text: "expired with reply",
+      extraMarkdown: null,
+      author: "user",
+      status: "received",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+    updateOpencodeDelivery(message.id, "pending", null, null);
+    const job = drizzleDb
+      .insert(opencodeDeliveryJobs)
+      .values({
+        messageId: message.id,
+        messageSessionId: sessionId,
+        opencodeSessionId: sessionId,
+        kind: "direct_user_message",
+        status: "running",
+        attemptCount: 1,
+        force: 1,
+        lockedAt: 0,
+        lockedBy: "waiting-worker",
+        nextAttemptAt: 0,
+        promptDispatchedAt: Date.now() - 2_000,
+      })
+      .returning()
+      .get();
+    insertMessageRow({
+      sessionId,
+      text: "already answered",
+      extraMarkdown: null,
+      author: "agent",
+      status: "queued",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+      parentId: message.id,
+    });
+
+    const claimed = await Effect.runPromise(
+      Effect.flatMap(OpenCodeDeliveryQueue, (queue) => queue.claimNext("second-worker")).pipe(
+        Effect.provide(OpenCodeDeliveryQueueLive),
+      ),
+    );
+
+    expect(claimed).toBeNull();
+    expect(
+      drizzleDb
+        .select()
+        .from(opencodeDeliveryJobs)
+        .where(eq(opencodeDeliveryJobs.id, job.id))
+        .get(),
+    ).toMatchObject({
+      status: "succeeded",
+      promptDispatchedAt: expect.any(Number),
+    });
+    expect(getMessage(message.id)).toMatchObject({
+      opencodeDeliveryStatus: "sent",
+      opencodeDeliveryError: null,
+    });
+  });
+});
+
+describe("OpenCode orphan delivery settle", () => {
+  it("fails a pending dispatched job once OpenCode is idle with no agent reply", async () => {
+    const sessionId = "ses_eeeeeeeeeeeeSettleIdle0001";
+    const user = insertMessageRow({
+      sessionId,
+      text: "orphan pending",
+      extraMarkdown: null,
+      author: "user",
+      status: "received",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+    updateOpencodeDelivery(user.id, "pending", null, null);
+    drizzleDb
+      .insert(opencodeDeliveryJobs)
+      .values({
+        messageId: user.id,
+        messageSessionId: sessionId,
+        opencodeSessionId: sessionId,
+        kind: "direct_user_message",
+        status: "failed",
+        attemptCount: 1,
+        nextAttemptAt: 0,
+        promptDispatchedAt: Date.now() - 2_000,
+        lastError: "OpenCode delivery lease expired after prompt dispatch.",
+      })
+      .run();
+
+    await settleOrphanOpenCodeDeliveryMessages(async () => "idle");
+
+    expect(getMessage(user.id)).toMatchObject({
+      opencodeDeliveryStatus: "failed",
+      opencodeDeliveryError: "OpenCode went idle with no agent reply after dispatch.",
+    });
+  });
+
+  it("keeps a pending dispatched job while OpenCode is still working", async () => {
+    const sessionId = "ses_ffffffffffffSettleBusy0002";
+    const user = insertMessageRow({
+      sessionId,
+      text: "still working",
+      extraMarkdown: null,
+      author: "user",
+      status: "received",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+    updateOpencodeDelivery(user.id, "pending", null, null);
+    drizzleDb
+      .insert(opencodeDeliveryJobs)
+      .values({
+        messageId: user.id,
+        messageSessionId: sessionId,
+        opencodeSessionId: sessionId,
+        kind: "direct_user_message",
+        status: "failed",
+        attemptCount: 1,
+        nextAttemptAt: 0,
+        promptDispatchedAt: Date.now() - 2_000,
+      })
+      .run();
+
+    await settleOrphanOpenCodeDeliveryMessages(async () => "pending");
+
+    expect(getMessage(user.id)).toMatchObject({
+      opencodeDeliveryStatus: "pending",
+      opencodeDeliveryError: null,
+    });
+  });
+
+  it("promotes a pending dispatched job to sent when settle sees a later agent reply", async () => {
+    const sessionId = "ses_111111111111SettleSent0003";
+    const user = insertMessageRow({
+      sessionId,
+      text: "orphan with reply",
+      extraMarkdown: null,
+      author: "user",
+      status: "received",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+    updateOpencodeDelivery(user.id, "pending", null, null);
+    drizzleDb
+      .insert(opencodeDeliveryJobs)
+      .values({
+        messageId: user.id,
+        messageSessionId: sessionId,
+        opencodeSessionId: sessionId,
+        kind: "direct_user_message",
+        status: "failed",
+        attemptCount: 1,
+        nextAttemptAt: 0,
+        promptDispatchedAt: Date.now() - 2_000,
+      })
+      .run();
+    insertMessageRow({
+      sessionId,
+      text: "here is the answer",
+      extraMarkdown: null,
+      author: "agent",
+      status: "queued",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+      parentId: user.id,
+    });
+
+    await settleOrphanOpenCodeDeliveryMessages(async (id) => {
+      if (id === sessionId) {
+        throw new Error("status should not be required once a reply exists");
+      }
+      return "unavailable";
+    });
+
+    expect(getMessage(user.id)).toMatchObject({
+      opencodeDeliveryStatus: "sent",
+      opencodeDeliveryError: null,
+    });
   });
 });
