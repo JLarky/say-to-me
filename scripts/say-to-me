@@ -276,7 +276,7 @@ path), you get a continue that starts with:
 
   you got idle notification (cli `say-to-me usage jarvis` to learn when they happen)
 
-User continues still start with the voice banner (`say-to-me usage`).
+User continues start with the voice banner (`say-to-me usage`).
 Attribution is `at HH:MM <your-session-id> said:` for both. The idle body names
 the worker: `say-to-me(<id>, <alias>) is now idle.` Alias comes from getSession.
 If the worker has no alias: `say-to-me(<id>) is now idle.`
@@ -442,7 +442,7 @@ Idle notifications instead of polling:
   jarvis-status. Idle continues start with
   `you got idle notification (cli \`say-to-me usage jarvis\` to learn when they happen)`
   and name the worker as `say-to-me(<id>, <alias>) is now idle.`
-  The worker chat still dings `Session is now idle.` for humans; that is not
+  The worker chat dings `Session is now idle.` for humans; that is not
   model input. Failed relays stay `Your relay could not be delivered.`
   Workers should voice reports in their own session. Return relays paste their
   chat into yours (hard to read), and the worker is notified when you go idle.
