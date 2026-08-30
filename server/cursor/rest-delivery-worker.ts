@@ -11,6 +11,7 @@ import {
   ProviderFailedError,
   ProviderNotStartedError,
   type ProviderPromptError,
+  type ProviderPromptResult,
 } from "@say-to-me/external-cli-delivery/workflow";
 import { createExternalCliRestDeliveryWorker } from "../external-cli/rest-delivery-worker.ts";
 import { postInternalJson } from "../external-cli/internal-http.ts";
@@ -112,8 +113,8 @@ function postCursorStreamProgress(sessionId: string, text: string): void {
 function runCursorPrompt(
   job: DbCursorDeliveryJob,
   claimed: ClaimedJobWithMessage,
-): Effect.Effect<string | null, ProviderPromptError> {
-  return Effect.async<string | null, ProviderPromptError>((resume) => {
+): Effect.Effect<ProviderPromptResult, ProviderPromptError> {
+  return Effect.async<ProviderPromptResult, ProviderPromptError>((resume) => {
     const child = spawn(
       // `agent` is ambiguous — Grok installs one under that name too, and PATH
       // order decides the winner. `cursor-agent` only ever means Cursor.
@@ -132,7 +133,7 @@ function runCursorPrompt(
     let pending = "";
     let lastAssistant = "";
 
-    const settle = (effect: Effect.Effect<string | null, ProviderPromptError>) => {
+    const settle = (effect: Effect.Effect<ProviderPromptResult, ProviderPromptError>) => {
       if (settled) return;
       settled = true;
       resume(effect);
@@ -200,6 +201,10 @@ function runCursorPrompt(
         return;
       }
       if (!turnEnded) {
+        if (code === 0 && lastAssistant.trim()) {
+          settle(Effect.succeed({ reply: lastAssistant.trim(), turnEnded: false }));
+          return;
+        }
         settle(
           Effect.fail(
             new ProviderFailedError({
@@ -211,7 +216,7 @@ function runCursorPrompt(
         return;
       }
       const reply = (parsed.text ?? lastAssistant).trim();
-      settle(Effect.succeed(reply || null));
+      settle(Effect.succeed({ reply: reply || null, turnEnded: true }));
     });
   });
 }

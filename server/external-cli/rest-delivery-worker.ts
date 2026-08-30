@@ -7,6 +7,7 @@ import {
   ProviderNotStartedError,
   type DeliveryFailure,
   type ProviderPromptError,
+  type ProviderPromptResult,
 } from "@say-to-me/external-cli-delivery/workflow";
 import type { DbMessage } from "../db/schemas.ts";
 import { postInternalJson } from "./internal-http.ts";
@@ -46,7 +47,7 @@ export type ExternalCliRestWorkerConfig<
   runPrompt: (
     job: TJob,
     claimed: TClaimed & { message: DbMessage },
-  ) => Effect.Effect<string | null, ProviderPromptError>;
+  ) => Effect.Effect<ProviderPromptResult | string | null, ProviderPromptError>;
 };
 
 export function createExternalCliRestDeliveryWorker<
@@ -56,7 +57,7 @@ export function createExternalCliRestDeliveryWorker<
   type ClaimResult = TClaimed | "stale-worker" | null;
   type ClaimedJobWithMessage = TClaimed & { message: DbMessage };
 
-  function echoDelivery(prompt: string): Effect.Effect<string, ProviderPromptError> {
+  function echoDelivery(prompt: string): Effect.Effect<ProviderPromptResult, ProviderPromptError> {
     if (workerMode(config.envPrefix) !== "echo") {
       return Effect.fail(
         new ProviderNotStartedError({
@@ -76,13 +77,13 @@ export function createExternalCliRestDeliveryWorker<
       const reply = `${config.echoReplyLabel}: ${prompt}`;
       const replyDelayMs = echoReplyDelayMs(config.envPrefix);
       if (replyDelayMs > 0) yield* Effect.sleep(`${replyDelayMs} millis`);
-      return reply;
+      return { reply, turnEnded: true };
     });
   }
 
   function runDelivery(
     claimed: ClaimedJobWithMessage,
-  ): Effect.Effect<string | null, ProviderPromptError> {
+  ): Effect.Effect<ProviderPromptResult | string | null, ProviderPromptError> {
     if (isRealWorkerMode(config.envPrefix, config.realWorkerMode)) {
       return config.runPrompt(claimed.job, claimed);
     }
@@ -115,13 +116,14 @@ export function createExternalCliRestDeliveryWorker<
     );
   }
 
-  function complete(job: TJob, reply: string | null): Effect.Effect<boolean> {
+  function complete(job: TJob, reply: string | null, turnEnded: boolean): Effect.Effect<boolean> {
     return Effect.promise(async () => {
       const body = await postInternalJson(
         `${config.apiBasePath}/complete`,
         {
           job,
           reply,
+          turnEnded,
         },
         OkResponse,
       );
@@ -264,7 +266,7 @@ export function createExternalCliRestDeliveryWorker<
         return true;
       }
       if (message.opencodeDeliveryStatus === "sent") {
-        yield* complete(job, null);
+        yield* complete(job, null, true);
         return true;
       }
 
@@ -310,7 +312,10 @@ export function createExternalCliRestDeliveryWorker<
       // when they know close happened before a trustworthy final event; keep
       // that turn pending so an early exit cannot produce a false idle ding.
       const turnEnded =
-        Either.isRight(outcome) ||
+        (Either.isRight(outcome) &&
+          (typeof outcome.right !== "object" ||
+            outcome.right === null ||
+            outcome.right.turnEnded !== false)) ||
         (Either.isLeft(outcome) &&
           (outcome.left._tag !== "ExternalCliProviderFailed" || outcome.left.turnEnded !== false));
       if (turnEnded) yield* markTurnEnded(job);
@@ -319,7 +324,9 @@ export function createExternalCliRestDeliveryWorker<
         // Even a worker that saw a renewal failure tries to complete: the
         // compare-and-set is the authority on ownership, and a reply we hold is
         // worth recording whenever it still matches the lease holder.
-        const completed = yield* complete(job, outcome.right);
+        const result = outcome.right;
+        const reply = typeof result === "object" && result !== null ? result.reply : result;
+        const completed = yield* complete(job, reply, turnEnded);
         if (!completed) yield* reportLeaseLost(job, "completion");
         return true;
       }

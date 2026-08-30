@@ -1,3 +1,7 @@
+import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { randomUUID } from "node:crypto";
+import path from "node:path";
 import { createServer } from "node:http";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { and, eq, gt } from "drizzle-orm";
@@ -9,7 +13,9 @@ process.env.SAY_TO_ME_CURSOR_ECHO_REPLY_DELAY_MS = "50";
 
 const { closeTestServer, createApiMiddleware, listen, teardownApi } =
   await import("../api.harness.ts");
-const { getMessage, insertMessageRow } = await import("../messages.ts");
+const { getMessage, insertMessageRow, listMessages } = await import("../messages.ts");
+const { getSessionWorkStatus } = await import("../external-cli/session-work-status.ts");
+const { stopIdleNotificationWatch } = await import("../notifications.ts");
 const { drizzleDb } = await import("../db/index.ts");
 const { messages: messagesTable } = await import("../db/drizzle-schema.ts");
 const { setSessionCwd } = await import("../sessions.ts");
@@ -46,7 +52,7 @@ describe("Cursor REST delivery worker", () => {
   });
 
   it("claims and completes a Cursor job through internal REST APIs", async () => {
-    const sessionId = "cur_e6ca1259-5b7f-4de3-afd5-a877811435cb";
+    const sessionId = `cur_${randomUUID()}`;
     setSessionCwd(sessionId, "/tmp/cursor-rest-worker-test");
     const message = insertMessageRow({
       sessionId,
@@ -58,6 +64,9 @@ describe("Cursor REST delivery worker", () => {
       sessionRefs: null,
       clientMessageId: null,
     });
+    // Message ids are reset by the shared test database between runs, while
+    // notification watches live in module state.
+    stopIdleNotificationWatch(message.id);
     enqueueCursorDeliveryJob({
       messageId: message.id,
       messageSessionId: sessionId,
@@ -176,6 +185,43 @@ describe("Cursor REST delivery worker", () => {
         0,
       ),
     ).toBe(true);
+  });
+
+  it("keeps the session busy and preserves progress text after an early clean close", async () => {
+    const sessionId = `cur_${randomUUID()}`;
+    const cwd = mkdtempSync(path.join(tmpdir(), "say-to-me-cursor-early-close-"));
+    const provider = path.join(cwd, "cursor-agent.sh");
+    writeFileSync(
+      provider,
+      '#!/bin/sh\nprintf \'{"type":"assistant","message":{"content":[{"type":"text","text":"still working"}]}}\\n\'\n',
+    );
+    chmodSync(provider, 0o755);
+    process.env.SAY_TO_ME_CURSOR_WORKER_MODE = "cursor";
+    process.env.SAY_TO_ME_CURSOR_BIN = provider;
+    setSessionCwd(sessionId, cwd);
+    const message = insertMessageRow({
+      sessionId,
+      text: "early close repro",
+      extraMarkdown: null,
+      author: "user",
+      status: "received",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+    enqueueCursorDeliveryJob({
+      messageId: message.id,
+      messageSessionId: sessionId,
+      cursorSessionId: sessionId,
+      kind: "direct_user_message",
+    });
+
+    await expect(
+      Effect.runPromise(runCursorRestDeliveryOnce("early-close", sessionId)),
+    ).resolves.toBe(true);
+    expect(getMessage(message.id)).toMatchObject({ opencodeDeliveryStatus: "sent" });
+    expect(listMessages(sessionId).some((row) => row.text === "still working")).toBe(true);
+    expect(await getSessionWorkStatus(sessionId)).toBe("pending");
   });
 
   it("includes the isolated CLI origin", () => {

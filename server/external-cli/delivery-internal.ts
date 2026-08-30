@@ -26,7 +26,11 @@ export type ExternalCliDeliveryInternalConfig<TLease extends ExternalCliDelivery
   workerVersion: number;
   scheduleWorkerReplacement: (sessionId: string) => Promise<void>;
   claimDeliveryJobForWorker: (workerId: string, sessionId?: string) => Promise<unknown>;
-  completeDeliveryJobFromWorker: (job: TLease, reply: string | null) => Promise<boolean>;
+  completeDeliveryJobFromWorker: (
+    job: TLease,
+    reply: string | null,
+    options?: { readonly markTurnEnded?: boolean },
+  ) => Promise<boolean>;
   retryDeliveryJobFromWorker: (job: TLease, error: string) => Promise<boolean>;
   failDeliveryJobFromWorker: (job: TLease, error: string) => Promise<boolean>;
   markDeliveryJobDispatchedFromWorker: (job: TLease) => Promise<boolean>;
@@ -173,7 +177,10 @@ export function createExternalCliDeliveryInternalDispatcher<
       if (!job) return error("Missing valid job lease.");
       const reply = body.reply == null ? null : stringField(body, "reply");
       if (body.reply != null && reply == null) return error("Invalid reply.");
-      return json({ ok: await config.completeDeliveryJobFromWorker(job, reply) });
+      const markTurnEnded = body.turnEnded !== false;
+      return json({
+        ok: await config.completeDeliveryJobFromWorker(job, reply, { markTurnEnded }),
+      });
     }
 
     if (pathname === `${config.basePath}/retry`) {

@@ -83,6 +83,12 @@ export class DeliveryLeaseLostError extends Data.TaggedError("ExternalCliDeliver
 /** Everything a provider prompt may fail with, distinguishable without parsing text. */
 export type ProviderPromptError = ProviderNotStartedError | ProviderFailedError;
 
+/** Provider reply plus whether the provider gave a trustworthy turn boundary. */
+export type ProviderPromptResult = {
+  readonly reply: string | null;
+  readonly turnEnded?: boolean;
+};
+
 export type DeliveryFailure = ProviderPromptError | DeliveryLeaseLostError;
 
 /** What a worker may do with a delivery job after an attempt failed. */
@@ -151,6 +157,7 @@ export type DeliveryQueueService = {
   fail: (
     job: ExternalCliDeliveryJob,
     error: string,
+    options?: { readonly markTurnEnded?: boolean },
   ) => Effect.Effect<boolean, ExternalCliDeliveryQueueError>;
   cancel: (
     job: ExternalCliDeliveryJob,
