@@ -267,6 +267,17 @@ export function runOpenCodeDeliveryOnce(): Effect.Effect<boolean, never, OpenCod
       yield* queue.complete(job, "sent", message.opencodeMessageId);
       return true;
     }
+    if (job.promptDispatchedAt != null) {
+      const failed = yield* queue.fail(
+        job,
+        job.lastError ?? "OpenCode delivery was already dispatched before the lease expired.",
+      );
+      if (failed) {
+        yield* afterDeliveryFailure(message, store);
+        yield* fx.broadcastQueue(message.sessionId);
+      }
+      return true;
+    }
 
     const status = yield* statusClient.getStatus(job.opencodeSessionId);
     if (status === "pending" && job.force !== 1) {

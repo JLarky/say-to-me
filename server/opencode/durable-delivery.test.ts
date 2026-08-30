@@ -198,6 +198,66 @@ describe("OpenCode delivery runtime", () => {
       lockedBy: "new-worker",
       opencodeMessageId: null,
     });
+    drizzleDb
+      .update(opencodeDeliveryJobs)
+      .set({ status: "succeeded" })
+      .where(eq(opencodeDeliveryJobs.id, staleJob.id))
+      .run();
+  });
+
+  it("fails an expired dispatched lease and blocks the second claimant", async () => {
+    const sessionId = "ses_expired_dispatched";
+    const message = insertMessageRow({
+      sessionId,
+      text: "expired prompt",
+      extraMarkdown: null,
+      author: "user",
+      status: "received",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+    updateOpencodeDelivery(message.id, "pending", null, null);
+    const job = drizzleDb
+      .insert(opencodeDeliveryJobs)
+      .values({
+        messageId: message.id,
+        messageSessionId: sessionId,
+        opencodeSessionId: sessionId,
+        kind: "direct_user_message",
+        status: "running",
+        attemptCount: 1,
+        force: 1,
+        lockedAt: 0,
+        lockedBy: "waiting-worker",
+        nextAttemptAt: 0,
+        promptDispatchedAt: 123,
+      })
+      .returning()
+      .get();
+
+    const claimed = await Effect.runPromise(
+      Effect.flatMap(OpenCodeDeliveryQueue, (queue) => queue.claimNext("second-worker")).pipe(
+        Effect.provide(OpenCodeDeliveryQueueLive),
+      ),
+    );
+
+    expect(claimed).toBeNull();
+    expect(
+      drizzleDb
+        .select()
+        .from(opencodeDeliveryJobs)
+        .where(eq(opencodeDeliveryJobs.id, job.id))
+        .get(),
+    ).toMatchObject({
+      status: "failed",
+      lockedBy: null,
+      promptDispatchedAt: 123,
+    });
+    expect(getMessage(message.id)).toMatchObject({
+      opencodeDeliveryStatus: "failed",
+      opencodeDeliveryError: "OpenCode delivery lease expired after prompt dispatch.",
+    });
   });
 
   it("marks messages sent when OpenCode accepts delivery", async () => {
