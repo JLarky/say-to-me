@@ -39,7 +39,6 @@ import {
   checkIdleNotification,
   startForwardCompletionNotificationWatch,
   startIdleNotificationWatch,
-  stopIdleNotificationWatch,
 } from "../notifications.ts";
 import { echoReplyDelayMs, workerMode, type ExternalCliWorkerEnvPrefix } from "./worker-env.ts";
 import { sessionHasLaterAgentReply } from "../session-has-later-agent-reply.ts";
@@ -1149,7 +1148,6 @@ export function createExternalCliDurableDelivery<
     reply: string | null,
     options?: { readonly markTurnEnded?: boolean },
   ): Promise<boolean> {
-    if (options?.markTurnEnded === false) stopIdleNotificationWatch(job.messageId);
     if (options?.markTurnEnded !== false) await markDeliveryJobCliTurnEndedFromWorker(job);
     const message = getMessage(job.messageId);
     const completed = await queueProgram(
@@ -1182,12 +1180,16 @@ export function createExternalCliDurableDelivery<
     return retried;
   }
 
-  async function endDeliveryJobFromWorker(job: TJob, error: string): Promise<boolean> {
+  async function endDeliveryJobFromWorker(
+    job: TJob,
+    error: string,
+    options?: { readonly markTurnEnded?: boolean },
+  ): Promise<boolean> {
     const message = getMessage(job.messageId);
     const failed = await queueProgram(
       Effect.gen(function* () {
         const queue = yield* DeliveryQueue;
-        return yield* queue.fail(toWorkflowJob(job), error, { markTurnEnded: false });
+        return yield* queue.fail(toWorkflowJob(job), error, options);
       }),
     );
     if (failed && message) afterDeliveryFailure(message, error);
@@ -1195,8 +1197,12 @@ export function createExternalCliDurableDelivery<
     return failed;
   }
 
-  function failDeliveryJobFromWorker(job: TJob, error: string): Promise<boolean> {
-    return endDeliveryJobFromWorker(job, error);
+  function failDeliveryJobFromWorker(
+    job: TJob,
+    error: string,
+    options?: { readonly markTurnEnded?: boolean },
+  ): Promise<boolean> {
+    return endDeliveryJobFromWorker(job, error, options);
   }
 
   /**
@@ -1206,8 +1212,12 @@ export function createExternalCliDurableDelivery<
    * separate internal endpoints (`/fail` and `/unconfirmed`), so merging them
    * would be a wire change and a worker version bump.
    */
-  function markDeliveryJobUnconfirmedFromWorker(job: TJob, error: string): Promise<boolean> {
-    return endDeliveryJobFromWorker(job, error);
+  function markDeliveryJobUnconfirmedFromWorker(
+    job: TJob,
+    error: string,
+    options?: { readonly markTurnEnded?: boolean },
+  ): Promise<boolean> {
+    return endDeliveryJobFromWorker(job, error, options);
   }
 
   function markDeliveryJobDispatchedFromWorker(job: TJob): Promise<boolean> {

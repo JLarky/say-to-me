@@ -174,13 +174,14 @@ export function createExternalCliRestDeliveryWorker<
     );
   }
 
-  function markUnconfirmed(job: TJob, error: string): Effect.Effect<boolean> {
+  function markUnconfirmed(job: TJob, error: string, turnEnded: boolean): Effect.Effect<boolean> {
     return Effect.promise(async () => {
       const body = await postInternalJson(
         `${config.apiBasePath}/unconfirmed`,
         {
           job,
           error,
+          turnEnded,
         },
         OkResponse,
       );
@@ -213,13 +214,14 @@ export function createExternalCliRestDeliveryWorker<
     });
   }
 
-  function fail(job: TJob, error: string): Effect.Effect<boolean> {
+  function fail(job: TJob, error: string, turnEnded: boolean): Effect.Effect<boolean> {
     return Effect.promise(async () => {
       const body = await postInternalJson(
         `${config.apiBasePath}/fail`,
         {
           job,
           error,
+          turnEnded,
         },
         OkResponse,
       );
@@ -353,12 +355,12 @@ export function createExternalCliRestDeliveryWorker<
           return true;
         }
         case "failed": {
-          const failed = yield* fail(job, action.error);
+          const failed = yield* fail(job, action.error, turnEnded);
           if (!failed) yield* reportLeaseLost(job, "failure");
           return true;
         }
         case "unconfirmed": {
-          const recorded = yield* markUnconfirmed(job, action.error);
+          const recorded = yield* markUnconfirmed(job, action.error, turnEnded);
           if (!recorded) yield* reportLeaseLost(job, "unconfirmed outcome");
           return true;
         }

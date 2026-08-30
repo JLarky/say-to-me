@@ -32,10 +32,18 @@ export type ExternalCliDeliveryInternalConfig<TLease extends ExternalCliDelivery
     options?: { readonly markTurnEnded?: boolean },
   ) => Promise<boolean>;
   retryDeliveryJobFromWorker: (job: TLease, error: string) => Promise<boolean>;
-  failDeliveryJobFromWorker: (job: TLease, error: string) => Promise<boolean>;
+  failDeliveryJobFromWorker: (
+    job: TLease,
+    error: string,
+    options?: { readonly markTurnEnded?: boolean },
+  ) => Promise<boolean>;
   markDeliveryJobDispatchedFromWorker: (job: TLease) => Promise<boolean>;
   markDeliveryJobCliTurnEndedFromWorker: (job: TLease) => Promise<boolean>;
-  markDeliveryJobUnconfirmedFromWorker: (job: TLease, error: string) => Promise<boolean>;
+  markDeliveryJobUnconfirmedFromWorker: (
+    job: TLease,
+    error: string,
+    options?: { readonly markTurnEnded?: boolean },
+  ) => Promise<boolean>;
   cancelDeliveryJobFromWorker: (job: TLease, reason: string) => Promise<boolean>;
   renewDeliveryJobFromWorker: (job: TLease) => Promise<TLease | null>;
 };
@@ -169,7 +177,10 @@ export function createExternalCliDeliveryInternalDispatcher<
       const message = stringField(body, "error");
       if (!job) return error("Missing valid job lease.");
       if (!message) return error("Missing error.");
-      return json({ ok: await config.markDeliveryJobUnconfirmedFromWorker(job, message) });
+      const markTurnEnded = body.turnEnded !== false;
+      return json({
+        ok: await config.markDeliveryJobUnconfirmedFromWorker(job, message, { markTurnEnded }),
+      });
     }
 
     if (pathname === `${config.basePath}/complete`) {
@@ -196,7 +207,8 @@ export function createExternalCliDeliveryInternalDispatcher<
       const message = stringField(body, "error");
       if (!job) return error("Missing valid job lease.");
       if (!message) return error("Missing error.");
-      return json({ ok: await config.failDeliveryJobFromWorker(job, message) });
+      const markTurnEnded = body.turnEnded !== false;
+      return json({ ok: await config.failDeliveryJobFromWorker(job, message, { markTurnEnded }) });
     }
 
     if (pathname === `${config.basePath}/cancel`) {

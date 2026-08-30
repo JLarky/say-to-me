@@ -153,15 +153,15 @@ function describeBackend<TJob extends Lease>(backend: BackendSuite<TJob>): void 
       expect(await getSessionWorkStatus(sessionId)).toBe("idle");
     });
 
-    it("keeps an open CLI turn on worker failure, while retry still closes it", async () => {
+    it("closes the open CLI turn on fail and retry even without a prior turn-ended write", async () => {
       const failSession = nextSessionId(backend.prefix);
       const failMessage = seedMessage(failSession, "fail closes turn");
       backend.enqueue(failMessage, failSession);
       const failJob = await claimOne("fail-worker", failSession);
       await backend.markDispatched(failJob);
       await expect(backend.fail(failJob, "provider failed")).resolves.toBe(true);
-      expect(jobRow(backend.table, failJob.id).cliTurnEndedAt).toBeNull();
-      expect(await getSessionWorkStatus(failSession)).toBe("pending");
+      expect(jobRow(backend.table, failJob.id).cliTurnEndedAt).not.toBeNull();
+      expect(await getSessionWorkStatus(failSession)).toBe("idle");
 
       const retrySession = nextSessionId(backend.prefix);
       const retryMessage = seedMessage(retrySession, "retry closes this attempt");

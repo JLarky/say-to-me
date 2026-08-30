@@ -14,7 +14,7 @@ export const WORKER_VERSIONS: Record<ExternalCliWorkerEnvPrefix, number> = {
   CLAUDE: 4,
   CODEX: 2,
   GROK: 3,
-  CURSOR: 4,
+  CURSOR: 5,
 };
 
 export function workerVersion(prefix: ExternalCliWorkerEnvPrefix): number {
