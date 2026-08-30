@@ -40,6 +40,8 @@ export type DeliveryJob = {
   lockedBy: string | null;
   lastError: string | null;
   opencodeMessageId: string | null;
+  promptDispatchedAt: number | null;
+  cliTurnEndedAt: number | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -85,6 +87,8 @@ export type OpenCodeDeliveryQueueService = {
   fail: (job: DeliveryJob, error: string) => Effect.Effect<boolean, OpenCodeDeliveryQueueError>;
   cancel: (job: DeliveryJob, reason: string) => Effect.Effect<boolean, OpenCodeDeliveryQueueError>;
   returnToPending: (job: DeliveryJob) => Effect.Effect<boolean, OpenCodeDeliveryQueueError>;
+  markDispatched?: (job: DeliveryJob) => Effect.Effect<boolean, OpenCodeDeliveryQueueError>;
+  markCliTurnEnded?: (job: DeliveryJob) => Effect.Effect<boolean, OpenCodeDeliveryQueueError>;
 };
 
 export type OpenCodePromptClientService = {
@@ -263,6 +267,17 @@ export function runOpenCodeDeliveryOnce(): Effect.Effect<boolean, never, OpenCod
       yield* queue.complete(job, "sent", message.opencodeMessageId);
       return true;
     }
+    if (job.promptDispatchedAt != null) {
+      const failed = yield* queue.fail(
+        job,
+        job.lastError ?? "OpenCode delivery was already dispatched before the lease expired.",
+      );
+      if (failed) {
+        yield* afterDeliveryFailure(message, store);
+        yield* fx.broadcastQueue(message.sessionId);
+      }
+      return true;
+    }
 
     const status = yield* statusClient.getStatus(job.opencodeSessionId);
     if (status === "pending" && job.force !== 1) {
@@ -273,6 +288,8 @@ export function runOpenCodeDeliveryOnce(): Effect.Effect<boolean, never, OpenCod
       return true;
     }
 
+    const promptDispatched = yield* queue.markDispatched?.(job) ?? Effect.succeed(true);
+    if (!promptDispatched) return true;
     yield* store.updateOpencodeDelivery(message.id, "pending", null, null);
     if (isLiveCompletionWatchStatus(message.completionWatchStatus)) {
       yield* store.markCompletionWorkSeen(message.id);
@@ -281,6 +298,7 @@ export function runOpenCodeDeliveryOnce(): Effect.Effect<boolean, never, OpenCod
     const outcome = yield* prompt
       .sendPrompt(job, message)
       .pipe(Effect.catchAll(() => Effect.succeed("failed" as const)));
+    yield* queue.markCliTurnEnded?.(job) ?? Effect.succeed(true);
     let delivered = (yield* store.getMessage(message.id)) ?? message;
     if (outcome === "sent" || outcome === "pending") {
       if (outcome === "sent" && delivered.opencodeDeliveryStatus !== "sent") {

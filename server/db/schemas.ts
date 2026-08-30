@@ -137,6 +137,8 @@ export const DbOpenCodeDeliveryJob = arktype({
   lockedBy: "string | null",
   lastError: "string | null",
   opencodeMessageId: "string | null",
+  promptDispatchedAt: "number | null",
+  cliTurnEndedAt: "number | null",
   createdAt: "string",
   updatedAt: "string",
 });
