@@ -163,7 +163,11 @@ describe("busy during the turn, one idle notice after process end", () => {
     // complete() also checks the idle watch immediately so the ding is not
     // delayed by the 5s poll. The watch stands down because that ding IS the
     // single notice — a later poll must not post a second one.
-    expect(await completeCursorDeliveryJobFromWorker(job, "3 plus 4 is 7")).toBe(true);
+    expect(
+      await completeCursorDeliveryJobFromWorker(job, "3 plus 4 is 7", {
+        processExited: true,
+      }),
+    ).toBe(true);
     expect(await checkIdleNotification(message.id)).toBe(false);
 
     const notices = listMessages(sessionId).filter((m) => m.text.includes("is now idle."));
@@ -207,7 +211,9 @@ describe("busy during the turn, one idle notice after process end", () => {
     expect(abandoned?.endedAt).not.toBeNull();
     expect(await getSessionWorkStatus(sessionId)).toBe("pending");
 
-    expect(await completeCursorDeliveryJobFromWorker(secondJob, "done")).toBe(true);
+    expect(
+      await completeCursorDeliveryJobFromWorker(secondJob, "done", { processExited: true }),
+    ).toBe(true);
     expect(await getSessionWorkStatus(sessionId)).toBe("idle");
   });
 
@@ -234,7 +240,11 @@ describe("busy during the turn, one idle notice after process end", () => {
       force: true,
     });
     const forcedJob = await dispatchTurn(sessionId, forced.id);
-    expect(await completeCursorDeliveryJobFromWorker(forcedJob, "forced result")).toBe(true);
+    expect(
+      await completeCursorDeliveryJobFromWorker(forcedJob, "forced result", {
+        processExited: true,
+      }),
+    ).toBe(true);
 
     const firstRow = drizzleDb
       .select({ status: cursorDeliveryJobs.status, endedAt: cursorDeliveryJobs.cliTurnEndedAt })
@@ -251,7 +261,9 @@ describe("busy during the turn, one idle notice after process end", () => {
     const job = await dispatchTurn(sessionId, message.id);
 
     startIdleNotificationWatch({ sessionId, triggerMessageId: message.id, seenWorking: true });
-    expect(await completeCursorDeliveryJobFromWorker(job, null)).toBe(true);
+    expect(await completeCursorDeliveryJobFromWorker(job, null, { processExited: true })).toBe(
+      true,
+    );
     // Cursor idle is process-end: complete() already posted with no extra quiet
     // window, so a later poll must not create a second notice.
     expect(await checkIdleNotification(message.id)).toBe(false);
@@ -314,7 +326,11 @@ describe("busy during the turn, one idle notice after process end", () => {
     // The queue already drained (job terminal), so the worker's completion
     // CAS cannot hold — record the observed turn end directly instead.
     expect(await markCursorDeliveryJobCliTurnEndedFromWorker(job)).toBe(true);
-    expect(await checkForwardCompletionNotification(sourceMessage.id)).toBe(true);
+    expect(
+      await checkForwardCompletionNotification(sourceMessage.id, {
+        externalCliProcessExited: true,
+      }),
+    ).toBe(true);
     expect(await checkForwardCompletionNotification(sourceMessage.id)).toBe(false);
 
     const notices = listMessages(sourceSessionId).filter((m) => m.text.includes("is now idle"));
@@ -404,7 +420,9 @@ describe("busy during the turn, one idle notice after process end", () => {
     const message = dispatchTypedMessage(sessionId, "sleep then nohup");
     const job = await dispatchTurn(sessionId, message.id);
 
-    expect(await completeCursorDeliveryJobFromWorker(job, "STARTING")).toBe(true);
+    expect(
+      await completeCursorDeliveryJobFromWorker(job, "STARTING", { processExited: true }),
+    ).toBe(true);
     expect(isCursorSessionBusy(sessionId)).toBe(false);
     expect(await getSessionWorkStatus(sessionId)).toBe("idle");
     expect((await getWaitingState(sessionId)).state).toBe("can_continue");

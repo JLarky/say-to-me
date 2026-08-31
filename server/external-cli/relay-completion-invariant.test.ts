@@ -161,13 +161,23 @@ describe("relay completion invariant", () => {
     expect(sourceIdleNotices(sourceSessionId)).toEqual([]);
 
     // The worker records the real outcome: only now is the turn over.
-    expect(await completeCursorDeliveryJobFromWorker(job, "here is the answer")).toBe(true);
+    expect(
+      await completeCursorDeliveryJobFromWorker(job, "here is the answer", {
+        processExited: true,
+      }),
+    ).toBe(true);
     expect(getMessage(targetMessage.id)?.opencodeDeliveryStatus).toBe("sent");
     // The worker's reply is only recorded when the lease compare-and-set holds,
     // so it also proves the mid-turn confirmation never stole the job.
-    expect(listMessages(targetSessionId).at(-1)?.extraMarkdown).toBe("here is the answer");
+    expect(
+      listMessages(targetSessionId).some(
+        (message) => message.author === "agent" && message.extraMarkdown === "here is the answer",
+      ),
+    ).toBe(true);
 
-    expect(await checkForwardCompletionNotification(sourceMessage.id)).toBe(true);
+    // Completion consumes the process-exit witness and notifies the relay
+    // source in the same event-driven path. A later check cannot duplicate it.
+    expect(await checkForwardCompletionNotification(sourceMessage.id)).toBe(false);
     expect(sourceIdleNotices(sourceSessionId)).toHaveLength(1);
   });
 
@@ -218,7 +228,14 @@ describe("relay completion invariant", () => {
 
     expect(await markCursorDeliveryJobCliTurnEndedFromWorker(job!)).toBe(true);
     expect(await getSessionWorkStatus(targetSessionId)).toBe("idle");
-    expect(await checkForwardCompletionNotification(sourceMessage.id)).toBe(true);
+    // A durable turn marker can recover queue state, but cannot authorize a
+    // notification without the worker's process-exit witness.
+    expect(await checkForwardCompletionNotification(sourceMessage.id)).toBe(false);
+    expect(
+      await checkForwardCompletionNotification(sourceMessage.id, {
+        externalCliProcessExited: true,
+      }),
+    ).toBe(true);
     expect(sourceIdleNotices(sourceSessionId)).toHaveLength(1);
   });
 

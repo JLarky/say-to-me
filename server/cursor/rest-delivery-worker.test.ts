@@ -10,6 +10,7 @@ import { Effect } from "effect";
 process.env.SAY_TO_ME_CURSOR_WORKER_AUTOSTART = "0";
 process.env.SAY_TO_ME_CURSOR_ECHO_ACCEPT_DELAY_MS = "0";
 process.env.SAY_TO_ME_CURSOR_ECHO_REPLY_DELAY_MS = "50";
+process.env.SAY_TO_ME_FORWARD_COMPLETION_POLL_MS = "100";
 
 const { closeTestServer, createApiMiddleware, listen, teardownApi } =
   await import("../api.harness.ts");
@@ -17,14 +18,13 @@ const { getMessage, insertMessageRow, listMessages } = await import("../messages
 const { getSessionWorkStatus } = await import("../external-cli/session-work-status.ts");
 const { stopIdleNotificationWatch } = await import("../notifications.ts");
 const { drizzleDb } = await import("../db/index.ts");
-const { messages: messagesTable } = await import("../db/drizzle-schema.ts");
+const { cursorDeliveryJobs, messages: messagesTable } = await import("../db/drizzle-schema.ts");
 const { setSessionCwd } = await import("../sessions.ts");
 const { enqueueCursorDeliveryJob } = await import("./durable-delivery.ts");
 const {
   cursorAssistantText,
   cursorCommandArgs,
   cursorDeliveryPrompt,
-  cursorTurnEndedOnClose,
   parseCursorJsonOutput,
   runCursorRestDeliveryOnce,
 } = await import("./rest-delivery-worker.ts");
@@ -45,6 +45,7 @@ describe("Cursor REST delivery worker", () => {
     server = null;
     delete process.env.SAY_TO_ME_INTERNAL_URL;
     delete process.env.SAY_TO_ME_CURSOR_WORKER_MODE;
+    delete process.env.SAY_TO_ME_CURSOR_BIN;
   });
 
   afterAll(async () => {
@@ -170,24 +171,7 @@ describe("Cursor REST delivery worker", () => {
     ).toEqual({ isError: false, text: "pirate ahoy" });
   });
 
-  it("does not treat an early Cursor close without a final result as turn end", () => {
-    const progressOnly = JSON.stringify({
-      type: "assistant",
-      message: { content: [{ type: "text", text: "I am still working" }] },
-    });
-    expect(cursorTurnEndedOnClose(progressOnly, 0)).toBe(false);
-    expect(cursorTurnEndedOnClose(progressOnly, 1)).toBe(false);
-    expect(
-      cursorTurnEndedOnClose(
-        [progressOnly, JSON.stringify({ type: "result", is_error: false, result: "done" })].join(
-          "\n",
-        ),
-        0,
-      ),
-    ).toBe(true);
-  });
-
-  it("keeps the session busy and preserves progress text after an early clean close", async () => {
+  it("treats a clean child close as process exit even without a final result", async () => {
     const sessionId = `cur_${randomUUID()}`;
     const cwd = mkdtempSync(path.join(tmpdir(), "say-to-me-cursor-early-close-"));
     const provider = path.join(cwd, "cursor-agent.sh");
@@ -221,8 +205,102 @@ describe("Cursor REST delivery worker", () => {
     ).resolves.toBe(true);
     expect(getMessage(message.id)).toMatchObject({ opencodeDeliveryStatus: "sent" });
     expect(listMessages(sessionId).some((row) => row.text === "still working")).toBe(true);
-    expect(await getSessionWorkStatus(sessionId)).toBe("pending");
+    expect(await getSessionWorkStatus(sessionId)).toBe("idle");
+    expect(
+      listMessages(sessionId).filter((row) => row.text === "Session is now idle."),
+    ).toHaveLength(1);
   });
+
+  it("isolated gate: no idle during a 2 minute quiet Cursor child, exactly 1 after exit", async () => {
+    const sessionId = `cur_${randomUUID()}`;
+    const cwd = mkdtempSync(path.join(tmpdir(), "say-to-me-cursor-process-exit-e2e-"));
+    const provider = path.join(cwd, "cursor-agent.sh");
+    writeFileSync(
+      provider,
+      [
+        "#!/bin/sh",
+        "sleep 5",
+        `printf '%s\\n' '${JSON.stringify({
+          type: "assistant",
+          message: { content: [{ type: "text", text: "5" }] },
+        })}'`,
+        "sleep 120",
+        `printf '%s\\n' '${JSON.stringify({
+          type: "result",
+          is_error: false,
+          result: "2 minutes",
+        })}'`,
+        "",
+      ].join("\n"),
+    );
+    chmodSync(provider, 0o755);
+    process.env.SAY_TO_ME_CURSOR_WORKER_MODE = "cursor";
+    process.env.SAY_TO_ME_CURSOR_BIN = provider;
+    expect(new URL(process.env.SAY_TO_ME_INTERNAL_URL!).port).not.toBe("5411");
+    setSessionCwd(sessionId, cwd);
+    const message = insertMessageRow({
+      sessionId,
+      text: "sleep 5, reply 5, sleep 2 minutes, reply 2 minutes",
+      extraMarkdown: null,
+      author: "user",
+      status: "received",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+    enqueueCursorDeliveryJob({
+      messageId: message.id,
+      messageSessionId: sessionId,
+      cursorSessionId: sessionId,
+      kind: "direct_user_message",
+    });
+
+    const worker = Effect.runPromise(runCursorRestDeliveryOnce("process-exit-e2e", sessionId));
+    await expect
+      .poll(
+        () => listMessages(sessionId).some((row) => row.author === "agent" && row.text === "5"),
+        {
+          timeout: 15_000,
+        },
+      )
+      .toBe(true);
+
+    // Simulate every non-authoritative signal saying "idle" while the real
+    // provider child is still sleeping. A timer/database implementation
+    // would ding here; the process-exit gate must stay silent.
+    const activeJob = drizzleDb
+      .select()
+      .from(cursorDeliveryJobs)
+      .where(eq(cursorDeliveryJobs.messageId, message.id))
+      .get();
+    expect(activeJob).toBeTruthy();
+    drizzleDb
+      .update(cursorDeliveryJobs)
+      .set({ status: "succeeded", cliTurnEndedAt: Date.now(), lockedAt: null, lockedBy: null })
+      .where(eq(cursorDeliveryJobs.messageId, message.id))
+      .run();
+    expect(await getSessionWorkStatus(sessionId)).toBe("idle");
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    expect(listMessages(sessionId).filter((row) => row.text === "Session is now idle.")).toEqual(
+      [],
+    );
+    drizzleDb
+      .update(cursorDeliveryJobs)
+      .set({
+        status: "running",
+        cliTurnEndedAt: null,
+        lockedAt: activeJob!.lockedAt,
+        lockedBy: activeJob!.lockedBy,
+      })
+      .where(eq(cursorDeliveryJobs.messageId, message.id))
+      .run();
+    expect(await getSessionWorkStatus(sessionId)).toBe("pending");
+
+    await expect(worker).resolves.toBe(true);
+    const notices = listMessages(sessionId).filter((row) => row.text === "Session is now idle.");
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatchObject({ author: "agent", extraMarkdown: "2 minutes" });
+  }, 140_000);
 
   it("includes the isolated CLI origin", () => {
     expect(

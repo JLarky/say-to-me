@@ -68,8 +68,8 @@ export class ProviderNotStartedError extends Data.TaggedError("ExternalCliProvid
 export class ProviderFailedError extends Data.TaggedError("ExternalCliProviderFailed")<{
   readonly message: string;
   readonly cause?: unknown;
-  /** Whether the provider emitted a trustworthy end-of-turn signal. */
-  readonly turnEnded?: boolean;
+  /** True only when the spawned provider child's `close` event fired. */
+  readonly processExited?: boolean;
 }> {}
 
 /**
@@ -83,10 +83,11 @@ export class DeliveryLeaseLostError extends Data.TaggedError("ExternalCliDeliver
 /** Everything a provider prompt may fail with, distinguishable without parsing text. */
 export type ProviderPromptError = ProviderNotStartedError | ProviderFailedError;
 
-/** Provider reply plus whether the provider gave a trustworthy turn boundary. */
+/** Provider reply plus the authoritative spawned-child lifecycle observation. */
 export type ProviderPromptResult = {
   readonly reply: string | null;
-  readonly turnEnded?: boolean;
+  /** True only when the spawned provider child's `close` event fired. */
+  readonly processExited: boolean;
 };
 
 export type DeliveryFailure = ProviderPromptError | DeliveryLeaseLostError;
@@ -157,7 +158,7 @@ export type DeliveryQueueService = {
   fail: (
     job: ExternalCliDeliveryJob,
     error: string,
-    options?: { readonly markTurnEnded?: boolean },
+    options?: { readonly processExited?: boolean },
   ) => Effect.Effect<boolean, ExternalCliDeliveryQueueError>;
   cancel: (
     job: ExternalCliDeliveryJob,
@@ -198,6 +199,7 @@ export type IdleNotificationWatchInput = {
   sessionId: string;
   triggerMessageId: number;
   seenWorking?: boolean;
+  autoPoll?: boolean;
 };
 
 export type ForwardCompletionWatchInput = {
@@ -206,6 +208,7 @@ export type ForwardCompletionWatchInput = {
   targetMessageId: number;
   targetSessionId: string;
   seenWorking?: boolean;
+  autoPoll?: boolean;
 };
 
 export type DeliveryEffectsService = {

@@ -25,14 +25,15 @@ import { detectSessionBackend } from "../session-id.ts";
 export type SessionWorkStatus = "pending" | "idle" | "unavailable";
 
 /**
- * Work status as the notification watchers need it: `idle` has to mean "this
- * session owes the relay nothing", not merely "no prompt is in front of the
- * agent this instant".
+ * Durable work status for queueing and UI. For external CLI sessions this is
+ * deliberately not notification authority: only the worker request produced
+ * by the spawned provider child's `close` event may release an idle notice.
  *
  * External CLI backends have no live session status to read. Owed delivery jobs
  * track prompt handover (queued / backing off / claimed). An open CLI turn
- * tracks the worker observing process-end after `markDispatched`. Queue-empty
- * is not idle: a succeeded or lease-expired job can still have an open turn.
+ * tracks durable turn bookkeeping after `markDispatched`. Queue-empty is not
+ * enough for work status, and even an `idle` result here cannot prove process
+ * exit to a notification watcher.
  */
 export async function getSessionWorkStatus(sessionId: string): Promise<SessionWorkStatus> {
   const backend = detectSessionBackend(sessionId);

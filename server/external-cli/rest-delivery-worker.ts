@@ -47,7 +47,7 @@ export type ExternalCliRestWorkerConfig<
   runPrompt: (
     job: TJob,
     claimed: TClaimed & { message: DbMessage },
-  ) => Effect.Effect<ProviderPromptResult | string | null, ProviderPromptError>;
+  ) => Effect.Effect<ProviderPromptResult, ProviderPromptError>;
 };
 
 export function createExternalCliRestDeliveryWorker<
@@ -77,13 +77,13 @@ export function createExternalCliRestDeliveryWorker<
       const reply = `${config.echoReplyLabel}: ${prompt}`;
       const replyDelayMs = echoReplyDelayMs(config.envPrefix);
       if (replyDelayMs > 0) yield* Effect.sleep(`${replyDelayMs} millis`);
-      return { reply, turnEnded: true };
+      return { reply, processExited: true };
     });
   }
 
   function runDelivery(
     claimed: ClaimedJobWithMessage,
-  ): Effect.Effect<ProviderPromptResult | string | null, ProviderPromptError> {
+  ): Effect.Effect<ProviderPromptResult, ProviderPromptError> {
     if (isRealWorkerMode(config.envPrefix, config.realWorkerMode)) {
       return config.runPrompt(claimed.job, claimed);
     }
@@ -116,14 +116,18 @@ export function createExternalCliRestDeliveryWorker<
     );
   }
 
-  function complete(job: TJob, reply: string | null, turnEnded: boolean): Effect.Effect<boolean> {
+  function complete(
+    job: TJob,
+    reply: string | null,
+    processExited: boolean,
+  ): Effect.Effect<boolean> {
     return Effect.promise(async () => {
       const body = await postInternalJson(
         `${config.apiBasePath}/complete`,
         {
           job,
           reply,
-          turnEnded,
+          processExited,
         },
         OkResponse,
       );
@@ -157,31 +161,18 @@ export function createExternalCliRestDeliveryWorker<
     );
   }
 
-  function markTurnEnded(job: TJob): Effect.Effect<boolean> {
-    return Effect.tryPromise(async () => {
-      const body = await postInternalJson(`${config.apiBasePath}/turn-ended`, { job }, OkResponse);
-      return body.ok;
-    }).pipe(
-      Effect.catchAll((error) =>
-        Effect.sync(() => {
-          console.error(
-            `[${config.backendLabel}-delivery-worker] could not record CLI turn end for job ${job.id}:`,
-            error,
-          );
-          return false;
-        }),
-      ),
-    );
-  }
-
-  function markUnconfirmed(job: TJob, error: string, turnEnded: boolean): Effect.Effect<boolean> {
+  function markUnconfirmed(
+    job: TJob,
+    error: string,
+    processExited: boolean,
+  ): Effect.Effect<boolean> {
     return Effect.promise(async () => {
       const body = await postInternalJson(
         `${config.apiBasePath}/unconfirmed`,
         {
           job,
           error,
-          turnEnded,
+          processExited,
         },
         OkResponse,
       );
@@ -214,14 +205,14 @@ export function createExternalCliRestDeliveryWorker<
     });
   }
 
-  function fail(job: TJob, error: string, turnEnded: boolean): Effect.Effect<boolean> {
+  function fail(job: TJob, error: string, processExited: boolean): Effect.Effect<boolean> {
     return Effect.promise(async () => {
       const body = await postInternalJson(
         `${config.apiBasePath}/fail`,
         {
           job,
           error,
-          turnEnded,
+          processExited,
         },
         OkResponse,
       );
@@ -268,7 +259,9 @@ export function createExternalCliRestDeliveryWorker<
         return true;
       }
       if (message.opencodeDeliveryStatus === "sent") {
-        yield* complete(job, null, true);
+        // Recovery has no same-process child-close witness. Stay silent rather
+        // than synthesizing idle from a durable delivery row.
+        yield* complete(job, null, false);
         return true;
       }
 
@@ -310,25 +303,21 @@ export function createExternalCliRestDeliveryWorker<
         runDelivery({ ...claimed, job, message } as ClaimedJobWithMessage),
       ).pipe(Effect.ensuring(Fiber.interrupt(heartbeat)));
 
-      // Process close is normally the turn-end signal. Providers may opt out
-      // when they know close happened before a trustworthy final event; keep
-      // that turn pending so an early exit cannot produce a false idle ding.
-      const turnEnded =
-        (Either.isRight(outcome) &&
-          (typeof outcome.right !== "object" ||
-            outcome.right === null ||
-            outcome.right.turnEnded !== false)) ||
+      // This is deliberately strict: only provider adapters may attest that
+      // their spawned child's `close` event fired. Results, errors, lease loss,
+      // and durable state never synthesize process exit.
+      const processExited =
+        (Either.isRight(outcome) && outcome.right.processExited === true) ||
         (Either.isLeft(outcome) &&
-          (outcome.left._tag !== "ExternalCliProviderFailed" || outcome.left.turnEnded !== false));
-      if (turnEnded) yield* markTurnEnded(job);
+          outcome.left._tag === "ExternalCliProviderFailed" &&
+          outcome.left.processExited === true);
 
       if (Either.isRight(outcome)) {
         // Even a worker that saw a renewal failure tries to complete: the
         // compare-and-set is the authority on ownership, and a reply we hold is
         // worth recording whenever it still matches the lease holder.
         const result = outcome.right;
-        const reply = typeof result === "object" && result !== null ? result.reply : result;
-        const completed = yield* complete(job, reply, turnEnded);
+        const completed = yield* complete(job, result.reply, processExited);
         if (!completed) yield* reportLeaseLost(job, "completion");
         return true;
       }
@@ -355,12 +344,12 @@ export function createExternalCliRestDeliveryWorker<
           return true;
         }
         case "failed": {
-          const failed = yield* fail(job, action.error, turnEnded);
+          const failed = yield* fail(job, action.error, processExited);
           if (!failed) yield* reportLeaseLost(job, "failure");
           return true;
         }
         case "unconfirmed": {
-          const recorded = yield* markUnconfirmed(job, action.error, turnEnded);
+          const recorded = yield* markUnconfirmed(job, action.error, processExited);
           if (!recorded) yield* reportLeaseLost(job, "unconfirmed outcome");
           return true;
         }

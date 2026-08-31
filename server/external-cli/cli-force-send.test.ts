@@ -250,7 +250,11 @@ type BackendSuite<TJob extends Lease> = {
   enqueue: (messageId: number, sessionId: string, options?: { force?: boolean }) => void;
   claim: (workerId: string, sessionId?: string) => Promise<{ job: TJob } | null>;
   markDispatched: (job: TJob) => Promise<boolean>;
-  complete: (job: TJob, reply: string | null) => Promise<boolean>;
+  complete: (
+    job: TJob,
+    reply: string | null,
+    options?: { readonly processExited?: boolean },
+  ) => Promise<boolean>;
   retryJob: (
     messageId: number,
     options?: { force?: boolean },
@@ -466,7 +470,7 @@ function describeBackend<TJob extends Lease>(backend: BackendSuite<TJob>): void 
       expect(invocationCount()).toBe(0);
 
       // The busy worker observes process end and completes its own job.
-      expect(await backend.complete(busyJob, "busy work done")).toBe(true);
+      expect(await backend.complete(busyJob, "busy work done", { processExited: true })).toBe(true);
 
       await expect(backend.runOnce("worker-auto", sessionId)).resolves.toBe(true);
 
@@ -523,7 +527,7 @@ function describeBackend<TJob extends Lease>(backend: BackendSuite<TJob>): void 
         return claimed.job;
       })();
       await backend.markDispatched(claimedJob);
-      await backend.complete(claimedJob, null);
+      await backend.complete(claimedJob, null, { processExited: true });
       // Simulate a lost outcome: terminal with the dispatch marker set.
       drizzleDb
         .update(backend.table)
@@ -563,7 +567,7 @@ function describeBackend<TJob extends Lease>(backend: BackendSuite<TJob>): void 
       const first = await backend.claim("worker-order", sessionId);
       expect(first?.job.messageId).toBe(newerForcedId);
       if (!first) throw new Error(`Expected ${backend.label} to hand out a job.`);
-      await backend.complete(first.job, null);
+      await backend.complete(first.job, null, { processExited: true });
 
       const second = await backend.claim("worker-order", sessionId);
       expect(second?.job.messageId).toBe(olderId);

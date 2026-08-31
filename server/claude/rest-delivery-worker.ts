@@ -9,6 +9,7 @@ import {
   ProviderFailedError,
   ProviderNotStartedError,
   type ProviderPromptError,
+  type ProviderPromptResult,
 } from "@say-to-me/external-cli-delivery/workflow";
 import { createExternalCliRestDeliveryWorker } from "../external-cli/rest-delivery-worker.ts";
 import { workerBin, workerMode, workerVersion } from "../external-cli/worker-env.ts";
@@ -97,8 +98,8 @@ export function resolveClaudeSpawnArgs(
 function runClaudePrompt(
   job: DbClaudeDeliveryJob,
   claimed: ClaimedJobWithMessage,
-): Effect.Effect<string | null, ProviderPromptError> {
-  return Effect.async<string | null, ProviderPromptError>((resume) => {
+): Effect.Effect<ProviderPromptResult, ProviderPromptError> {
+  return Effect.async<ProviderPromptResult, ProviderPromptError>((resume) => {
     const child = spawn(
       workerBin("CLAUDE", "claude"),
       resolveClaudeSpawnArgs(
@@ -117,7 +118,7 @@ function runClaudePrompt(
     let resultText: string | null = null;
     let resultIsError = false;
 
-    const settle = (effect: Effect.Effect<string | null, ProviderPromptError>) => {
+    const settle = (effect: Effect.Effect<ProviderPromptResult, ProviderPromptError>) => {
       if (settled) return;
       settled = true;
       resume(effect);
@@ -165,6 +166,7 @@ function runClaudePrompt(
           Effect.fail(
             new ProviderFailedError({
               message: `Claude exited with code ${code}: ${stderr.trim()}`,
+              processExited: true,
             }),
           ),
         );
@@ -173,13 +175,16 @@ function runClaudePrompt(
       if (resultIsError) {
         settle(
           Effect.fail(
-            new ProviderFailedError({ message: resultText ?? "Claude delivery failed." }),
+            new ProviderFailedError({
+              message: resultText ?? "Claude delivery failed.",
+              processExited: true,
+            }),
           ),
         );
         return;
       }
       const reply = (resultText ?? textParts.join("\n\n")).trim();
-      settle(Effect.succeed(reply || null));
+      settle(Effect.succeed({ reply: reply || null, processExited: true }));
     });
   });
 }

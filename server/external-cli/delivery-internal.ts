@@ -29,20 +29,19 @@ export type ExternalCliDeliveryInternalConfig<TLease extends ExternalCliDelivery
   completeDeliveryJobFromWorker: (
     job: TLease,
     reply: string | null,
-    options?: { readonly markTurnEnded?: boolean },
+    options?: { readonly processExited?: boolean },
   ) => Promise<boolean>;
   retryDeliveryJobFromWorker: (job: TLease, error: string) => Promise<boolean>;
   failDeliveryJobFromWorker: (
     job: TLease,
     error: string,
-    options?: { readonly markTurnEnded?: boolean },
+    options?: { readonly processExited?: boolean },
   ) => Promise<boolean>;
   markDeliveryJobDispatchedFromWorker: (job: TLease) => Promise<boolean>;
-  markDeliveryJobCliTurnEndedFromWorker: (job: TLease) => Promise<boolean>;
   markDeliveryJobUnconfirmedFromWorker: (
     job: TLease,
     error: string,
-    options?: { readonly markTurnEnded?: boolean },
+    options?: { readonly processExited?: boolean },
   ) => Promise<boolean>;
   cancelDeliveryJobFromWorker: (job: TLease, reason: string) => Promise<boolean>;
   renewDeliveryJobFromWorker: (job: TLease) => Promise<TLease | null>;
@@ -166,20 +165,14 @@ export function createExternalCliDeliveryInternalDispatcher<
       return json({ ok: await config.markDeliveryJobDispatchedFromWorker(job) });
     }
 
-    if (pathname === `${config.basePath}/turn-ended`) {
-      const job = leaseField(body, config.sessionIdLeaseField);
-      if (!job) return error("Missing valid job lease.");
-      return json({ ok: await config.markDeliveryJobCliTurnEndedFromWorker(job) });
-    }
-
     if (pathname === `${config.basePath}/unconfirmed`) {
       const job = leaseField(body, config.sessionIdLeaseField);
       const message = stringField(body, "error");
       if (!job) return error("Missing valid job lease.");
       if (!message) return error("Missing error.");
-      const markTurnEnded = body.turnEnded !== false;
+      const processExited = body.processExited === true;
       return json({
-        ok: await config.markDeliveryJobUnconfirmedFromWorker(job, message, { markTurnEnded }),
+        ok: await config.markDeliveryJobUnconfirmedFromWorker(job, message, { processExited }),
       });
     }
 
@@ -188,9 +181,9 @@ export function createExternalCliDeliveryInternalDispatcher<
       if (!job) return error("Missing valid job lease.");
       const reply = body.reply == null ? null : stringField(body, "reply");
       if (body.reply != null && reply == null) return error("Invalid reply.");
-      const markTurnEnded = body.turnEnded !== false;
+      const processExited = body.processExited === true;
       return json({
-        ok: await config.completeDeliveryJobFromWorker(job, reply, { markTurnEnded }),
+        ok: await config.completeDeliveryJobFromWorker(job, reply, { processExited }),
       });
     }
 
@@ -207,8 +200,8 @@ export function createExternalCliDeliveryInternalDispatcher<
       const message = stringField(body, "error");
       if (!job) return error("Missing valid job lease.");
       if (!message) return error("Missing error.");
-      const markTurnEnded = body.turnEnded !== false;
-      return json({ ok: await config.failDeliveryJobFromWorker(job, message, { markTurnEnded }) });
+      const processExited = body.processExited === true;
+      return json({ ok: await config.failDeliveryJobFromWorker(job, message, { processExited }) });
     }
 
     if (pathname === `${config.basePath}/cancel`) {

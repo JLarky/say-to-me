@@ -11,10 +11,10 @@ export type ExternalCliWorkerEnvPrefix = "CLAUDE" | "CURSOR" | "CODEX" | "GROK";
  * stream `cursor-agent -p` output and idle only when that child exits.
  */
 export const WORKER_VERSIONS: Record<ExternalCliWorkerEnvPrefix, number> = {
-  CLAUDE: 4,
-  CODEX: 2,
-  GROK: 3,
-  CURSOR: 5,
+  CLAUDE: 5,
+  CODEX: 3,
+  GROK: 4,
+  CURSOR: 6,
 };
 
 export function workerVersion(prefix: ExternalCliWorkerEnvPrefix): number {
