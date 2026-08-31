@@ -42,9 +42,17 @@ type BackendSuite<TJob extends Lease> = {
   enqueue: (messageId: number, sessionId: string) => void;
   claim: (workerId: string, sessionId?: string) => Promise<{ job: TJob } | null>;
   markDispatched: (job: TJob) => Promise<boolean>;
-  complete: (job: TJob, reply: string | null) => Promise<boolean>;
+  complete: (
+    job: TJob,
+    reply: string | null,
+    options?: { readonly processExited?: boolean },
+  ) => Promise<boolean>;
   retry: (job: TJob, error: string) => Promise<boolean>;
-  fail: (job: TJob, error: string) => Promise<boolean>;
+  fail: (
+    job: TJob,
+    error: string,
+    options?: { readonly processExited?: boolean },
+  ) => Promise<boolean>;
   renew: (job: TJob) => Promise<TJob | null>;
 };
 
@@ -149,7 +157,7 @@ function describeBackend<TJob extends Lease>(backend: BackendSuite<TJob>): void 
       const second = await claimOne("worker-c", sessionId);
       await backend.markDispatched(second);
       expect(await getSessionWorkStatus(sessionId)).toBe("pending");
-      await expect(backend.complete(second, "done")).resolves.toBe(true);
+      await expect(backend.complete(second, "done", { processExited: true })).resolves.toBe(true);
       expect(await getSessionWorkStatus(sessionId)).toBe("idle");
     });
 
@@ -159,7 +167,9 @@ function describeBackend<TJob extends Lease>(backend: BackendSuite<TJob>): void 
       backend.enqueue(failMessage, failSession);
       const failJob = await claimOne("fail-worker", failSession);
       await backend.markDispatched(failJob);
-      await expect(backend.fail(failJob, "provider failed")).resolves.toBe(true);
+      await expect(backend.fail(failJob, "provider failed", { processExited: true })).resolves.toBe(
+        true,
+      );
       expect(jobRow(backend.table, failJob.id).cliTurnEndedAt).not.toBeNull();
       expect(await getSessionWorkStatus(failSession)).toBe("idle");
 
@@ -199,7 +209,7 @@ function describeBackend<TJob extends Lease>(backend: BackendSuite<TJob>): void 
       backend.enqueue(dispatchedMessageId, dispatchedSession);
       const dispatchedJob = await claimOne("worker-a", dispatchedSession);
       await backend.markDispatched(dispatchedJob);
-      await backend.fail(dispatchedJob, "provider ran and failed");
+      await backend.fail(dispatchedJob, "provider ran and failed", { processExited: true });
 
       backend.enqueue(dispatchedMessageId, dispatchedSession);
       expect(jobRow(backend.table, dispatchedJob.id).status).toBe("failed");
@@ -224,7 +234,9 @@ function describeBackend<TJob extends Lease>(backend: BackendSuite<TJob>): void 
       // The heartbeat renews the lease while the delivery is still finishing; the
       // worker then completes with the lease object it captured beforehand.
       await expect(backend.renew(job)).resolves.not.toBeNull();
-      await expect(backend.complete(job, "the agent replied")).resolves.toBe(true);
+      await expect(
+        backend.complete(job, "the agent replied", { processExited: true }),
+      ).resolves.toBe(true);
 
       expect(jobRow(backend.table, job.id).status).toBe("succeeded");
       expect(getMessage(messageId)?.opencodeDeliveryStatus).toBe("sent");
@@ -244,8 +256,12 @@ function describeBackend<TJob extends Lease>(backend: BackendSuite<TJob>): void 
       const thief = await claimOne("worker-b", sessionId);
       expect(thief.attemptCount).toBe(stale.attemptCount + 1);
 
-      await expect(backend.complete(stale, "reply from the old worker")).resolves.toBe(false);
-      await expect(backend.fail(stale, "failure from the old worker")).resolves.toBe(false);
+      await expect(
+        backend.complete(stale, "reply from the old worker", { processExited: true }),
+      ).resolves.toBe(false);
+      await expect(
+        backend.fail(stale, "failure from the old worker", { processExited: true }),
+      ).resolves.toBe(false);
       await expect(backend.retry(stale, "retry from the old worker")).resolves.toBe(false);
 
       expect(jobRow(backend.table, stale.id)).toMatchObject({

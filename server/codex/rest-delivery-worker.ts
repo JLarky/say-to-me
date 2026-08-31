@@ -13,6 +13,7 @@ import {
   ProviderFailedError,
   ProviderNotStartedError,
   type ProviderPromptError,
+  type ProviderPromptResult,
 } from "@say-to-me/external-cli-delivery/workflow";
 import { createExternalCliRestDeliveryWorker } from "../external-cli/rest-delivery-worker.ts";
 import { workerBin, workerVersion } from "../external-cli/worker-env.ts";
@@ -61,8 +62,8 @@ export function parseCodexLastMessage(output: string): string {
 function runCodexPrompt(
   job: DbCodexDeliveryJob,
   claimed: ClaimedJobWithMessage,
-): Effect.Effect<string | null, ProviderPromptError> {
-  return Effect.async<string | null, ProviderPromptError>((resume) => {
+): Effect.Effect<ProviderPromptResult, ProviderPromptError> {
+  return Effect.async<ProviderPromptResult, ProviderPromptError>((resume) => {
     // `-o` last-message file avoids parsing unstable `--json` event streams; per-job uuid temp path is race-safe.
     const outFile = path.join(tmpdir(), `say-to-me-codex-${randomUUID()}.txt`);
     const args = [
@@ -83,7 +84,7 @@ function runCodexPrompt(
     let settled = false;
     let stderr = "";
 
-    const settle = (effect: Effect.Effect<string | null, ProviderPromptError>) => {
+    const settle = (effect: Effect.Effect<ProviderPromptResult, ProviderPromptError>) => {
       if (settled) return;
       settled = true;
       resume(effect);
@@ -121,19 +122,21 @@ function runCodexPrompt(
             Effect.fail(
               new ProviderFailedError({
                 message: `Codex exited with code ${code}: ${stderr.trim()}`,
+                processExited: true,
               }),
             ),
           );
           return;
         }
         const reply = parseCodexLastMessage(readFileSync(outFile, "utf8"));
-        settle(Effect.succeed(reply || null));
+        settle(Effect.succeed({ reply: reply || null, processExited: true }));
       } catch (error) {
         settle(
           Effect.fail(
             new ProviderFailedError({
               message: `Codex output could not be read: ${error instanceof Error ? error.message : String(error)}`,
               cause: error,
+              processExited: true,
             }),
           ),
         );

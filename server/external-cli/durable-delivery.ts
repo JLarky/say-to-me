@@ -48,6 +48,7 @@ import {
 } from "../messages.ts";
 import { getSession } from "../sessions.ts";
 import {
+  checkForwardCompletionNotification,
   checkIdleNotification,
   startForwardCompletionNotificationWatch,
   startIdleNotificationWatch,
@@ -986,9 +987,9 @@ export function createExternalCliDurableDelivery<
     fail: (job, error, options) =>
       tryQueue(() => {
         const turnEnd =
-          options?.markTurnEnded === false
-            ? {}
-            : { cliTurnEndedAt: sql`COALESCE(${config.jobsTable.cliTurnEndedAt}, ${Date.now()})` };
+          options?.processExited === true
+            ? { cliTurnEndedAt: sql`COALESCE(${config.jobsTable.cliTurnEndedAt}, ${Date.now()})` }
+            : {};
         const result = drizzleDb
           .update(config.jobsTable)
           .set({
@@ -1053,8 +1054,9 @@ export function createExternalCliDurableDelivery<
         insertExternalAgentReply(sessionId, reply);
       }),
     startForwardCompletionNotificationWatch: (input) =>
-      tryEffects(() => startForwardCompletionNotificationWatch(input)),
-    startIdleNotificationWatch: (input) => tryEffects(() => startIdleNotificationWatch(input)),
+      tryEffects(() => startForwardCompletionNotificationWatch({ ...input, autoPoll: false })),
+    startIdleNotificationWatch: (input) =>
+      tryEffects(() => startIdleNotificationWatch({ ...input, autoPoll: false })),
   } satisfies DeliveryEffectsService);
 
   function queueProgram<A>(effect: Effect.Effect<A, unknown, DeliveryQueueService>): Promise<A> {
@@ -1073,6 +1075,16 @@ export function createExternalCliDurableDelivery<
       job.kind === "forward_target_message" &&
       isLiveCompletionWatchStatus(message.completionWatchStatus)
     ) {
+      startForwardCompletionNotificationWatch({
+        sourceMessageId:
+          message.completionSourceMessageId ?? message.forwardSourceMessageId ?? message.id,
+        sourceSessionId:
+          message.completionSourceSessionId ?? message.forwardSourceSessionId ?? message.sessionId,
+        targetMessageId: message.id,
+        targetSessionId: job.externalSessionId,
+        seenWorking: true,
+        autoPoll: false,
+      });
       return;
     }
     if (job.kind !== "direct_user_message" && job.kind !== "forward_target_message") return;
@@ -1080,6 +1092,7 @@ export function createExternalCliDurableDelivery<
       sessionId: job.externalSessionId,
       triggerMessageId: message.id,
       seenWorking: true,
+      autoPoll: false,
     });
   }
 
@@ -1110,10 +1123,25 @@ export function createExternalCliDurableDelivery<
         targetMessageId: message.id,
         targetSessionId: externalSessionId,
         seenWorking: true,
+        autoPoll: false,
       });
     } else {
       startIdleWatchForDispatchedJob(toWorkflowJob(job));
     }
+  }
+
+  async function checkIdleAfterProcessExit(job: TJob, message: DbMessage | null): Promise<boolean> {
+    if (
+      message &&
+      job.kind === "forward_target_message" &&
+      isLiveCompletionWatchStatus(message.completionWatchStatus)
+    ) {
+      return checkForwardCompletionNotification(
+        message.completionSourceMessageId ?? message.forwardSourceMessageId ?? message.id,
+        { externalCliProcessExited: true },
+      );
+    }
+    return checkIdleNotification(job.messageId, { externalCliProcessExited: true });
   }
 
   function afterDeliveryFailure(message: DbMessage, error = config.failureMessage): void {
@@ -1184,9 +1212,10 @@ export function createExternalCliDurableDelivery<
   async function completeDeliveryJobFromWorker(
     job: TJob,
     reply: string | null,
-    options?: { readonly markTurnEnded?: boolean },
+    options?: { readonly processExited?: boolean },
   ): Promise<boolean> {
-    if (options?.markTurnEnded !== false) await markDeliveryJobCliTurnEndedFromWorker(job);
+    const processExited = options?.processExited === true;
+    if (processExited) await markDeliveryJobCliTurnEndedFromWorker(job);
     const message = getMessage(job.messageId);
     const completed = await queueProgram(
       Effect.gen(function* () {
@@ -1195,12 +1224,12 @@ export function createExternalCliDurableDelivery<
       }),
     );
     if (!completed || !message) {
-      if (!completed) await checkIdleNotification(job.messageId);
+      if (processExited) await checkIdleAfterProcessExit(job, message);
       return completed;
     }
     if (reply != null) insertExternalAgentReply(getSessionId(job), reply);
-    afterDelivery(job, message, { watchIdle: options?.markTurnEnded !== false });
-    if (options?.markTurnEnded !== false) await checkIdleNotification(job.messageId);
+    afterDelivery(job, message, { watchIdle: true });
+    if (processExited) await checkIdleAfterProcessExit(job, message);
     return true;
   }
 
@@ -1221,8 +1250,10 @@ export function createExternalCliDurableDelivery<
   async function endDeliveryJobFromWorker(
     job: TJob,
     error: string,
-    options?: { readonly markTurnEnded?: boolean },
+    options?: { readonly processExited?: boolean },
   ): Promise<boolean> {
+    const processExited = options?.processExited === true;
+    if (processExited) await markDeliveryJobCliTurnEndedFromWorker(job);
     const message = getMessage(job.messageId);
     const failed = await queueProgram(
       Effect.gen(function* () {
@@ -1232,13 +1263,14 @@ export function createExternalCliDurableDelivery<
     );
     if (failed && message) afterDeliveryFailure(message, error);
     if (message) broadcastQueue(message.sessionId);
+    if (processExited) await checkIdleAfterProcessExit(job, message);
     return failed;
   }
 
   function failDeliveryJobFromWorker(
     job: TJob,
     error: string,
-    options?: { readonly markTurnEnded?: boolean },
+    options?: { readonly processExited?: boolean },
   ): Promise<boolean> {
     return endDeliveryJobFromWorker(job, error, options);
   }
@@ -1253,7 +1285,7 @@ export function createExternalCliDurableDelivery<
   function markDeliveryJobUnconfirmedFromWorker(
     job: TJob,
     error: string,
-    options?: { readonly markTurnEnded?: boolean },
+    options?: { readonly processExited?: boolean },
   ): Promise<boolean> {
     return endDeliveryJobFromWorker(job, error, options);
   }

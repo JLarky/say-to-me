@@ -126,7 +126,11 @@ describe("external CLI forward completion notifications", () => {
       .where(eq(claudeDeliveryJobs.id, runningJob!.id))
       .run();
 
-    expect(await checkForwardCompletionNotification(sourceMessage.id)).toBe(true);
+    expect(
+      await checkForwardCompletionNotification(sourceMessage.id, {
+        externalCliProcessExited: true,
+      }),
+    ).toBe(true);
 
     const sourceNoticeJob = drizzleDb
       .select()
@@ -192,7 +196,11 @@ describe("external CLI forward completion notifications", () => {
       targetSessionId,
       seenWorking: true,
     });
-    expect(await checkForwardCompletionNotification(firstSource.id)).toBe(true);
+    expect(
+      await checkForwardCompletionNotification(firstSource.id, {
+        externalCliProcessExited: true,
+      }),
+    ).toBe(true);
     const firstNotice = getMessageByClientId(
       sourceSessionId,
       "user",
@@ -240,7 +248,11 @@ describe("external CLI forward completion notifications", () => {
       targetSessionId,
       seenWorking: true,
     });
-    expect(await checkForwardCompletionNotification(secondSource.id)).toBe(true);
+    expect(
+      await checkForwardCompletionNotification(secondSource.id, {
+        externalCliProcessExited: true,
+      }),
+    ).toBe(true);
 
     const secondNotice = getMessageByClientId(
       sourceSessionId,

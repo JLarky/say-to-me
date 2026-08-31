@@ -9,6 +9,7 @@ import {
   ProviderFailedError,
   ProviderNotStartedError,
   type ProviderPromptError,
+  type ProviderPromptResult,
 } from "@say-to-me/external-cli-delivery/workflow";
 import { createExternalCliRestDeliveryWorker } from "../external-cli/rest-delivery-worker.ts";
 import { workerBin, workerVersion } from "../external-cli/worker-env.ts";
@@ -68,8 +69,8 @@ export function grokCommandArgs(resumeId: string, prompt: string, model?: string
 function runGrokPrompt(
   job: DbGrokDeliveryJob,
   claimed: ClaimedJobWithMessage,
-): Effect.Effect<string | null, ProviderPromptError> {
-  return Effect.async<string | null, ProviderPromptError>((resume) => {
+): Effect.Effect<ProviderPromptResult, ProviderPromptError> {
+  return Effect.async<ProviderPromptResult, ProviderPromptError>((resume) => {
     const child = spawn(
       workerBin("GROK", "grok"),
       grokCommandArgs(
@@ -84,7 +85,7 @@ function runGrokPrompt(
     let stdout = "";
     let stderr = "";
 
-    const settle = (effect: Effect.Effect<string | null, ProviderPromptError>) => {
+    const settle = (effect: Effect.Effect<ProviderPromptResult, ProviderPromptError>) => {
       if (settled) return;
       settled = true;
       resume(effect);
@@ -114,6 +115,7 @@ function runGrokPrompt(
           Effect.fail(
             new ProviderFailedError({
               message: `Grok agent exited with code ${code}: ${stderr.trim()}`,
+              processExited: true,
             }),
           ),
         );
@@ -122,12 +124,17 @@ function runGrokPrompt(
       const parsed = parseGrokJsonOutput(stdout);
       if (parsed.isError) {
         settle(
-          Effect.fail(new ProviderFailedError({ message: parsed.text ?? "Grok delivery failed." })),
+          Effect.fail(
+            new ProviderFailedError({
+              message: parsed.text ?? "Grok delivery failed.",
+              processExited: true,
+            }),
+          ),
         );
         return;
       }
       const reply = parsed.text?.trim() ?? "";
-      settle(Effect.succeed(reply || null));
+      settle(Effect.succeed({ reply: reply || null, processExited: true }));
     });
   });
 }

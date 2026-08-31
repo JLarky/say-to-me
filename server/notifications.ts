@@ -127,6 +127,11 @@ type IdleNotificationWatch = {
   seenWorking: boolean;
 };
 
+type ExternalCliExitCheckOptions = {
+  /** True only for the internal request completed from a provider child's close event. */
+  externalCliProcessExited?: boolean;
+};
+
 const idleNotificationWatches = new Map<number, IdleNotificationWatch>();
 const idleNotificationTimers = new Map<number, ReturnType<typeof setInterval>>();
 
@@ -173,7 +178,11 @@ export function startIdleNotificationWatch({
   sessionId,
   triggerMessageId,
   seenWorking = false,
-}: Omit<IdleNotificationWatch, "seenWorking"> & { seenWorking?: boolean }): void {
+  autoPoll = true,
+}: Omit<IdleNotificationWatch, "seenWorking"> & {
+  seenWorking?: boolean;
+  autoPoll?: boolean;
+}): void {
   const existing = idleNotificationWatches.get(triggerMessageId);
   idleNotificationWatches.set(triggerMessageId, {
     sessionId,
@@ -181,6 +190,12 @@ export function startIdleNotificationWatch({
     seenWorking: existing?.seenWorking || seenWorking,
   });
 
+  if (!autoPoll) {
+    const timer = idleNotificationTimers.get(triggerMessageId);
+    if (timer) clearInterval(timer);
+    idleNotificationTimers.delete(triggerMessageId);
+    return;
+  }
   if (idleNotificationTimers.has(triggerMessageId)) return;
   const timer = setInterval(() => {
     void checkIdleNotification(triggerMessageId);
@@ -189,9 +204,22 @@ export function startIdleNotificationWatch({
   idleNotificationTimers.set(triggerMessageId, timer);
 }
 
-export async function checkIdleNotification(triggerMessageId: number): Promise<boolean> {
+export async function checkIdleNotification(
+  triggerMessageId: number,
+  options: ExternalCliExitCheckOptions = {},
+): Promise<boolean> {
   const watch = idleNotificationWatches.get(triggerMessageId);
   if (!watch) return false;
+
+  const backend = detectSessionBackend(watch.sessionId);
+  if (
+    (backend === "claude" || backend === "cursor" || backend === "codex" || backend === "grok") &&
+    options.externalCliProcessExited !== true
+  ) {
+    // Database rows and timer ticks are never proof that an external CLI child
+    // exited. A server restart loses the witness and intentionally fails late.
+    return false;
+  }
 
   const status = await getSessionWorkStatus(watch.sessionId);
   if (status === "pending") {
@@ -245,7 +273,13 @@ export function startForwardCompletionNotificationWatch({
     seenWorking: existing?.seenWorking || seenWorking,
   });
 
-  if (!autoPoll || forwardCompletionTimers.has(sourceMessageId)) return;
+  if (!autoPoll) {
+    const timer = forwardCompletionTimers.get(sourceMessageId);
+    if (timer) clearInterval(timer);
+    forwardCompletionTimers.delete(sourceMessageId);
+    return;
+  }
+  if (forwardCompletionTimers.has(sourceMessageId)) return;
   const timer = setInterval(() => {
     void checkForwardCompletionNotification(sourceMessageId);
   }, forwardCompletionPollMs);
@@ -255,6 +289,7 @@ export function startForwardCompletionNotificationWatch({
 
 export async function checkForwardCompletionNotification(
   sourceMessageId: number,
+  options: ExternalCliExitCheckOptions = {},
 ): Promise<boolean> {
   const watch = forwardCompletionWatches.get(sourceMessageId);
   if (!watch) return false;
@@ -335,6 +370,19 @@ export async function checkForwardCompletionNotification(
   // Same invariant as the completion-watch tick: an idle read only means the
   // relay finished if the prompt actually reached the target in the first place.
   if (!promptReachedTarget(targetMessage?.opencodeDeliveryStatus ?? null, promptDispatchedAt)) {
+    return false;
+  }
+
+  const targetBackend = detectSessionBackend(watch.targetSessionId);
+  if (
+    (targetBackend === "claude" ||
+      targetBackend === "cursor" ||
+      targetBackend === "codex" ||
+      targetBackend === "grok") &&
+    options.externalCliProcessExited !== true
+  ) {
+    // Pre-dispatch polling may enqueue a waiting relay, but only the provider
+    // child's close witness may complete an external CLI relay.
     return false;
   }
 
@@ -612,9 +660,21 @@ export const NotificationWatchRepositoryLive = Layer.succeed(NotificationWatchRe
 
 export const NotificationWatchSchedulerLive = Layer.succeed(NotificationWatchScheduler, {
   startIdle: (watch) =>
-    Effect.sync(() => startIdleNotificationWatch({ ...watch, seenWorking: true })),
+    Effect.sync(() =>
+      startIdleNotificationWatch({
+        ...watch,
+        seenWorking: true,
+        autoPoll: detectSessionBackend(watch.sessionId) === "opencode",
+      }),
+    ),
   startForwardCompletion: (watch) =>
-    Effect.sync(() => startForwardCompletionNotificationWatch({ ...watch, seenWorking: true })),
+    Effect.sync(() =>
+      startForwardCompletionNotificationWatch({
+        ...watch,
+        seenWorking: true,
+        autoPoll: detectSessionBackend(watch.targetSessionId) === "opencode",
+      }),
+    ),
 } satisfies NotificationWatchSchedulerService);
 
 export const NotificationWatchResumeLive = Layer.mergeAll(
