@@ -16,6 +16,8 @@ const { closeTestServer, createApiMiddleware, listen, teardownApi } =
   await import("../api.harness.ts");
 const { getMessage, insertMessageRow, listMessages } = await import("../messages.ts");
 const { getSessionWorkStatus } = await import("../external-cli/session-work-status.ts");
+const { hasExternalCliSessionWork } = await import("../external-cli/cli-session-busy.ts");
+const { resetLiveChildrenForTests } = await import("../external-cli/live-child.ts");
 const { stopIdleNotificationWatch } = await import("../notifications.ts");
 const { drizzleDb } = await import("../db/index.ts");
 const { cursorDeliveryJobs, messages: messagesTable } = await import("../db/drizzle-schema.ts");
@@ -41,6 +43,7 @@ describe("Cursor REST delivery worker", () => {
   });
 
   afterEach(async () => {
+    resetLiveChildrenForTests();
     if (server) await closeTestServer(server);
     server = null;
     delete process.env.SAY_TO_ME_INTERNAL_URL;
@@ -301,6 +304,69 @@ describe("Cursor REST delivery worker", () => {
     expect(notices).toHaveLength(1);
     expect(notices[0]).toMatchObject({ author: "agent", extraMarkdown: "2 minutes" });
   }, 140_000);
+
+  it("isolated gate: Stop stays busy after stamping cliTurnEndedAt until the Cursor child exits", async () => {
+    const sessionId = `cur_${randomUUID()}`;
+    const cwd = mkdtempSync(path.join(tmpdir(), "say-to-me-cursor-busy-gate-"));
+    const provider = path.join(cwd, "cursor-agent.sh");
+    writeFileSync(
+      provider,
+      [
+        "#!/bin/sh",
+        "sleep 5",
+        `printf '%s\\n' '${JSON.stringify({
+          type: "assistant",
+          message: { content: [{ type: "text", text: "5" }] },
+        })}'`,
+        "sleep 8",
+        `printf '%s\\n' '${JSON.stringify({
+          type: "result",
+          is_error: false,
+          result: "2 minutes",
+        })}'`,
+        "",
+      ].join("\n"),
+    );
+    chmodSync(provider, 0o755);
+    process.env.SAY_TO_ME_CURSOR_WORKER_MODE = "cursor";
+    process.env.SAY_TO_ME_CURSOR_BIN = provider;
+    expect(new URL(process.env.SAY_TO_ME_INTERNAL_URL!).port).not.toBe("5411");
+    setSessionCwd(sessionId, cwd);
+    const message = insertMessageRow({
+      sessionId,
+      text: "sleep 5, reply 5, sleep, reply 2 minutes",
+      extraMarkdown: null,
+      author: "user",
+      status: "received",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+    enqueueCursorDeliveryJob({
+      messageId: message.id,
+      messageSessionId: sessionId,
+      cursorSessionId: sessionId,
+      kind: "direct_user_message",
+    });
+
+    const worker = Effect.runPromise(runCursorRestDeliveryOnce("busy-gate", sessionId));
+    await expect
+      .poll(
+        () => listMessages(sessionId).some((row) => row.author === "agent" && row.text === "5"),
+        { timeout: 15_000 },
+      )
+      .toBe(true);
+
+    drizzleDb
+      .update(cursorDeliveryJobs)
+      .set({ cliTurnEndedAt: Date.now() })
+      .where(eq(cursorDeliveryJobs.messageId, message.id))
+      .run();
+    expect(hasExternalCliSessionWork(sessionId)).toBe(true);
+
+    await expect(worker).resolves.toBe(true);
+    expect(hasExternalCliSessionWork(sessionId)).toBe(false);
+  }, 40_000);
 
   it("includes the isolated CLI origin", () => {
     expect(

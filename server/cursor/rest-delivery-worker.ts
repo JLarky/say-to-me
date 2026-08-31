@@ -16,6 +16,7 @@ import {
 import { createExternalCliRestDeliveryWorker } from "../external-cli/rest-delivery-worker.ts";
 import { postInternalJson } from "../external-cli/internal-http.ts";
 import { workerBin, workerVersion } from "../external-cli/worker-env.ts";
+import { bindSpawnedLiveChild } from "../external-cli/live-child.ts";
 import type { ResolveWorkerInternalUrlOptions } from "../external-cli/worker-internal-url.ts";
 import { safeJsonParse, UnknownJson } from "@say-to-me/runtime-validation";
 
@@ -119,7 +120,6 @@ function runCursorPrompt(
       ),
       { cwd: claimed.cursor.cwd, stdio: ["ignore", "pipe", "pipe"] },
     );
-
     let settled = false;
     let stdout = "";
     let stderr = "";
@@ -131,6 +131,21 @@ function runCursorPrompt(
       settled = true;
       resume(effect);
     };
+    const { releaseLiveChild } = bindSpawnedLiveChild(
+      job.cursorSessionId,
+      child,
+      job.id,
+      (error) => {
+        settle(
+          Effect.fail(
+            new ProviderFailedError({
+              message: `Cursor live child register did not land: ${error.message}`,
+              processExited: false,
+            }),
+          ),
+        );
+      },
+    );
 
     const consumeLine = (line: string) => {
       const trimmed = line.trim();
@@ -157,7 +172,8 @@ function runCursorPrompt(
     });
     // `error` fires when the child never ran, so the prompt cannot have been
     // read. A non-zero `close` means it ran and may well have read it.
-    child.on("error", (error) =>
+    child.on("error", (error) => {
+      releaseLiveChild();
       settle(
         Effect.fail(
           new ProviderNotStartedError({
@@ -165,9 +181,10 @@ function runCursorPrompt(
             cause: error,
           }),
         ),
-      ),
-    );
+      );
+    });
     child.on("close", (code) => {
+      releaseLiveChild();
       if (pending.trim()) consumeLine(pending);
       if (code !== 0) {
         settle(

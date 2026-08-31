@@ -20,6 +20,7 @@ const {
 } = await import("./durable-delivery.ts");
 const { stopCursorSession } = await import("./stop.ts");
 const { isCursorSessionBusy } = await import("./delivery.ts");
+const { registerLiveChild, clearLiveChild } = await import("../external-cli/live-child.ts");
 
 describe("stopCursorSession", () => {
   afterAll(() => {
@@ -90,8 +91,11 @@ describe("stopCursorSession", () => {
     expect(claimed).not.toBeNull();
     expect(await markCursorDeliveryJobDispatchedFromWorker(claimed!.job)).toBe(true);
 
+    delete process.env.SAY_TO_ME_INTERNAL_URL;
+    await registerLiveChild(sessionId, claimed!.job.id);
     expect(isCursorSessionBusy(sessionId)).toBe(true);
     expect(await stopCursorSession(sessionId)).toEqual({ ok: true });
+    clearLiveChild(sessionId, claimed!.job.id);
     expect(isCursorSessionBusy(sessionId)).toBe(false);
   });
 

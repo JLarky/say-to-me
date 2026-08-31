@@ -17,6 +17,7 @@ import {
 } from "@say-to-me/external-cli-delivery/workflow";
 import { createExternalCliRestDeliveryWorker } from "../external-cli/rest-delivery-worker.ts";
 import { workerBin, workerVersion } from "../external-cli/worker-env.ts";
+import { bindSpawnedLiveChild } from "../external-cli/live-child.ts";
 import type { ResolveWorkerInternalUrlOptions } from "../external-cli/worker-internal-url.ts";
 import { codexReasoningEffortConfigArg, type CodexReasoningEffort } from "./reasoning-effort.ts";
 
@@ -80,7 +81,6 @@ function runCodexPrompt(
       cwd: claimed.codex.cwd,
       stdio: ["ignore", "pipe", "pipe"],
     });
-
     let settled = false;
     let stderr = "";
 
@@ -89,6 +89,21 @@ function runCodexPrompt(
       settled = true;
       resume(effect);
     };
+    const { releaseLiveChild } = bindSpawnedLiveChild(
+      job.codexSessionId,
+      child,
+      job.id,
+      (error) => {
+        settle(
+          Effect.fail(
+            new ProviderFailedError({
+              message: `Codex live child register did not land: ${error.message}`,
+              processExited: false,
+            }),
+          ),
+        );
+      },
+    );
 
     const cleanup = () => {
       try {
@@ -105,6 +120,7 @@ function runCodexPrompt(
     // read. A non-zero `close`, or an unreadable last-message file, means it ran
     // and may well have read it.
     child.on("error", (error) => {
+      releaseLiveChild();
       cleanup();
       settle(
         Effect.fail(
@@ -116,6 +132,7 @@ function runCodexPrompt(
       );
     });
     child.on("close", (code) => {
+      releaseLiveChild();
       try {
         if (code !== 0) {
           settle(

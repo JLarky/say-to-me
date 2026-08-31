@@ -5,10 +5,13 @@ import { dispatchGrokDeliveryInternalRequest } from "./grok/grok-delivery-intern
 import { dispatchEffectApiRequest } from "./effect-api.ts";
 import { dispatchSseApiRequest } from "./sse-routes.ts";
 import { dispatchEmbedWidgetRequest } from "../embed/solid/widget.ts";
+import { dispatchLiveChildInternalRequest } from "../external-cli/live-child.ts";
 
 export async function dispatchApiRequest(request: Request): Promise<Response | null> {
   const embedWidgetResponse = await dispatchEmbedWidgetRequest(request);
   if (embedWidgetResponse) return embedWidgetResponse;
+  const liveChildResponse = await dispatchLiveChildInternalRequest(request);
+  if (liveChildResponse) return liveChildResponse;
   const claudeDeliveryResponse = await dispatchClaudeDeliveryInternalRequest(request);
   if (claudeDeliveryResponse) return claudeDeliveryResponse;
   const cursorDeliveryResponse = await dispatchCursorDeliveryInternalRequest(request);
