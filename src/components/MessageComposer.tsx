@@ -573,8 +573,8 @@ export function MessageComposer({
                 {elevatorMusic.error
                   ? `Unable to play elevator music: ${elevatorMusic.error}`
                   : elevatorMusic.isPlaying
-                    ? "Looping music is playing to help keep this browser tab awake while you wait for agent responses."
-                    : "Play looping music to help keep this browser tab awake while you wait for agent responses."}
+                    ? "Looping music is playing, and this screen should stay awake while you wait for agent responses."
+                    : "Play looping music to keep this screen awake while you wait for agent responses."}
               </span>
             </div>
             <label {...stylex.props(composer.label)}>
