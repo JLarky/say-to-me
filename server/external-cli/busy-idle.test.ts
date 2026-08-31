@@ -73,7 +73,7 @@ async function dispatchTurn(sessionId: string, messageId: number) {
   expect(claimed).not.toBeNull();
   expect(await markCursorDeliveryJobDispatchedFromWorker(claimed!.job)).toBe(true);
   expect(claimed!.job.messageId).toBe(messageId);
-  registerLiveChild(sessionId, claimed!.job.id);
+  await registerLiveChild(sessionId, claimed!.job.id);
   return claimed!.job;
 }
 
@@ -113,6 +113,7 @@ describe("busy during the turn, one idle notice after process end", () => {
   });
 
   beforeEach(() => {
+    delete process.env.SAY_TO_ME_INTERNAL_URL;
     resetLiveChildrenForTests();
     clearForwardCompletionNotificationWatches();
     drizzleDb.delete(cursorDeliveryJobs).run();

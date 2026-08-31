@@ -10,13 +10,14 @@ export type ExternalCliWorkerEnvPrefix = "CLAUDE" | "CURSOR" | "CODEX" | "GROK";
  * and must be retired rather than left running. Cursor workers at this version
  * stream `cursor-agent -p` output and idle only when that child exits. This
  * generation also registers the spawned child in the in-memory live-child map
- * so Stop stays on for the whole child lifetime.
+ * so Stop stays on for the whole child lifetime. Register awaits the API map;
+ * a child that never lands fails the prompt instead of hiding Stop.
  */
 export const WORKER_VERSIONS: Record<ExternalCliWorkerEnvPrefix, number> = {
-  CLAUDE: 6,
-  CODEX: 4,
-  GROK: 5,
-  CURSOR: 7,
+  CLAUDE: 7,
+  CODEX: 5,
+  GROK: 6,
+  CURSOR: 8,
 };
 
 export function workerVersion(prefix: ExternalCliWorkerEnvPrefix): number {

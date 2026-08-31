@@ -9,6 +9,10 @@ import { postInternalJson } from "./internal-http.ts";
  *
  * Request-scoped and never persisted. A server restart empties the map and the
  * busy predicate falls false-late — same policy as idle.
+ *
+ * Production workers are another PID. `isBusy` and Stop read the API process
+ * map, so register must land over INTERNAL_URL. Failed or not-yet-landed
+ * register hides Stop mid-turn (false early). Failed clear is fine (false late).
  */
 const liveChildren = new Map<string, Set<number>>();
 
@@ -18,6 +22,9 @@ const LiveChildBody = arktype({
 });
 
 const OkResponse = arktype({ ok: "boolean" });
+
+const REGISTER_BACKOFF_MS = [0, 50, 100, 200, 400] as const;
+const REGISTER_ATTEMPT_TIMEOUT_MS = 1_000;
 
 function addEntry(sessionId: string, entry: number): void {
   let entries = liveChildren.get(sessionId);
@@ -35,29 +42,67 @@ function removeEntry(sessionId: string, entry: number): void {
   if (entries.size === 0) liveChildren.delete(sessionId);
 }
 
-function announceLiveChild(action: "register" | "clear", sessionId: string, entry: number): void {
+function canAnnounce(): boolean {
   // Isolated/production workers set this. Skip when unset so unit tests never
-  // call the live instance default (`say.local`). Vitest runs worker and server
-  // in one process, so the local map is already the `isBusy` witness.
-  if (!process.env.SAY_TO_ME_INTERNAL_URL) return;
-  if (process.env.VITEST === "true") return;
-  void postInternalJson(
-    `/api/internal/cli-live-child/${action}`,
-    { sessionId, entry },
-    OkResponse,
-  ).catch((error: unknown) => {
-    console.error(`[live-child] ${action} announce failed for ${sessionId}:`, error);
-  });
+  // call the live instance default (`say.local`). Vitest still announces when
+  // INTERNAL_URL is set so isolated gates prove the worker-to-API path.
+  return Boolean(process.env.SAY_TO_ME_INTERNAL_URL);
 }
 
-export function registerLiveChild(sessionId: string, entry: number): void {
-  addEntry(sessionId, entry);
-  announceLiveChild("register", sessionId, entry);
+function registerDidNotLandError(sessionId: string, cause: Error | undefined): Error {
+  const detail = cause?.message ?? "unknown error";
+  return new Error(`live child register did not land for ${sessionId}: ${detail}`);
 }
 
+async function postRegisterUntilLanded(sessionId: string, entry: number): Promise<void> {
+  let lastError: Error | undefined;
+  for (const delayMs of REGISTER_BACKOFF_MS) {
+    if (delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+    try {
+      await Promise.race([
+        postInternalJson("/api/internal/cli-live-child/register", { sessionId, entry }, OkResponse),
+        new Promise<never>((_, reject) => {
+          setTimeout(
+            () => reject(new Error(`register timed out after ${REGISTER_ATTEMPT_TIMEOUT_MS}ms`)),
+            REGISTER_ATTEMPT_TIMEOUT_MS,
+          );
+        }),
+      ]);
+      return;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+  }
+  throw registerDidNotLandError(sessionId, lastError);
+}
+
+/**
+ * Register a spawned child on the map `isBusy` reads. When INTERNAL_URL is set,
+ * this awaits and retries HTTP until the API process map has the child. It does
+ * not add locally first — that would hide a failed announce in-process.
+ * When INTERNAL_URL is unset, the local map is the witness (unit tests).
+ */
+export async function registerLiveChild(sessionId: string, entry: number): Promise<void> {
+  if (!canAnnounce()) {
+    addEntry(sessionId, entry);
+    return;
+  }
+  await postRegisterUntilLanded(sessionId, entry);
+}
+
+/** Best-effort: a failed clear leaves Stop on (false late). Never throws. */
 export function clearLiveChild(sessionId: string, entry: number): void {
   removeEntry(sessionId, entry);
-  announceLiveChild("clear", sessionId, entry);
+  if (!canAnnounce()) return;
+  void postInternalJson(
+    "/api/internal/cli-live-child/clear",
+    { sessionId, entry },
+    OkResponse,
+  ).catch((failure: Error) => {
+    console.error(`[live-child] clear announce failed for ${sessionId}:`, failure);
+  });
 }
 
 export function hasLiveChild(sessionId: string): boolean {
@@ -67,6 +112,46 @@ export function hasLiveChild(sessionId: string): boolean {
 /** Test-only: drop every entry so sibling cases cannot leak busy. */
 export function resetLiveChildrenForTests(): void {
   liveChildren.clear();
+}
+
+type SpawnedChild = {
+  readonly pid?: number;
+  kill: (signal?: NodeJS.Signals | number) => boolean;
+};
+
+/**
+ * After spawn: register until the API map has the child. If register never
+ * lands, kill the child and fail the prompt (false early is worse than failing).
+ * If the child exits while register is in flight, undo a late land with clear.
+ */
+export function bindSpawnedLiveChild(
+  sessionId: string,
+  child: SpawnedChild,
+  fallbackEntry: number,
+  onRegisterFailed: (failure: Error) => void,
+) {
+  const liveEntry = child.pid ?? fallbackEntry;
+  let released = false;
+  const releaseLiveChild = () => {
+    released = true;
+    clearLiveChild(sessionId, liveEntry);
+  };
+  void registerLiveChild(sessionId, liveEntry).then(
+    () => {
+      if (released) clearLiveChild(sessionId, liveEntry);
+    },
+    (failure: Error) => {
+      if (released) return;
+      try {
+        child.kill();
+      } catch {
+        // ignore
+      }
+      releaseLiveChild();
+      onRegisterFailed(failure);
+    },
+  );
+  return { liveEntry, releaseLiveChild };
 }
 
 function json(body: unknown, init: ResponseInit = {}): Response {

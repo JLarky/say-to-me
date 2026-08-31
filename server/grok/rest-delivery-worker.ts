@@ -13,7 +13,7 @@ import {
 } from "@say-to-me/external-cli-delivery/workflow";
 import { createExternalCliRestDeliveryWorker } from "../external-cli/rest-delivery-worker.ts";
 import { workerBin, workerVersion } from "../external-cli/worker-env.ts";
-import { clearLiveChild, registerLiveChild } from "../external-cli/live-child.ts";
+import { bindSpawnedLiveChild } from "../external-cli/live-child.ts";
 import type { ResolveWorkerInternalUrlOptions } from "../external-cli/worker-internal-url.ts";
 import { safeJsonParse, UnknownJson } from "@say-to-me/runtime-validation";
 
@@ -81,10 +81,6 @@ function runGrokPrompt(
       ),
       { cwd: claimed.grok.cwd, stdio: ["ignore", "pipe", "pipe"] },
     );
-    const liveEntry = child.pid ?? job.id;
-    registerLiveChild(job.grokSessionId, liveEntry);
-    const releaseLiveChild = () => clearLiveChild(job.grokSessionId, liveEntry);
-
     let settled = false;
     let stdout = "";
     let stderr = "";
@@ -94,6 +90,16 @@ function runGrokPrompt(
       settled = true;
       resume(effect);
     };
+    const { releaseLiveChild } = bindSpawnedLiveChild(job.grokSessionId, child, job.id, (error) => {
+      settle(
+        Effect.fail(
+          new ProviderFailedError({
+            message: `Grok live child register did not land: ${error.message}`,
+            processExited: false,
+          }),
+        ),
+      );
+    });
 
     child.stdout.on("data", (chunk: Buffer) => {
       stdout += chunk.toString("utf8");

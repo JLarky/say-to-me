@@ -13,7 +13,7 @@ import {
 } from "@say-to-me/external-cli-delivery/workflow";
 import { createExternalCliRestDeliveryWorker } from "../external-cli/rest-delivery-worker.ts";
 import { workerBin, workerMode, workerVersion } from "../external-cli/worker-env.ts";
-import { clearLiveChild, registerLiveChild } from "../external-cli/live-child.ts";
+import { bindSpawnedLiveChild } from "../external-cli/live-child.ts";
 import type { ResolveWorkerInternalUrlOptions } from "../external-cli/worker-internal-url.ts";
 import { safeJsonParse, UnknownJson } from "@say-to-me/runtime-validation";
 import { resolveClaudeSessionFlag, type ClaudeSessionFlag } from "./delivery.ts";
@@ -111,10 +111,6 @@ function runClaudePrompt(
       ),
       { cwd: claimed.claude.cwd, stdio: ["ignore", "pipe", "pipe"] },
     );
-    const liveEntry = child.pid ?? job.id;
-    registerLiveChild(job.claudeSessionId, liveEntry);
-    const releaseLiveChild = () => clearLiveChild(job.claudeSessionId, liveEntry);
-
     let settled = false;
     let stdoutBuffer = "";
     let stderr = "";
@@ -127,6 +123,21 @@ function runClaudePrompt(
       settled = true;
       resume(effect);
     };
+    const { releaseLiveChild } = bindSpawnedLiveChild(
+      job.claudeSessionId,
+      child,
+      job.id,
+      (error) => {
+        settle(
+          Effect.fail(
+            new ProviderFailedError({
+              message: `Claude live child register did not land: ${error.message}`,
+              processExited: false,
+            }),
+          ),
+        );
+      },
+    );
 
     const handleLine = (line: string) => {
       const parsed = parseClaudeStreamLine(line);

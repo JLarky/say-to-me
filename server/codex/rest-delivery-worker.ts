@@ -17,7 +17,7 @@ import {
 } from "@say-to-me/external-cli-delivery/workflow";
 import { createExternalCliRestDeliveryWorker } from "../external-cli/rest-delivery-worker.ts";
 import { workerBin, workerVersion } from "../external-cli/worker-env.ts";
-import { clearLiveChild, registerLiveChild } from "../external-cli/live-child.ts";
+import { bindSpawnedLiveChild } from "../external-cli/live-child.ts";
 import type { ResolveWorkerInternalUrlOptions } from "../external-cli/worker-internal-url.ts";
 import { codexReasoningEffortConfigArg, type CodexReasoningEffort } from "./reasoning-effort.ts";
 
@@ -81,10 +81,6 @@ function runCodexPrompt(
       cwd: claimed.codex.cwd,
       stdio: ["ignore", "pipe", "pipe"],
     });
-    const liveEntry = child.pid ?? job.id;
-    registerLiveChild(job.codexSessionId, liveEntry);
-    const releaseLiveChild = () => clearLiveChild(job.codexSessionId, liveEntry);
-
     let settled = false;
     let stderr = "";
 
@@ -93,6 +89,21 @@ function runCodexPrompt(
       settled = true;
       resume(effect);
     };
+    const { releaseLiveChild } = bindSpawnedLiveChild(
+      job.codexSessionId,
+      child,
+      job.id,
+      (error) => {
+        settle(
+          Effect.fail(
+            new ProviderFailedError({
+              message: `Codex live child register did not land: ${error.message}`,
+              processExited: false,
+            }),
+          ),
+        );
+      },
+    );
 
     const cleanup = () => {
       try {
