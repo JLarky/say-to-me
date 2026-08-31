@@ -15,3 +15,7 @@ The Play/Pause control preserves playback position.
 Pausing elevator music pauses the existing audio element without resetting `currentTime`. Pressing Play again resumes that same audio element from the paused position.
 
 The audio position is reset only when the elevator music provider is torn down, such as when the app unmounts.
+
+## Keep screen awake
+
+Audio playback alone does not prevent a phone from sleeping. While elevator music is playing, the app requests a screen wake lock. Pausing elevator music releases the lock. If the wake lock is unavailable or fails, elevator music still plays.

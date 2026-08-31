@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useBrowserPlaybackSnapshot } from "./browser-playback-store.ts";
+import { createKeepAwake, type KeepAwakeSession } from "./keep-awake.ts";
 
 // Source attribution: https://pixabay.com/music/bossa-nova-lounge-jazz-elevator-music-489965/
 const elevatorMusicUrl = "/elevator-music.mp3";
@@ -21,6 +22,7 @@ const fallbackElevatorMusicContext: ElevatorMusicContextValue = {
 
 export function ElevatorMusicProvider({ children }: { children: React.ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const keepAwakeRef = useRef<KeepAwakeSession | null>(null);
   const browserPlayback = useBrowserPlaybackSnapshot();
   const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState("");
@@ -40,16 +42,19 @@ export function ElevatorMusicProvider({ children }: { children: React.ReactNode 
     const existingAudio = audioRef.current;
     if (existingAudio) {
       if (isPlaying) {
+        endKeepAwake();
         existingAudio.pause();
         setIsPlaying(false);
         return;
       }
       try {
         existingAudio.volume = currentVolume;
+        void beginKeepAwake();
         await existingAudio.play();
         setError("");
         setIsPlaying(true);
       } catch (caught) {
+        endKeepAwake();
         setError(caught instanceof Error ? caught.message : String(caught));
       }
       return;
@@ -60,6 +65,7 @@ export function ElevatorMusicProvider({ children }: { children: React.ReactNode 
       audio.loop = true;
       audio.volume = currentVolume;
       audioRef.current = audio;
+      void beginKeepAwake();
       await audio.play();
       setError("");
       setIsPlaying(true);
@@ -69,7 +75,20 @@ export function ElevatorMusicProvider({ children }: { children: React.ReactNode 
     }
   }
 
+  async function beginKeepAwake() {
+    keepAwakeRef.current?.stop();
+    const keepAwake = createKeepAwake();
+    keepAwakeRef.current = keepAwake;
+    await keepAwake.start();
+  }
+
+  function endKeepAwake() {
+    keepAwakeRef.current?.stop();
+    keepAwakeRef.current = null;
+  }
+
   function stopElevatorMusic() {
+    endKeepAwake();
     const audio = audioRef.current;
     audioRef.current = null;
     if (audio) {
