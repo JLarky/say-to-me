@@ -766,6 +766,7 @@ export function createExternalCliDurableDelivery<
         and(
           eq(sessionIdColumn, sessionId),
           ne(config.jobsTable.id, exceptJobId),
+          ne(config.jobsTable.status, "running"),
           isNotNull(config.jobsTable.promptDispatchedAt),
           isNull(config.jobsTable.cliTurnEndedAt),
         ),

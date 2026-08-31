@@ -211,6 +211,40 @@ describe("busy during the turn, one idle notice after process end", () => {
     expect(await getSessionWorkStatus(sessionId)).toBe("idle");
   });
 
+  it("keeps a genuinely running turn open when a forced turn ends", async () => {
+    const sessionId = nextSessionId();
+    const first = dispatchTypedMessage(sessionId, "long-running turn");
+    const firstJob = await dispatchTurn(sessionId, first.id);
+
+    const forced = insertMessageRow({
+      sessionId,
+      text: "force this prompt",
+      extraMarkdown: null,
+      author: "user",
+      status: "received",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+    enqueueCursorDeliveryJob({
+      messageId: forced.id,
+      messageSessionId: sessionId,
+      cursorSessionId: sessionId,
+      kind: "direct_user_message",
+      force: true,
+    });
+    const forcedJob = await dispatchTurn(sessionId, forced.id);
+    expect(await completeCursorDeliveryJobFromWorker(forcedJob, "forced result")).toBe(true);
+
+    const firstRow = drizzleDb
+      .select({ status: cursorDeliveryJobs.status, endedAt: cursorDeliveryJobs.cliTurnEndedAt })
+      .from(cursorDeliveryJobs)
+      .where(eq(cursorDeliveryJobs.id, firstJob.id))
+      .get();
+    expect(firstRow).toMatchObject({ status: "running", endedAt: null });
+    expect(await getSessionWorkStatus(sessionId)).toBe("pending");
+  });
+
   it("direct: without a worker reply the watch itself posts the single idle notice", async () => {
     const sessionId = nextSessionId();
     const message = dispatchTypedMessage(sessionId, "please think quietly");

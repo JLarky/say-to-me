@@ -435,11 +435,11 @@ function describeBackend<TJob extends Lease>(backend: BackendSuite<TJob>): void 
       expect(jobRow(backend.table, queuedJobId).promptDispatchedAt).not.toBeNull();
       // The forced send skips only timing; durability and reporting are intact.
       expect(getMessage(queuedId)?.opencodeDeliveryStatus).toBe("sent");
-      // The later forced dispatch supersedes the abandoned busy turn marker.
+      // A forced dispatch must not close a genuinely running turn.
       expect(jobRow(backend.table, busyJob.id)).toMatchObject({
         status: "running",
         promptDispatchedAt: expect.any(Number),
-        cliTurnEndedAt: expect.any(Number),
+        cliTurnEndedAt: null,
       });
     });
 
