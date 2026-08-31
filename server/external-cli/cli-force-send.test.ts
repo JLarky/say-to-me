@@ -70,6 +70,9 @@ function writeFakeProvider(name: string): string {
       '  prev="$arg"',
       "done",
       'if [ -n "$out" ]; then printf ok > "$out"; fi',
+      ...(name === "cursor"
+        ? ['printf \'{"type":"result","is_error":false,"result":"ok"}\\n\'']
+        : []),
       "exit 0",
       "",
     ].join("\n"),
@@ -126,6 +129,9 @@ function writeSleepingProvider(name: string): string {
       '  prev="$arg"',
       "done",
       'if [ -n "$out" ]; then printf ok > "$out"; fi',
+      ...(name === "cursor"
+        ? ['printf \'{"type":"result","is_error":false,"result":"ok"}\\n\'']
+        : []),
       "exit 0",
       "",
     ].join("\n"),
@@ -429,7 +435,7 @@ function describeBackend<TJob extends Lease>(backend: BackendSuite<TJob>): void 
       expect(jobRow(backend.table, queuedJobId).promptDispatchedAt).not.toBeNull();
       // The forced send skips only timing; durability and reporting are intact.
       expect(getMessage(queuedId)?.opencodeDeliveryStatus).toBe("sent");
-      // The busy job is untouched: its marker still belongs to worker-busy.
+      // A forced dispatch must not close a genuinely running turn.
       expect(jobRow(backend.table, busyJob.id)).toMatchObject({
         status: "running",
         promptDispatchedAt: expect.any(Number),

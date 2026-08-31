@@ -11,6 +11,7 @@ import {
   ProviderFailedError,
   ProviderNotStartedError,
   type ProviderPromptError,
+  type ProviderPromptResult,
 } from "@say-to-me/external-cli-delivery/workflow";
 import { createExternalCliRestDeliveryWorker } from "../external-cli/rest-delivery-worker.ts";
 import { postInternalJson } from "../external-cli/internal-http.ts";
@@ -84,6 +85,13 @@ export function parseCursorJsonOutput(stdout: string): { isError?: boolean; text
   return { isError, text };
 }
 
+/** A final successful result is Cursor's trustworthy end-of-turn signal. */
+export function cursorTurnEndedOnClose(stdout: string, code: number | null): boolean {
+  if (code !== 0) return false;
+  const parsed = parseCursorJsonOutput(stdout);
+  return parsed.isError !== true && parsed.text != null && parsed.text.trim() !== "";
+}
+
 export function cursorCommandArgs(resumeId: string, prompt: string, model?: string): string[] {
   const args = ["-p", "--output-format", "stream-json", "--resume", resumeId, "--force", prompt];
   if (model) args.push("--model", model);
@@ -105,8 +113,8 @@ function postCursorStreamProgress(sessionId: string, text: string): void {
 function runCursorPrompt(
   job: DbCursorDeliveryJob,
   claimed: ClaimedJobWithMessage,
-): Effect.Effect<string | null, ProviderPromptError> {
-  return Effect.async<string | null, ProviderPromptError>((resume) => {
+): Effect.Effect<ProviderPromptResult, ProviderPromptError> {
+  return Effect.async<ProviderPromptResult, ProviderPromptError>((resume) => {
     const child = spawn(
       // `agent` is ambiguous — Grok installs one under that name too, and PATH
       // order decides the winner. `cursor-agent` only ever means Cursor.
@@ -125,7 +133,7 @@ function runCursorPrompt(
     let pending = "";
     let lastAssistant = "";
 
-    const settle = (effect: Effect.Effect<string | null, ProviderPromptError>) => {
+    const settle = (effect: Effect.Effect<ProviderPromptResult, ProviderPromptError>) => {
       if (settled) return;
       settled = true;
       resume(effect);
@@ -168,11 +176,13 @@ function runCursorPrompt(
     );
     child.on("close", (code) => {
       if (pending.trim()) consumeLine(pending);
+      const turnEnded = cursorTurnEndedOnClose(stdout, code);
       if (code !== 0) {
         settle(
           Effect.fail(
             new ProviderFailedError({
               message: `Cursor agent exited with code ${code}: ${stderr.trim()}`,
+              turnEnded,
             }),
           ),
         );
@@ -182,13 +192,31 @@ function runCursorPrompt(
       if (parsed.isError) {
         settle(
           Effect.fail(
-            new ProviderFailedError({ message: parsed.text ?? "Cursor delivery failed." }),
+            new ProviderFailedError({
+              message: parsed.text ?? "Cursor delivery failed.",
+              turnEnded,
+            }),
+          ),
+        );
+        return;
+      }
+      if (!turnEnded) {
+        if (code === 0 && lastAssistant.trim()) {
+          settle(Effect.succeed({ reply: lastAssistant.trim(), turnEnded: false }));
+          return;
+        }
+        settle(
+          Effect.fail(
+            new ProviderFailedError({
+              message: "Cursor agent closed without a final result event.",
+              turnEnded: false,
+            }),
           ),
         );
         return;
       }
       const reply = (parsed.text ?? lastAssistant).trim();
-      settle(Effect.succeed(reply || null));
+      settle(Effect.succeed({ reply: reply || null, turnEnded: true }));
     });
   });
 }

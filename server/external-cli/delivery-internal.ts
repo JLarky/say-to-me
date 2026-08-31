@@ -26,12 +26,24 @@ export type ExternalCliDeliveryInternalConfig<TLease extends ExternalCliDelivery
   workerVersion: number;
   scheduleWorkerReplacement: (sessionId: string) => Promise<void>;
   claimDeliveryJobForWorker: (workerId: string, sessionId?: string) => Promise<unknown>;
-  completeDeliveryJobFromWorker: (job: TLease, reply: string | null) => Promise<boolean>;
+  completeDeliveryJobFromWorker: (
+    job: TLease,
+    reply: string | null,
+    options?: { readonly markTurnEnded?: boolean },
+  ) => Promise<boolean>;
   retryDeliveryJobFromWorker: (job: TLease, error: string) => Promise<boolean>;
-  failDeliveryJobFromWorker: (job: TLease, error: string) => Promise<boolean>;
+  failDeliveryJobFromWorker: (
+    job: TLease,
+    error: string,
+    options?: { readonly markTurnEnded?: boolean },
+  ) => Promise<boolean>;
   markDeliveryJobDispatchedFromWorker: (job: TLease) => Promise<boolean>;
   markDeliveryJobCliTurnEndedFromWorker: (job: TLease) => Promise<boolean>;
-  markDeliveryJobUnconfirmedFromWorker: (job: TLease, error: string) => Promise<boolean>;
+  markDeliveryJobUnconfirmedFromWorker: (
+    job: TLease,
+    error: string,
+    options?: { readonly markTurnEnded?: boolean },
+  ) => Promise<boolean>;
   cancelDeliveryJobFromWorker: (job: TLease, reason: string) => Promise<boolean>;
   renewDeliveryJobFromWorker: (job: TLease) => Promise<TLease | null>;
 };
@@ -165,7 +177,10 @@ export function createExternalCliDeliveryInternalDispatcher<
       const message = stringField(body, "error");
       if (!job) return error("Missing valid job lease.");
       if (!message) return error("Missing error.");
-      return json({ ok: await config.markDeliveryJobUnconfirmedFromWorker(job, message) });
+      const markTurnEnded = body.turnEnded !== false;
+      return json({
+        ok: await config.markDeliveryJobUnconfirmedFromWorker(job, message, { markTurnEnded }),
+      });
     }
 
     if (pathname === `${config.basePath}/complete`) {
@@ -173,7 +188,10 @@ export function createExternalCliDeliveryInternalDispatcher<
       if (!job) return error("Missing valid job lease.");
       const reply = body.reply == null ? null : stringField(body, "reply");
       if (body.reply != null && reply == null) return error("Invalid reply.");
-      return json({ ok: await config.completeDeliveryJobFromWorker(job, reply) });
+      const markTurnEnded = body.turnEnded !== false;
+      return json({
+        ok: await config.completeDeliveryJobFromWorker(job, reply, { markTurnEnded }),
+      });
     }
 
     if (pathname === `${config.basePath}/retry`) {
@@ -189,7 +207,8 @@ export function createExternalCliDeliveryInternalDispatcher<
       const message = stringField(body, "error");
       if (!job) return error("Missing valid job lease.");
       if (!message) return error("Missing error.");
-      return json({ ok: await config.failDeliveryJobFromWorker(job, message) });
+      const markTurnEnded = body.turnEnded !== false;
+      return json({ ok: await config.failDeliveryJobFromWorker(job, message, { markTurnEnded }) });
     }
 
     if (pathname === `${config.basePath}/cancel`) {
