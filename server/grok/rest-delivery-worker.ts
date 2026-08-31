@@ -13,6 +13,7 @@ import {
 } from "@say-to-me/external-cli-delivery/workflow";
 import { createExternalCliRestDeliveryWorker } from "../external-cli/rest-delivery-worker.ts";
 import { workerBin, workerVersion } from "../external-cli/worker-env.ts";
+import { clearLiveChild, registerLiveChild } from "../external-cli/live-child.ts";
 import type { ResolveWorkerInternalUrlOptions } from "../external-cli/worker-internal-url.ts";
 import { safeJsonParse, UnknownJson } from "@say-to-me/runtime-validation";
 
@@ -80,6 +81,9 @@ function runGrokPrompt(
       ),
       { cwd: claimed.grok.cwd, stdio: ["ignore", "pipe", "pipe"] },
     );
+    const liveEntry = child.pid ?? job.id;
+    registerLiveChild(job.grokSessionId, liveEntry);
+    const releaseLiveChild = () => clearLiveChild(job.grokSessionId, liveEntry);
 
     let settled = false;
     let stdout = "";
@@ -99,7 +103,8 @@ function runGrokPrompt(
     });
     // `error` fires when the child never ran, so the prompt cannot have been
     // read. A non-zero `close` means it ran and may well have read it.
-    child.on("error", (error) =>
+    child.on("error", (error) => {
+      releaseLiveChild();
       settle(
         Effect.fail(
           new ProviderNotStartedError({
@@ -107,9 +112,10 @@ function runGrokPrompt(
             cause: error,
           }),
         ),
-      ),
-    );
+      );
+    });
     child.on("close", (code) => {
+      releaseLiveChild();
       if (code !== 0) {
         settle(
           Effect.fail(

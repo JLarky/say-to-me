@@ -1,3 +1,7 @@
+import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { randomUUID } from "node:crypto";
+import path from "node:path";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { and, eq, gt } from "drizzle-orm";
 import { Effect } from "effect";
@@ -10,9 +14,11 @@ const { closeTestServer, createApiMiddleware, listen, teardownApi } =
   await import("../api.harness.ts");
 const { getMessage, insertMessageRow } = await import("../messages.ts");
 const { drizzleDb } = await import("../db/index.ts");
-const { messages: messagesTable } = await import("../db/drizzle-schema.ts");
+const { codexDeliveryJobs, messages: messagesTable } = await import("../db/drizzle-schema.ts");
 const { setSessionCwd } = await import("../sessions.ts");
 const { enqueueCodexDeliveryJob } = await import("./durable-delivery.ts");
+const { hasExternalCliSessionWork } = await import("../external-cli/cli-session-busy.ts");
+const { hasLiveChild, resetLiveChildrenForTests } = await import("../external-cli/live-child.ts");
 const { codexCommandArgs, codexDeliveryPrompt, parseCodexLastMessage, runCodexRestDeliveryOnce } =
   await import("./rest-delivery-worker.ts");
 
@@ -28,10 +34,12 @@ describe("Codex REST delivery worker", () => {
   });
 
   afterEach(async () => {
+    resetLiveChildrenForTests();
     if (server) await closeTestServer(server);
     server = null;
     delete process.env.SAY_TO_ME_INTERNAL_URL;
     delete process.env.SAY_TO_ME_CODEX_WORKER_MODE;
+    delete process.env.SAY_TO_ME_CODEX_BIN;
   });
 
   afterAll(async () => {
@@ -123,4 +131,60 @@ describe("Codex REST delivery worker", () => {
       ),
     ).toContain("say-to-me api --server http://127.0.0.1:5412");
   });
+
+  it("isolated gate: Stop stays busy after stamping cliTurnEndedAt until the Codex child exits", async () => {
+    const sessionId = `cx_${randomUUID()}`;
+    const cwd = mkdtempSync(path.join(tmpdir(), "say-to-me-codex-busy-gate-"));
+    const provider = path.join(cwd, "codex.sh");
+    writeFileSync(
+      provider,
+      [
+        "#!/bin/sh",
+        "out=''",
+        "prev=''",
+        'for arg in "$@"; do',
+        '  if [ "$prev" = "-o" ]; then out="$arg"; fi',
+        '  prev="$arg"',
+        "done",
+        "sleep 2",
+        "sleep 8",
+        'if [ -n "$out" ]; then printf "2 minutes\\n" > "$out"; fi',
+        "",
+      ].join("\n"),
+    );
+    chmodSync(provider, 0o755);
+    process.env.SAY_TO_ME_CODEX_WORKER_MODE = "codex";
+    process.env.SAY_TO_ME_CODEX_BIN = provider;
+    expect(new URL(process.env.SAY_TO_ME_INTERNAL_URL!).port).not.toBe("5411");
+    setSessionCwd(sessionId, cwd);
+    const message = insertMessageRow({
+      sessionId,
+      text: "sleep then reply 2 minutes",
+      extraMarkdown: null,
+      author: "user",
+      status: "received",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+    enqueueCodexDeliveryJob({
+      messageId: message.id,
+      messageSessionId: sessionId,
+      codexSessionId: sessionId,
+      kind: "direct_user_message",
+    });
+
+    const worker = Effect.runPromise(runCodexRestDeliveryOnce("busy-gate", sessionId));
+    await expect.poll(() => hasLiveChild(sessionId), { timeout: 15_000 }).toBe(true);
+
+    drizzleDb
+      .update(codexDeliveryJobs)
+      .set({ cliTurnEndedAt: Date.now() })
+      .where(eq(codexDeliveryJobs.messageId, message.id))
+      .run();
+    expect(hasExternalCliSessionWork(sessionId)).toBe(true);
+
+    await expect(worker).resolves.toBe(true);
+    expect(hasExternalCliSessionWork(sessionId)).toBe(false);
+  }, 40_000);
 });

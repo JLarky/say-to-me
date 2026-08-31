@@ -1,3 +1,7 @@
+import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { randomUUID } from "node:crypto";
+import path from "node:path";
 import { createServer } from "node:http";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { and, eq, gt } from "drizzle-orm";
@@ -11,9 +15,11 @@ const { closeTestServer, createApiMiddleware, listen, teardownApi } =
   await import("../api.harness.ts");
 const { getMessage, insertMessageRow } = await import("../messages.ts");
 const { drizzleDb } = await import("../db/index.ts");
-const { messages: messagesTable } = await import("../db/drizzle-schema.ts");
+const { claudeDeliveryJobs, messages: messagesTable } = await import("../db/drizzle-schema.ts");
 const { setSessionCwd } = await import("../sessions.ts");
 const { enqueueClaudeDeliveryJob } = await import("./durable-delivery.ts");
+const { hasExternalCliSessionWork } = await import("../external-cli/cli-session-busy.ts");
+const { hasLiveChild, resetLiveChildrenForTests } = await import("../external-cli/live-child.ts");
 const {
   claudeCommandArgs,
   claudeDeliveryPrompt,
@@ -28,12 +34,16 @@ describe("Claude REST delivery worker", () => {
     const started = await listen(createApiMiddleware());
     server = started.server;
     process.env.SAY_TO_ME_INTERNAL_URL = started.origin;
+    process.env.SAY_TO_ME_INTERNAL_API_TOKEN = "test-internal-api-token";
   });
 
   afterEach(async () => {
+    resetLiveChildrenForTests();
     if (server) await closeTestServer(server);
     server = null;
     delete process.env.SAY_TO_ME_INTERNAL_URL;
+    delete process.env.SAY_TO_ME_CLAUDE_WORKER_MODE;
+    delete process.env.SAY_TO_ME_CLAUDE_BIN;
   });
 
   afterAll(async () => {
@@ -148,4 +158,62 @@ describe("Claude REST delivery worker", () => {
       ),
     ).toContain("say-to-me api --server http://127.0.0.1:5412");
   });
+
+  it("isolated gate: Stop stays busy after stamping cliTurnEndedAt until the Claude child exits", async () => {
+    const sessionId = `cc_${randomUUID()}`;
+    const cwd = mkdtempSync(path.join(tmpdir(), "say-to-me-claude-busy-gate-"));
+    const provider = path.join(cwd, "claude.sh");
+    writeFileSync(
+      provider,
+      [
+        "#!/bin/sh",
+        "sleep 2",
+        `printf '%s\\n' '${JSON.stringify({
+          type: "assistant",
+          message: { content: [{ type: "text", text: "5" }] },
+        })}'`,
+        "sleep 8",
+        `printf '%s\\n' '${JSON.stringify({
+          type: "result",
+          is_error: false,
+          result: "2 minutes",
+        })}'`,
+        "",
+      ].join("\n"),
+    );
+    chmodSync(provider, 0o755);
+    process.env.SAY_TO_ME_CLAUDE_WORKER_MODE = "claude";
+    process.env.SAY_TO_ME_CLAUDE_BIN = provider;
+    expect(new URL(process.env.SAY_TO_ME_INTERNAL_URL!).port).not.toBe("5411");
+    setSessionCwd(sessionId, cwd);
+    const message = insertMessageRow({
+      sessionId,
+      text: "sleep, reply 5, sleep, reply 2 minutes",
+      extraMarkdown: null,
+      author: "user",
+      status: "received",
+      links: null,
+      sessionRefs: null,
+      clientMessageId: null,
+    });
+    enqueueClaudeDeliveryJob({
+      messageId: message.id,
+      messageSessionId: sessionId,
+      claudeSessionId: sessionId,
+      kind: "direct_user_message",
+    });
+
+    const worker = Effect.runPromise(runClaudeRestDeliveryOnce("busy-gate", sessionId));
+    await expect.poll(() => hasLiveChild(sessionId), { timeout: 15_000 }).toBe(true);
+
+    drizzleDb
+      .update(claudeDeliveryJobs)
+      .set({ cliTurnEndedAt: Date.now() })
+      .where(eq(claudeDeliveryJobs.messageId, message.id))
+      .run();
+    expect(hasExternalCliSessionWork(sessionId)).toBe(true);
+
+    await expect(worker).resolves.toBe(true);
+    expect(hasExternalCliSessionWork(sessionId)).toBe(false);
+  }, 40_000);
 });

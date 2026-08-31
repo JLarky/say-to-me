@@ -8,13 +8,15 @@ export type ExternalCliWorkerEnvPrefix = "CLAUDE" | "CURSOR" | "CODEX" | "GROK";
  * Current generation writes the dispatch marker before prompting a provider. A
  * worker from an earlier generation does not, so it would still double-prompt
  * and must be retired rather than left running. Cursor workers at this version
- * stream `cursor-agent -p` output and idle only when that child exits.
+ * stream `cursor-agent -p` output and idle only when that child exits. This
+ * generation also registers the spawned child in the in-memory live-child map
+ * so Stop stays on for the whole child lifetime.
  */
 export const WORKER_VERSIONS: Record<ExternalCliWorkerEnvPrefix, number> = {
-  CLAUDE: 5,
-  CODEX: 3,
-  GROK: 4,
-  CURSOR: 6,
+  CLAUDE: 6,
+  CODEX: 4,
+  GROK: 5,
+  CURSOR: 7,
 };
 
 export function workerVersion(prefix: ExternalCliWorkerEnvPrefix): number {

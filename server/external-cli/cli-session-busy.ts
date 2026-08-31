@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { drizzleDb } from "../db/index.ts";
 import {
   claudeDeliveryJobs,
@@ -6,6 +6,7 @@ import {
   cursorDeliveryJobs,
   grokDeliveryJobs,
 } from "../db/drizzle-schema.ts";
+import { hasLiveChild } from "./live-child.ts";
 import { detectSessionBackend } from "../session-id.ts";
 
 const QUEUED_JOB_STATUSES = ["pending", "retrying"] as const;
@@ -23,9 +24,9 @@ type CliSessionColumn =
   | typeof grokDeliveryJobs.grokSessionId;
 
 /**
- * True while an external CLI session still owes delivery work or has an open
- * CLI turn. A `running` row whose turn already ended is not busy: process-end
- * is the idle signal even if the complete CAS has not landed yet.
+ * True while an external CLI session still owes delivery work or has a live
+ * spawned CLI child. A stamped `cli_turn_ended_at` is not the busy signal:
+ * Stop stays on for the whole child lifetime (false late over false early).
  * Safe to import from `messages.ts` (no cycle through durable-delivery).
  */
 export function hasExternalCliSessionWork(sessionId: string): boolean {
@@ -64,18 +65,7 @@ function isBusy(table: CliJobsTable, sessionColumn: CliSessionColumn, sessionId:
     )
     .get();
   if ((claimedNotDispatched?.count ?? 0) > 0) return true;
-  const openTurn = drizzleDb
-    .select({ count: sql<number>`COUNT(*)` })
-    .from(table)
-    .where(
-      and(
-        eq(sessionColumn, sessionId),
-        isNotNull(table.promptDispatchedAt),
-        isNull(table.cliTurnEndedAt),
-      ),
-    )
-    .get();
-  return (openTurn?.count ?? 0) > 0;
+  return hasLiveChild(sessionId);
 }
 
 /**
