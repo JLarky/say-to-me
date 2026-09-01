@@ -568,6 +568,57 @@ describe("POST /api/spaces/:spaceId/jarvis", () => {
     expect(body.session.id).not.toBe(unrelatedId);
   });
 
+  it("reconciles CLI sessions via bind marker after a crash before persist", async () => {
+    let crashOnce = true;
+    let createdId = "";
+    installOpenCodeModelDeps({
+      createCliSessionRecord: async (_provider, workspacePath, _model, _deps, _effort, options) => {
+        const session = ensureSession(`gx_${crypto.randomUUID()}`);
+        options?.crashAfterCreateBeforeMarker?.(session.id);
+        if (options?.bindMarker) setSessionAliasIfSafe(session.id, options.bindMarker);
+        const { setSessionCwd } = await import("./sessions.ts");
+        return setSessionCwd(session.id, workspacePath);
+      },
+      crashAfterProviderCreateBeforePersist: (sessionId) => {
+        createdId = sessionId;
+        if (crashOnce) {
+          crashOnce = false;
+          throw new Error("cli crash before persist");
+        }
+      },
+    });
+
+    const first = await createJarvisInSpace({
+      spaceId,
+      name: "cli crash",
+      provider: "grok",
+      modelID: "grok-4.5",
+    }).catch((error: Error) => error);
+    expect(first).toBeInstanceOf(Error);
+    expect(createdId).toMatch(/^gx_/);
+    const op = drizzleDb
+      .select()
+      .from(jarvisCreateOperations)
+      .where(eq(jarvisCreateOperations.alias, "cli crash"))
+      .get();
+    expect(op?.sessionId).toBeNull();
+    expect(getSessionByAlias(jarvisOperationBindMarker(op!.id))?.id).toBe(createdId);
+
+    clearJarvisCreateDeps();
+    installOpenCodeModelDeps({
+      createCliSessionRecord: async () => {
+        throw new Error("should not create another CLI session");
+      },
+    });
+    const second = await createJarvisInSpace({
+      spaceId,
+      name: "cli crash",
+      provider: "grok",
+      modelID: "grok-4.5",
+    });
+    expect(second.session.id).toBe(createdId);
+  });
+
   it("keeps bootstrap message identity stable across retries", async () => {
     const first = await createJarvis(spaceId, "bootstrap once");
     const firstBody = await first!.json();

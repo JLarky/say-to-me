@@ -13,6 +13,8 @@ import {
 import { clearForwardCompletionNotificationWatches } from "./notifications.ts";
 import { opencodeStatusCache } from "./opencode/cache.ts";
 import { stopAllCompletionWatches } from "./opencode/completion-watch.ts";
+import { setSessionT3InstanceId } from "./sessions.ts";
+import { setT3ServerInstanceAccessToken, updateAppSettings } from "./settings.ts";
 
 async function fetchSessionMessages(origin: string, sessionId: string): Promise<ApiMessage[]> {
   const queue = await fetch(`${origin}/api/sessions/${sessionId}/messages`).then((response) =>
@@ -239,6 +241,52 @@ describe("say API: messages", () => {
       process.env.SAY_TO_ME_OPENCODE_URL = previousOpenCodeUrl;
       openCode.server.close();
       server.close();
+    }
+  });
+
+  it("persists T3 delivery and retries it without a client message id", async () => {
+    const sessionId = "t3_11111111-1111-4111-8111-111111111111";
+    let dispatchCount = 0;
+    const t3 = await mockOpenCode((req, res) => {
+      if (req.url !== "/api/orchestration/dispatch") {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+      dispatchCount += 1;
+      res.writeHead(dispatchCount === 1 ? 502 : 200, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify(dispatchCount === 1 ? { error: "temporary failure" } : { sequence: 1 }),
+      );
+    });
+    updateAppSettings({
+      t3ServerInstances: [
+        { id: "test-t3", baseDir: "/tmp/test-t3", originUrl: t3.url, isDev: false },
+      ],
+    });
+    setT3ServerInstanceAccessToken("test-t3", "test-token", Date.now() + 60 * 60 * 1000);
+    await createTestSession(sessionId);
+    setSessionT3InstanceId(sessionId, "test-t3");
+
+    try {
+      const body = { author: "user", text: "retry this" };
+      const first = await fetch(`${origin}/api/sessions/${sessionId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      await waitFor(() => dispatchCount >= 1);
+      const queue = await fetch(`${origin}/api/sessions/${sessionId}/messages`).then((res) =>
+        res.json(),
+      );
+
+      expect(first.status).toBe(201);
+      expect(
+        queue.messages.filter((message: ApiMessage) => message.author === "user"),
+      ).toHaveLength(1);
+      await waitFor(() => dispatchCount >= 2);
+    } finally {
+      t3.server.close();
     }
   });
 
