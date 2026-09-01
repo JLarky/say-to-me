@@ -1,6 +1,7 @@
 import { broadcastQueue } from "../broadcast.ts";
 import { getMessage } from "../messages.ts";
 import { ensureSession } from "../sessions.ts";
+import { dropLiveChildren } from "./live-child.ts";
 import { markDeliveryStoppedByUser, STOPPED_BY_USER_REASON } from "./stop-delivery.ts";
 
 export type StopExternalCliResult = { ok: true } | { ok: false; status: number; error: string };
@@ -67,6 +68,8 @@ export async function stopExternalCliSession(
   } catch {
     // Worker may already be idle or absent.
   }
+
+  dropLiveChildren(config.sessionId);
 
   return { ok: true };
 }

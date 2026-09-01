@@ -109,6 +109,14 @@ export function hasLiveChild(sessionId: string): boolean {
   return (liveChildren.get(sessionId)?.size ?? 0) > 0;
 }
 
+/**
+ * Explicit Stop: drop this session's map entries in-process. Idempotent.
+ * No HTTP announce — worker register/clear stays the automatic path.
+ */
+export function dropLiveChildren(sessionId: string): void {
+  liveChildren.delete(sessionId);
+}
+
 /** Test-only: drop every entry so sibling cases cannot leak busy. */
 export function resetLiveChildrenForTests(): void {
   liveChildren.clear();
