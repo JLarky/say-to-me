@@ -1,7 +1,8 @@
 import { mkdtempSync, rmSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterAll, describe, expect, it } from "vite-plus/test";
+import { afterAll, afterEach, describe, expect, it } from "vite-plus/test";
 import { Effect } from "effect";
 
 const testDbDir = mkdtempSync(path.join(tmpdir(), "say-to-me-cursor-stop-test-"));
@@ -20,9 +21,14 @@ const {
 } = await import("./durable-delivery.ts");
 const { stopCursorSession } = await import("./stop.ts");
 const { isCursorSessionBusy } = await import("./delivery.ts");
-const { registerLiveChild, clearLiveChild } = await import("../external-cli/live-child.ts");
+const { registerLiveChild, resetLiveChildrenForTests } =
+  await import("../external-cli/live-child.ts");
 
 describe("stopCursorSession", () => {
+  afterEach(() => {
+    resetLiveChildrenForTests();
+  });
+
   afterAll(() => {
     drizzleSqlite.close();
     rmSync(testDbDir, { force: true, recursive: true });
@@ -95,7 +101,16 @@ describe("stopCursorSession", () => {
     await registerLiveChild(sessionId, claimed!.job.id);
     expect(isCursorSessionBusy(sessionId)).toBe(true);
     expect(await stopCursorSession(sessionId)).toEqual({ ok: true });
-    clearLiveChild(sessionId, claimed!.job.id);
+    expect(isCursorSessionBusy(sessionId)).toBe(false);
+  });
+
+  it("clears busy when Stop runs against a stale live-child map with no jobs", async () => {
+    const sessionId = `cur_${randomUUID()}`;
+    setSessionCwd(sessionId, "/tmp/cursor-stop-orphan-test");
+    delete process.env.SAY_TO_ME_INTERNAL_URL;
+    await registerLiveChild(sessionId, 4242);
+    expect(isCursorSessionBusy(sessionId)).toBe(true);
+    expect(await stopCursorSession(sessionId)).toEqual({ ok: true });
     expect(isCursorSessionBusy(sessionId)).toBe(false);
   });
 

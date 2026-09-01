@@ -10,8 +10,13 @@ process.env.SAY_TO_ME_INTERNAL_API_TOKEN = "test-internal-api-token";
 
 const { closeTestServer, createApiMiddleware, listen, teardownApi } =
   await import("../api.harness.ts");
-const { clearLiveChild, hasLiveChild, registerLiveChild, resetLiveChildrenForTests } =
-  await import("./live-child.ts");
+const {
+  clearLiveChild,
+  dropLiveChildren,
+  hasLiveChild,
+  registerLiveChild,
+  resetLiveChildrenForTests,
+} = await import("./live-child.ts");
 
 describe("live child register must land on the API map", () => {
   afterEach(() => {
@@ -72,6 +77,20 @@ describe("live child register must land on the API map", () => {
     await registerLiveChild(sessionId, 3);
     process.env.SAY_TO_ME_INTERNAL_URL = "http://127.0.0.1:1";
     expect(() => clearLiveChild(sessionId, 3)).not.toThrow();
+    expect(hasLiveChild(sessionId)).toBe(false);
+  });
+
+  it("dropLiveChildren is idempotent and only removes that session", async () => {
+    delete process.env.SAY_TO_ME_INTERNAL_URL;
+    const sessionId = `cur_${randomUUID()}`;
+    const otherId = `cur_${randomUUID()}`;
+    await registerLiveChild(sessionId, 1);
+    await registerLiveChild(sessionId, 2);
+    await registerLiveChild(otherId, 3);
+    dropLiveChildren(sessionId);
+    expect(hasLiveChild(sessionId)).toBe(false);
+    expect(hasLiveChild(otherId)).toBe(true);
+    expect(() => dropLiveChildren(sessionId)).not.toThrow();
     expect(hasLiveChild(sessionId)).toBe(false);
   });
 });
