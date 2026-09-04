@@ -3,7 +3,7 @@
 Anti-slop rules currently run as warnings. A warning identifies code that deserves
 review; it does not prove the code is wrong. Preserve runtime behavior and type
 evidence even when that means leaving a warning for a later rule improvement or a
-focused suppression.
+larger contract fix.
 
 ## Decision order
 
@@ -36,7 +36,7 @@ narrowest scope and a documented reason.
 | A known object literal is widened by an annotation                   | Keep inference and use `satisfies` to check the owner contract.                                                                                                                                                                                |
 | A function's explicit object return type is useful API documentation | Define a named owner type and retain the return annotation. Do not delete the contract just to preserve inference.                                                                                                                             |
 | A caught or rejected value                                           | Keep it `unknown`. Narrow only before inspecting properties, using a schema or a focused type guard. A callback that only rethrows the value needs no invented generic type.                                                                   |
-| A real union with distinct runtime representations                   | Use the union's correct runtime discriminator. If the rule rejects the idiomatic discriminator, improve or suppress the rule rather than substituting a weaker check.                                                                          |
+| A real union with distinct runtime representations                   | Use the union's correct runtime discriminator. If the rule rejects the idiomatic discriminator, improve the rule or leave the warning rather than substituting a weaker check.                                                                 |
 | Test data passed directly to `JSON.stringify` with no read-back      | Retain the `unknown` parameter; a transparent serialization sink does not need to recover the value's shape. Do not change the parameter to an unconstrained generic solely to silence lint.                                                   |
 | An assertion over a controlled test fixture                          | Prefer a typed fixture or schema. A `SAFETY:` comment is acceptable only when it states a concrete invariant that the same test or module controls; a comment is not runtime validation.                                                       |
 | A callback receives several event-specific payloads                  | Express the relationship in the owning callback type, ideally with an event-to-detail mapping. Do not cast the broad callback value to a hand-written union in the consumer.                                                                   |
@@ -79,11 +79,10 @@ that do not inspect the error.
 
 `server/claude/activity-hub.test.ts`, `server/claude/activity.test.ts`,
 `server/claude/title.test.ts`, `server/codex/activity-hub.test.ts`,
-`server/codex/activity.test.ts`, `server/codex/title.test.ts`,
-`server/cursor/activity-hub.test.ts`, `server/cursor/activity.test.ts`,
-`server/grok/activity.test.ts`, and `server/markdown/extra-markdown-html.test.ts`
-changed a `(value: unknown)` JSON-line helper to an unconstrained `<T>(value: T)`
-generic before calling `JSON.stringify`.
+`server/codex/activity.test.ts`, `server/cursor/activity-hub.test.ts`,
+`server/cursor/activity.test.ts`, and `server/grok/activity.test.ts` changed a
+`(value: unknown)` JSON-line helper to an unconstrained `<T>(value: T)` generic
+before calling `JSON.stringify`.
 
 Right resolution: keep the parameter `unknown`. Each helper only serializes a
 value for a test fixture line; it never reads the value back, so there is no
@@ -106,8 +105,8 @@ the documented `null`/`string`/`AddressInfo` check directly.
 does not protect the operation that requires the string.
 
 Right resolution: first establish that `RequestInit.body` is a string, then parse
-and validate the JSON with ArkType. If the runtime discriminator is flagged, keep
-the warning or suppress that exact boundary check.
+and validate the JSON with ArkType. If the runtime discriminator is flagged, leave
+the warning.
 
 ### Session runtime log details
 
