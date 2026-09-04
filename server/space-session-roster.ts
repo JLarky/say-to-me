@@ -479,10 +479,8 @@ export function buildSpaceRosterSession(
     latestSayMessage ||
     (latest.deliveryStatus === "failed" ? "Latest Say delivery failed" : null);
 
-  return {
+  const rosterSession: SpaceRosterSession = {
     id: session.id,
-    ...(session.t3InstanceId ? { t3InstanceId: session.t3InstanceId } : {}),
-    ...(session.paseoInstanceId ? { paseoInstanceId: session.paseoInstanceId } : {}),
     title,
     agent: isJarvis ? "Jarvis" : cachedInfo?.agent?.trim() || backendProvider,
     provider: backendProvider,
@@ -496,13 +494,6 @@ export function buildSpaceRosterSession(
       session.state === "jarvis"
         ? session.state
         : undefined,
-    ...(options.context
-      ? {
-          repoId: options.context.repoId,
-          worktree: options.context.worktree,
-          worktreeId: options.context.worktreeId,
-        }
-      : {}),
     archived: session.state === "archived",
     rosterStatus: derived.rosterStatus,
     rosterStatusLabel: derived.rosterStatusLabel,
@@ -523,6 +514,14 @@ export function buildSpaceRosterSession(
         ? options.timerSummary
         : timerSummaryForSession(session.id, options.now),
   };
+  if (session.t3InstanceId) rosterSession.t3InstanceId = session.t3InstanceId;
+  if (session.paseoInstanceId) rosterSession.paseoInstanceId = session.paseoInstanceId;
+  if (options.context) {
+    rosterSession.repoId = options.context.repoId;
+    rosterSession.worktree = options.context.worktree;
+    rosterSession.worktreeId = options.context.worktreeId;
+  }
+  return rosterSession;
 }
 
 export function buildSpaceRosterSessionsForOwners(
