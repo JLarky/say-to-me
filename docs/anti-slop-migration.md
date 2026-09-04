@@ -10,23 +10,34 @@ focused suppression.
 For each finding:
 
 1. Decide whether the flagged construct is actually unsafe in its context.
-2. If it is unsafe, repair the owning contract or validate the value at the trust
-   boundary.
-3. If the construct is legitimate, keep it and improve the rule or add the
+2. If it is unsafe and the repair is small and self-contained, fix the owning
+   contract or validate the value at the trust boundary now.
+3. If it is unsafe but the real repair needs larger contract work (a new owner
+   type, a schema migration, an API change touching other callers), leave the
+   warning in place and track the larger repair separately. Do not paper over
+   it with a local change that still discards the same type evidence.
+4. If the construct is legitimate, keep it and improve the rule, or add the
    narrowest documented suppression once warnings become errors.
-4. Do not replace a correct construct with a less accurate spelling merely because
+5. Do not replace a correct construct with a less accurate spelling merely because
    the rule does not recognize it.
+
+`oxlint-disable-next-line` is not allowed while these rules are at warning
+severity. A warning does not fail the build, so a disable comment only hides the
+review prompt instead of resolving it (step 2) or holding it honestly (step 3).
+Suppressions are for after a rule moves to error, and even then only with the
+narrowest scope and a documented reason.
 
 ## Accepted patterns
 
 | Situation                                                            | Preferred resolution                                                                                                                                                                                                                           |
 | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Untrusted JSON, SDK, database, or process output                     | Parse once with ArkType at the trust boundary and return a named validated type. A TypeScript generic or assertion does not validate runtime data.                                                                                             |
+| Untrusted JSON, raw-SQL/aggregate database rows, or process output   | Parse once with ArkType at the trust boundary and return a named validated type. A TypeScript generic or assertion does not validate runtime data. See docs/database.md.                                                                       |
+| OpenCode SDK responses (`@opencode-ai/sdk/v2/client`)                | Already typed by the generated v2 client; read `.data` fields directly. Do not re-validate with ArkType or cast. ArkType belongs at untyped I/O, not on already-typed generated SDK data. See docs/opencode-sdk.md.                            |
 | A known object literal is widened by an annotation                   | Keep inference and use `satisfies` to check the owner contract.                                                                                                                                                                                |
 | A function's explicit object return type is useful API documentation | Define a named owner type and retain the return annotation. Do not delete the contract just to preserve inference.                                                                                                                             |
 | A caught or rejected value                                           | Keep it `unknown`. Narrow only before inspecting properties, using a schema or a focused type guard. A callback that only rethrows the value needs no invented generic type.                                                                   |
 | A real union with distinct runtime representations                   | Use the union's correct runtime discriminator. If the rule rejects the idiomatic discriminator, improve or suppress the rule rather than substituting a weaker check.                                                                          |
-| Test data passed directly to `JSON.stringify`                        | Use a named `JsonValue`/fixture contract when JSON compatibility matters, or retain `unknown` with a focused rule exception. Do not change the parameter to an unconstrained generic solely to silence lint.                                   |
+| Test data passed directly to `JSON.stringify` with no read-back      | Retain the `unknown` parameter; a transparent serialization sink does not need to recover the value's shape. Do not change the parameter to an unconstrained generic solely to silence lint.                                                   |
 | An assertion over a controlled test fixture                          | Prefer a typed fixture or schema. A `SAFETY:` comment is acceptable only when it states a concrete invariant that the same test or module controls; a comment is not runtime validation.                                                       |
 | A callback receives several event-specific payloads                  | Express the relationship in the owning callback type, ideally with an event-to-detail mapping. Do not cast the broad callback value to a hand-written union in the consumer.                                                                   |
 | Effect layers do not compose without `any`/`never`                   | Make the helper generic over the API and its requirements, or keep the warning until the owner types can be repaired. A comment does not make `as never` sound.                                                                                |
@@ -66,12 +77,18 @@ that do not inspect the error.
 
 ### Test fixture serializers
 
-Activity/title fixtures changed `(value: unknown)` to unconstrained `<T>(value: T)`
-helpers before calling `JSON.stringify`.
+`server/claude/activity-hub.test.ts`, `server/claude/activity.test.ts`,
+`server/claude/title.test.ts`, `server/codex/activity-hub.test.ts`,
+`server/codex/activity.test.ts`, `server/codex/title.test.ts`,
+`server/cursor/activity-hub.test.ts`, `server/cursor/activity.test.ts`,
+`server/grok/activity.test.ts`, and `server/markdown/extra-markdown-html.test.ts`
+changed a `(value: unknown)` JSON-line helper to an unconstrained `<T>(value: T)`
+generic before calling `JSON.stringify`.
 
-Right resolution: use a project `JsonValue` fixture type if call-site JSON safety
-is valuable; otherwise retain `unknown` and suppress the rule for a transparent
-serialization sink.
+Right resolution: keep the parameter `unknown`. Each helper only serializes a
+value for a test fixture line; it never reads the value back, so there is no
+shape to recover. Leave the warning if the rule does not already exempt
+transparent serialization sinks.
 
 ### Node server addresses
 
@@ -121,6 +138,13 @@ work is ready rather than overstating safety in a comment.
 ## Review record
 
 - Setup: PR #10, merged with rules at warning severity.
-- Initial cleanup: PR #11. Rejected patterns above were removed before review.
+- Initial cleanup: PR #11 (open). Rejected patterns above were removed before
+  review; the remaining diff has not merged.
+- Rebase attempt: PR #67 (open), rebasing PR #11 onto current main. Rejected as
+  too large for one review pass; do not land it as-is.
 - Flaky-test deletion: PR #13. Its removed coverage must be reviewed and restored
-  separately; test deletion is not an anti-slop fix.
+  separately; test deletion is not an anti-slop fix. Restoration is tracked in
+  issue #15 / PR #14.
+- This doc and its `AGENTS.md` link landed standalone in PR #65. Once #65 merges,
+  drop the same two files from #11 and #67 so they do not reintroduce a
+  conflicting copy.
