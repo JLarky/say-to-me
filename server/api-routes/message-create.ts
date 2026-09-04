@@ -237,10 +237,9 @@ export function createSessionMessageEffect(
         targetText: forwardedText,
         links: linksJson,
         sourceSessionRefs: JSON.stringify([
-          {
-            id: targetSessionId,
-            ...(leadingRelay?.session.alias ? { alias: leadingRelay.session.alias } : {}),
-          },
+          leadingRelay?.session.alias
+            ? { id: targetSessionId, alias: leadingRelay.session.alias }
+            : { id: targetSessionId },
         ]),
         targetSessionRefs: JSON.stringify([{ id: sessionId }]),
         clientMessageId,
