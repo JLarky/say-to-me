@@ -80,11 +80,9 @@ async function createJarvis(
     new Request(`http://say.local/api/spaces/${spaceId}/jarvis`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        name,
-        provider,
-        ...(provider === "opencode" || modelID ? { modelID } : {}),
-      }),
+      body: JSON.stringify(
+        provider === "opencode" || modelID ? { name, provider, modelID } : { name, provider },
+      ),
     }),
   );
 }
