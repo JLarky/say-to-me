@@ -11,6 +11,9 @@ function listen(
   return new Promise((resolve) => {
     const server = createServer(app);
     server.listen(0, "127.0.0.1", () => {
+      // SAFETY: address() is called inside the listen() callback, so the server
+      // is already bound to a TCP port; it always returns AddressInfo here, never
+      // a string or null.
       const address = server.address() as { port: number };
       resolve({ server, origin: `http://127.0.0.1:${address.port}` });
     });

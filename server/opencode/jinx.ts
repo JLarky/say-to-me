@@ -1,4 +1,5 @@
 import { type } from "arktype";
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- Jinx structured-output schema is JSON Schema metadata with extensible fields. */
 import { Duration, Effect } from "effect";
 import { mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -93,15 +94,16 @@ export function classifyWithJinx(input: WaitingStateInput): Promise<WaitingState
   const promptSession = (sessionID: string) =>
     Effect.tryPromise(async () => {
       const model = jinxModel();
-      const result = await client.session.prompt({
+      const promptParams: Parameters<typeof client.session.prompt>[0] = {
         sessionID,
         directory: scratchDirectory,
         agent: "plan",
-        ...(model ? { model } : {}),
         system: jinxSystemPrompt,
         format: { type: "json_schema", schema: jinxOutputSchema, retryCount: 1 },
         parts: [{ type: "text", text: buildJinxPrompt(input) }],
-      });
+      };
+      if (model) promptParams.model = model;
+      const result = await client.session.prompt(promptParams);
       if (!result.response || result.response.status < 200 || result.response.status >= 300) {
         throw new Error(
           result.response

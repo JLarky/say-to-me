@@ -5,11 +5,14 @@ export type SseClient = {
 
 export const sseRetryLine = "retry: 3000\n\n";
 
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Snapshot frames preserve backend-owned payload fields while this transport reads only revision.
+type SseSnapshotPayload = { revision?: number } & Record<string, unknown>;
+
 export function ssePingFrame(): string {
   return "event: ping\ndata: {}\n\n";
 }
 
-export function sseSnapshotFrame(payload: { revision?: number } & Record<string, unknown>): string {
+export function sseSnapshotFrame(payload: SseSnapshotPayload): string {
   const revision = Number.isInteger(payload.revision) ? payload.revision : 0;
   return `id: ${revision}\nevent: snapshot\ndata: ${JSON.stringify(payload)}\n\n`;
 }

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- JSON-RPC params and tool results are intentionally extensible protocol payloads, narrowed at each tool boundary. */
 import { createInterface } from "node:readline";
 import { type as arktype } from "arktype";
 import { safeJsonParse } from "@say-to-me/runtime-validation";
@@ -15,6 +16,9 @@ type ToolCall = {
   arguments?: Record<string, unknown>;
   name?: string;
 };
+
+type JsonRpcResultObject = { readonly [key: string]: unknown };
+type JsonRpcResult = JsonRpcResultObject | readonly unknown[] | string;
 
 const JsonRpcRequestSchema = arktype({
   "id?": "number | string | null",
@@ -139,7 +143,7 @@ async function handleLine(line: string): Promise<void> {
   }
 }
 
-async function handleRequest(request: JsonRpcRequest): Promise<unknown> {
+async function handleRequest(request: JsonRpcRequest): Promise<JsonRpcResult> {
   if (request.method === "initialize") {
     return {
       capabilities: { tools: {} },
@@ -153,7 +157,7 @@ async function handleRequest(request: JsonRpcRequest): Promise<unknown> {
   throw new Error(`Unsupported method: ${request.method ?? "unknown"}`);
 }
 
-async function callTool(call: ToolCall): Promise<unknown> {
+async function callTool(call: ToolCall): Promise<JsonRpcResult> {
   const args = call.arguments ?? {};
   if (call.name === "boo_list_sessions") return driver.listSessions();
   if (call.name === "boo_start_agent") {
@@ -215,7 +219,9 @@ function requiredString(args: Record<string, unknown>, key: string): string {
   return value;
 }
 
-function toolResult(value: unknown): object {
+type ToolResult = { content: Array<{ type: "text"; text: string }> };
+
+function toolResult(value: JsonRpcResult): ToolResult {
   return { content: [{ text: JSON.stringify(value, null, 2), type: "text" }] };
 }
 

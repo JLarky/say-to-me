@@ -111,7 +111,7 @@ describe("say API: opencode", () => {
   it("stops a pending OpenCode session through the SDK abort endpoint", async () => {
     const previousOpenCodeUrl = process.env.SAY_TO_ME_OPENCODE_URL;
     const sessionDirectory = "/tmp/stop-project";
-    let abortRequest;
+    let abortRequest: IncomingMessage | undefined;
     const openCode = await mockOpenCode((req, res) => {
       if (
         req.url?.startsWith("/session/ses_ff19a11e43a24NwSk2Gx3LBAmy") &&
@@ -148,8 +148,7 @@ describe("say API: opencode", () => {
       const payload = await response.json();
 
       expect(response.ok).toBe(true);
-      expect(abortRequest).toBeDefined();
-      expect((abortRequest as unknown as IncomingMessage).url).toContain(
+      expect(abortRequest?.url).toContain(
         `/session/ses_ff19a11e43a24NwSk2Gx3LBAmy/abort?directory=${encodeURIComponent(sessionDirectory)}`,
       );
       expect(payload.session.opencodeStatus).toBe("idle");

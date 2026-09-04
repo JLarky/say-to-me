@@ -35,8 +35,12 @@ const OrganizationError = Schema.Struct({
 
 type OrganizationError = Schema.Schema.Type<typeof OrganizationError>;
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- This is the untrusted JSON object being parsed field-by-field by parseOrganization.
+type OrganizationJsonObject = Record<string, unknown>;
+
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
+function asRecord(value: unknown): OrganizationJsonObject | null {
+  return value && typeof value === "object" ? (value as OrganizationJsonObject) : null;
 }
 
 // A folder chain that loops back on itself would make its subtree invisible on
@@ -55,6 +59,7 @@ function hasCycle(folders: OrgFolder[]): boolean {
   return false;
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 export function parseOrganization(payload: unknown): Organization | null {
   const root = asRecord(payload);
   if (!root || !Array.isArray(root.folders) || !Array.isArray(root.placements)) return null;
@@ -85,6 +90,7 @@ function getOrganizationEffect(): Effect.Effect<Organization, never, SessionOrga
 }
 
 function saveOrganizationEffect(
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   payload: unknown,
 ): Effect.Effect<{ ok: true }, OrganizationError, SessionOrganizationService> {
   return Effect.gen(function* () {
@@ -135,7 +141,8 @@ export function buildSessionFoldersHandlers<
   R,
 >(api: HttpApi.HttpApi<Id, Groups, E, R>) {
   return HttpApiBuilder.group(
-    api as unknown as HttpApi.HttpApi<Id, typeof SessionFoldersGroup, E, R>,
+    // @ts-expect-error SAFETY: Every caller passes the assembled API containing SessionFoldersGroup; Effect cannot express that group-membership constraint for arbitrary Groups.
+    api as HttpApi.HttpApi<Id, typeof SessionFoldersGroup, E, R>,
     "sessionFolders",
     (handlers) =>
       handlers

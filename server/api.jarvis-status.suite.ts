@@ -10,6 +10,9 @@ import { JarvisStatusOpenCode, waitForIdleStatusEffect } from "./jarvis-status.t
 import { fakeServiceLayer } from "./effect-test-helpers.ts";
 import type { OpenCodeStatus, WaitingStatePayload } from "../src/types.ts";
 
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- These response assertions intentionally inspect selected fields of evolving Jarvis JSON payloads.
+type JarvisStatusJson = Record<string, unknown>;
+
 function jarvisStatusRequest(sessionId: string, query = "") {
   return Effect.promise(() =>
     dispatchEffectApiRequest(
@@ -34,7 +37,7 @@ function jarvisStatusByMessageRequest(messageId: number | string, query = "") {
   );
 }
 
-async function responseJson<T = Record<string, unknown>>(response: Response): Promise<T> {
+async function responseJson<T = JarvisStatusJson>(response: Response): Promise<T> {
   return (await response.json()) as T;
 }
 
@@ -134,7 +137,7 @@ describe("say API: Jarvis status", () => {
     const response = await Effect.runPromise(jarvisStatusRequest(sessionId));
     expect(await response.clone().text()).toContain('\n  "messages": [');
     const payload = await responseJson<{
-      messages: Array<{ id: number } & Record<string, unknown>>;
+      messages: Array<{ id: number } & JarvisStatusJson>;
       nextPullCursor: string | null;
       otherMessages: number[];
       opencodeActivity: { recentItems?: unknown[] };
@@ -161,9 +164,9 @@ describe("say API: Jarvis status", () => {
         },
       ],
     });
-    expect(
-      Object.keys((payload.messages[0].sessions as Array<Record<string, unknown>>)[0]),
-    ).toEqual(["id"]);
+    expect(Object.keys((payload.messages[0].sessions as Array<JarvisStatusJson>)[0])).toEqual([
+      "id",
+    ]);
     expect(payload.messages[0].createdAt).toEqual(expect.any(String));
     expect(String(payload.messages[0].extraMarkdownPreview)).toContain("details");
     expect(String(payload.messages[0].extraMarkdownPreview).length).toBeLessThanOrEqual(240);
@@ -173,9 +176,12 @@ describe("say API: Jarvis status", () => {
     expect(payload.opencodeActivity).not.toHaveProperty("latestOutputSnippet");
     expect(payload.opencodeActivity.recentItems?.length ?? 0).toBeLessThanOrEqual(2);
     if (payload.opencodeActivity.recentItems?.[0]) {
-      expect(
-        Object.keys(payload.opencodeActivity.recentItems[0] as Record<string, unknown>),
-      ).toEqual(["kind", "snippet", "timestamp", "partial"]);
+      expect(Object.keys(payload.opencodeActivity.recentItems[0] as JarvisStatusJson)).toEqual([
+        "kind",
+        "snippet",
+        "timestamp",
+        "partial",
+      ]);
     }
     expect(payload).toMatchObject({ sessionId, opencodeState: expect.any(String) });
   });
@@ -222,10 +228,10 @@ describe("say API: Jarvis status", () => {
       ),
     );
     const payload = await responseJson<{
-      messages: Array<{ id: number } & Record<string, unknown>>;
+      messages: Array<{ id: number } & JarvisStatusJson>;
       opencodeActivity: { recentItems?: unknown[] };
     }>(responses.status);
-    const evidence = await responseJson<{ message: Record<string, unknown> }>(responses.evidence);
+    const evidence = await responseJson<{ message: JarvisStatusJson }>(responses.evidence);
 
     expect(responses.status.status).toBe(200);
     expect(responses.evidence.status).toBe(200);

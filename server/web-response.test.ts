@@ -8,6 +8,8 @@ import { pipeWebResponseToExpress } from "./web-response.ts";
 async function listen(app: express.Express) {
   const server = createServer(app);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  // SAFETY: listen(0, "127.0.0.1", ...) binds a TCP socket before resolving, so
+  // address() here always returns AddressInfo, never a string or null.
   const address = server.address() as { port: number };
   return { origin: `http://127.0.0.1:${address.port}`, server };
 }

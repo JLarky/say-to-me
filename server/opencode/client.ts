@@ -1,4 +1,5 @@
 import {
+  /* oxlint-disable anti-slop/no-unsafe-dictionary-type -- OpenCode SDK response metadata is an extensible external protocol contract. */
   type Model as OcConfigModel,
   type ModelV2Info as OcModel,
   type Project as OcProject,
@@ -321,12 +322,12 @@ export async function setOpenCodeSessionModel(
   const baseUrl = openCodeBaseUrl();
   const url = new URL(`/api/session/${encodeURIComponent(sessionId)}/model`, baseUrl);
   if (directory) url.searchParams.set("directory", directory);
+  const baseModel = { providerID, id: modelID };
+  const model = variant ? { ...baseModel, variant } : baseModel;
   const response = await openCodeFetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: { providerID, id: modelID, ...(variant ? { variant } : {}) },
-    }),
+    body: JSON.stringify({ model }),
   });
   if (response.status < 200 || response.status >= 300) {
     throw new Error(`OpenCode returned HTTP ${response.status}`);
@@ -338,10 +339,9 @@ export async function getOpenCodeSessionModel(
   directory?: string | null,
 ): Promise<{ providerID: string; modelID: string; variant: string | null }> {
   const client = createOpenCodeClient();
-  const result = await client.session.get({
-    sessionID: sessionId,
-    ...(directory ? { directory } : {}),
-  });
+  const getParams: Parameters<typeof client.session.get>[0] = { sessionID: sessionId };
+  if (directory) getParams.directory = directory;
+  const result = await client.session.get(getParams);
   if (!result.response || result.response.status < 200 || result.response.status >= 300) {
     throw new Error(
       result.response
@@ -460,10 +460,9 @@ export async function createOpenCodeSession(
 ): Promise<{ ok: true; session: DbSession } | { ok: false; status: number; error: string }> {
   try {
     const client = createOpenCodeClient();
-    const result = await client.session.create({
-      directory,
-      ...(options.title ? { title: options.title } : {}),
-    });
+    const createParams: Parameters<typeof client.session.create>[0] = { directory };
+    if (options.title) createParams.title = options.title;
+    const result = await client.session.create(createParams);
     // v2 SDK network failures can omit `response` entirely.
     if (!result.response || result.response.status < 200 || result.response.status >= 300) {
       return mapOpenCodeSessionCreateFailure(result);

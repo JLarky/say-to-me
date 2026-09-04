@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { createComponent } from "solid-js";
+import { createComponent, type JSX } from "solid-js";
 // @ts-expect-error -- Solid omits declarations for the direct browser runtime entry.
 import { render } from "solid-js/web/dist/web.js";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -12,7 +12,7 @@ afterEach(() => {
   dispose = undefined;
   document.body.replaceChildren();
 });
-function mount(view: unknown) {
+function mount(view: JSX.Element) {
   const host = document.createElement("div");
   document.body.append(host);
   dispose = render(() => view as never, host);

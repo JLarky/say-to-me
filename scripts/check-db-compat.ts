@@ -36,7 +36,7 @@ const DbIntegrityRow = arktype({ integrity_check: "string" });
 const DbMigrationRow = arktype({ hash: "string" });
 const DbTableInfoRow = arktype({ name: "string" });
 
-const requiredColumns: Record<string, string[]> = {
+const requiredColumns = {
   sessions: [
     "id",
     "created_at",
@@ -91,7 +91,7 @@ const requiredColumns: Record<string, string[]> = {
     "thumbnail_height",
     "created_at",
   ],
-};
+} satisfies Record<string, string[]>;
 
 try {
   copyFileSync(sourcePath, tempDbPath);

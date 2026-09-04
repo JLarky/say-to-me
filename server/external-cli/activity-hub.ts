@@ -3,6 +3,7 @@ import { createActivityHub, type ActivityListener } from "../activityHub.ts";
 import { withExternalCliItemHtml } from "../markdown/extra-markdown-html.ts";
 import { detectSessionBackend } from "../session-id.ts";
 
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Provider transcript parsers retain provider-specific item fields before rendering.
 export type ExternalCliActivityItem = { readonly timestamp?: number | null } & Record<
   string,
   unknown
@@ -111,8 +112,8 @@ export function createExternalCliActivityHub<TItem extends ExternalCliActivityIt
         onError: listener.onError,
       };
       const unsubscribe = activityHub.subscribe(sessionId, limitedListener);
-      void activityHub.snapshot(sessionId).then(limitedListener.onSnapshot, (caught: unknown) => {
-        const message = caught instanceof Error ? caught.message : String(caught);
+      void activityHub.snapshot(sessionId).then(limitedListener.onSnapshot, (cause: unknown) => {
+        const message = cause instanceof Error ? cause.message : String(cause);
         limitedListener.onError(message);
       });
       return unsubscribe;

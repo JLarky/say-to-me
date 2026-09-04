@@ -12,6 +12,9 @@ type ExecResult = {
   stderr: string;
 };
 
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Boo CLI JSON is external process output, narrowed to the optional session fields below.
+type BooSessionCandidate = Record<string, unknown>;
+
 export type BooSession = {
   attached?: boolean;
   idle_ms?: number;
@@ -157,7 +160,7 @@ function defaultLauncherFor(agent: BooAgentKind): BooLauncher {
 
 function isBooSession(value: unknown): value is BooSession {
   if (typeof value !== "object" || value == null) return false;
-  const candidate = value as Record<string, unknown>;
+  const candidate = value as BooSessionCandidate;
   return typeof candidate.name === "string";
 }
 

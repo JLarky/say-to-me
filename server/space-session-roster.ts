@@ -53,14 +53,16 @@ export type SpaceRosterSession = {
   cachedActivityStatus: string | null;
   timerSummary: string | null;
 };
+type SessionWorkspace = { path: string | null; label: string | null };
+type DerivedSpaceRosterStatus = Pick<SpaceRosterSession, "rosterStatus" | "rosterStatusLabel">;
 
-const rosterStatusOrder: Record<SpaceRosterStatusTone, number> = {
+const rosterStatusOrder = {
   error: 0,
   attention: 1,
   working: 2,
   idle: 3,
   unknown: 4,
-};
+} satisfies Record<SpaceRosterStatusTone, number>;
 
 function sessionProviderLabel(session: typeof sessions.$inferSelect): string {
   const backend = detectSessionBackend(session.id);
@@ -93,10 +95,7 @@ function previewLine(text: string | null | undefined, max = 160): string | null 
   return `${compact.slice(0, max - 3)}...`;
 }
 
-function workspaceForSession(session: typeof sessions.$inferSelect): {
-  path: string | null;
-  label: string | null;
-} {
+function workspaceForSession(session: typeof sessions.$inferSelect): SessionWorkspace {
   const pathValue =
     session.cwd?.trim() ||
     session.opencodeDirectory?.trim() ||
@@ -118,7 +117,7 @@ export function deriveSpaceRosterStatus(input: {
   activityAt?: string | null;
   /** Clock snapshot from the Effect roster boundary — required, never Date.now(). */
   nowMs: number;
-}): { rosterStatus: SpaceRosterStatusTone; rosterStatusLabel: string } {
+}): DerivedSpaceRosterStatus {
   const delivery = input.latestDeliveryStatus?.toLowerCase() ?? "";
   if (delivery === "failed" || input.latestDeliveryError?.trim()) {
     return { rosterStatus: "error", rosterStatusLabel: "ERROR" };
@@ -479,10 +478,20 @@ export function buildSpaceRosterSession(
     latestSayMessage ||
     (latest.deliveryStatus === "failed" ? "Latest Say delivery failed" : null);
 
-  return {
+  const instanceIds: Pick<SpaceRosterSession, "id" | "t3InstanceId" | "paseoInstanceId"> = {
     id: session.id,
-    ...(session.t3InstanceId ? { t3InstanceId: session.t3InstanceId } : {}),
-    ...(session.paseoInstanceId ? { paseoInstanceId: session.paseoInstanceId } : {}),
+  };
+  if (session.t3InstanceId) instanceIds.t3InstanceId = session.t3InstanceId;
+  if (session.paseoInstanceId) instanceIds.paseoInstanceId = session.paseoInstanceId;
+  const context: Pick<SpaceRosterSession, "repoId" | "worktree" | "worktreeId"> = {};
+  if (options.context) {
+    context.repoId = options.context.repoId;
+    context.worktree = options.context.worktree;
+    context.worktreeId = options.context.worktreeId;
+  }
+
+  return {
+    ...instanceIds,
     title,
     agent: isJarvis ? "Jarvis" : cachedInfo?.agent?.trim() || backendProvider,
     provider: backendProvider,
@@ -496,13 +505,7 @@ export function buildSpaceRosterSession(
       session.state === "jarvis"
         ? session.state
         : undefined,
-    ...(options.context
-      ? {
-          repoId: options.context.repoId,
-          worktree: options.context.worktree,
-          worktreeId: options.context.worktreeId,
-        }
-      : {}),
+    ...context,
     archived: session.state === "archived",
     rosterStatus: derived.rosterStatus,
     rosterStatusLabel: derived.rosterStatusLabel,

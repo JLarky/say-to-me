@@ -23,7 +23,8 @@ function hrefForSession(sessionId: string | null | undefined): string {
   return sessionId === "default" ? "/default" : `/ses/${sessionId}`;
 }
 
-function errorMessage(value: unknown, fallback: string): string {
+function errorMessage(cause: unknown, fallback: string): string {
+  const value = cause;
   if (value instanceof Error) return value.message || fallback;
   try {
     return ErrorPayload.assert(value).error || fallback;

@@ -1,5 +1,6 @@
 import { createComponent, onCleanup as onStandardCleanup } from "solid-js";
 import { render } from "solid-js/web";
+import type { JsonValue } from "@say-to-me/runtime-validation";
 // @ts-expect-error -- Solid omits declarations for the direct browser runtime.
 import { createRenderEffect, createRoot, createSignal, onCleanup } from "solid-js/dist/solid.js";
 import { Widget } from "./components/Widget.tsx";
@@ -100,7 +101,7 @@ function timersUrl(attributes: VoiceWidgetAttributes): string {
 }
 
 function parsePayload(
-  raw: unknown,
+  raw: JsonValue,
 ): { messages: ReadonlyArray<unknown>; revision?: unknown } | null {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
   const value = raw as { messages?: unknown; revision?: unknown };
@@ -109,10 +110,10 @@ function parsePayload(
     : null;
 }
 
-function parseSsePayload(raw: string): unknown {
+function parseSsePayload(raw: string): JsonValue {
   // SSE payloads are parsed only at the transport boundary and validated immediately by parsePayload.
   // eslint-disable-next-line no-restricted-properties
-  return JSON.parse(raw) as unknown;
+  return JSON.parse(raw);
 }
 
 function timerRelativeLabel(nextFireAt: number, now: number): string {
@@ -757,7 +758,7 @@ function createOwnedWidget(props: VoiceWidgetProps): HTMLElement {
       setSessionState("unavailable");
       return;
     }
-    const apply = (raw: unknown) => {
+    const apply = (raw: JsonValue) => {
       const payload = parsePayload(raw);
       if (!payload || cancelled) return;
       const decision = decideVoiceWidgetRevision(revision, payload.revision);

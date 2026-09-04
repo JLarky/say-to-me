@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import type { JsonValue } from "@say-to-me/runtime-validation";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { buildSessionMessageCommand } from "./message-command.ts";
 import { SPELLED_NUMBER_WORDS_ERROR } from "./validation.ts";
@@ -7,11 +8,11 @@ const sourceSessionId = "ses_12345678901234567890123456";
 const targetSessionId = "ses_abcdef012345ABCDEFGHJKLMNO";
 const voiceSessionId = "vo_shopping-notes";
 
-async function build(body: unknown, rawSessionId = sourceSessionId) {
+async function build(body: JsonValue, rawSessionId = sourceSessionId) {
   return Effect.runPromise(buildSessionMessageCommand({ body, rawSessionId }));
 }
 
-async function fail(body: unknown, rawSessionId = sourceSessionId) {
+async function fail(body: JsonValue, rawSessionId = sourceSessionId) {
   return Effect.runPromise(Effect.flip(buildSessionMessageCommand({ body, rawSessionId })));
 }
 

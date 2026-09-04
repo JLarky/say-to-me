@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
+import { type as arktype } from "arktype";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { readMigrationFiles } from "drizzle-orm/migrator";
 import { dbDir, dbPath, root } from "../config.ts";
@@ -108,12 +109,14 @@ export function wipeTestDatabase(): void {
   drizzleDb.insert(sessions).values({ id: "default" }).onConflictDoNothing().run();
 }
 
+const SqliteTableInfoColumn = arktype({ name: "string" });
+
 function repairDismissedAtMigrationJournal() {
   const notificationColumns = drizzleSqlite.prepare("PRAGMA table_info(notifications)").all();
-  const hasDismissedAt = notificationColumns.some(
-    (column) =>
-      column && typeof column === "object" && "name" in column && column.name === "dismissed_at",
-  );
+  const hasDismissedAt = notificationColumns.some((column) => {
+    const parsed = SqliteTableInfoColumn(column);
+    return !(parsed instanceof arktype.errors) && parsed.name === "dismissed_at";
+  });
   if (!hasDismissedAt) return;
 
   const migration = readMigrationFiles({ migrationsFolder }).find((file) =>

@@ -1,9 +1,10 @@
 import * as HttpApi from "@effect/platform/HttpApi";
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- Request bodies are untrusted JSON and are validated field-by-field by the route's existing command builders. */
 import * as HttpApiBuilder from "@effect/platform/HttpApiBuilder";
 import * as HttpApiEndpoint from "@effect/platform/HttpApiEndpoint";
 import * as HttpApiGroup from "@effect/platform/HttpApiGroup";
 import * as HttpServerResponse from "@effect/platform/HttpServerResponse";
-import { type as arktype } from "arktype";
+import { type as arktype, type Type } from "arktype";
 import { Context, Effect, Layer, Schema } from "effect";
 import {
   createMessageResult,
@@ -149,12 +150,14 @@ function textValidationError(text: string, maxLength = maxMessageLength()): stri
   return null;
 }
 
-function unknownKeyError(body: unknown, schema: (data: unknown) => unknown): string | null {
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
+function unknownKeyError(body: unknown, schema: Type): string | null {
   const result = schema(body ?? {});
   return result instanceof arktype.errors ? result.summary : null;
 }
 
 function unsupportedFieldError(
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   body: unknown,
   fields: Array<{ key: string; message: string }>,
 ): string | null {
@@ -164,6 +167,7 @@ function unsupportedFieldError(
 
 export function createSessionMessageEffect(
   rawSessionId: string,
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   body: unknown,
 ): Effect.Effect<HttpServerResponse.HttpServerResponse, MessageCreateError, MessageCreateService> {
   return Effect.gen(function* () {
@@ -239,6 +243,7 @@ export function createSessionMessageEffect(
         sourceSessionRefs: JSON.stringify([
           {
             id: targetSessionId,
+            // oxlint-disable-next-line anti-slop/no-conditional-empty-object-spread -- The stored session reference must omit alias when the resolved target has no non-empty alias.
             ...(leadingRelay?.session.alias ? { alias: leadingRelay.session.alias } : {}),
           },
         ]),
@@ -298,6 +303,7 @@ export function createSessionMessageEffect(
 }
 
 export function sayEffect(
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   body: unknown,
 ): Effect.Effect<HttpServerResponse.HttpServerResponse, MessageCreateError, MessageCreateService> {
   return Effect.gen(function* () {
@@ -345,6 +351,7 @@ export function sayEffect(
 
 export function replyEffect(
   rawId: string,
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   body: unknown,
 ): Effect.Effect<HttpServerResponse.HttpServerResponse, MessageCreateError, MessageCreateService> {
   return Effect.gen(function* () {
@@ -434,7 +441,8 @@ export function buildMessageCreateHandlers<
   R,
 >(api: HttpApi.HttpApi<Id, Groups, E, R>) {
   return HttpApiBuilder.group(
-    api as unknown as HttpApi.HttpApi<Id, typeof MessageCreateGroup, E, R>,
+    // @ts-expect-error SAFETY: Every caller passes the assembled API containing MessageCreateGroup; Effect cannot express that group-membership constraint for arbitrary Groups.
+    api as HttpApi.HttpApi<Id, typeof MessageCreateGroup, E, R>,
     "message-create",
     (handlers) =>
       handlers

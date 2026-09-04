@@ -42,6 +42,8 @@ describe("Paseo chat inbound message persistence", () => {
   it("keeps the configured non-pinned window and preserves pinned rows", async () => {
     ensureSession(sessionId);
     const first = await importMessage("paseo-1", "pinned backlog row");
+    // SAFETY: importMessage's return fixture/schema is controlled by this test file;
+    // it always resolves with a body of { message: { id: number } }.
     const firstBody = first.body as { message: { id: number } };
     setMessagePinned(firstBody.message.id, true);
     for (let index = 2; index <= 101; index++) {

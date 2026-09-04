@@ -22,6 +22,9 @@ import {
   updateSessionState,
 } from "../sessions.ts";
 import { publicRouteErrorResponse } from "./route-errors.ts";
+
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- The effect route accepts untrusted JSON and validates each supported field below.
+type SessionUpdatePayload = Record<string, unknown>;
 import { resolveDashboardPlacement } from "../dashboard-placement.ts";
 import { toSpacesError } from "../spaces.ts";
 import { openApiDocs } from "./openapi-docs.ts";
@@ -193,12 +196,12 @@ export function listSessionsEffect({
 
 export function updateSessionEffect(
   rawSessionId: string,
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   payload: unknown,
 ): Effect.Effect<SessionUpdated, SessionValidationError, SessionMutationService> {
   return Effect.gen(function* () {
     const sessionId = normalizeSessionId(rawSessionId);
-    const record =
-      payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
+    const record = payload && typeof payload === "object" ? (payload as SessionUpdatePayload) : {};
     const hasState = "state" in record;
     const hasCwd = "cwd" in record;
     const hasAlias = "alias" in record;
@@ -278,6 +281,7 @@ export function updateSessionEffect(
 
 export function updateOpenCodeTitleEffect(
   rawSessionId: string,
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   payload: unknown,
 ): Effect.Effect<
   SessionUpdated,
@@ -494,7 +498,8 @@ export function buildSessionsHandlers<
   R,
 >(api: HttpApi.HttpApi<Id, Groups, E, R>) {
   return HttpApiBuilder.group(
-    api as unknown as HttpApi.HttpApi<Id, typeof SessionsGroup, E, R>,
+    // @ts-expect-error SAFETY: Every caller passes the assembled API containing SessionsGroup; Effect cannot express that group-membership constraint for arbitrary Groups.
+    api as HttpApi.HttpApi<Id, typeof SessionsGroup, E, R>,
     "sessions",
     (handlers) =>
       handlers

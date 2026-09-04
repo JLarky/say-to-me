@@ -17,6 +17,12 @@ import {
   WorkerIdentity,
 } from "./workflow.ts";
 
+type RecordingEffects = {
+  layer: Layer.Layer<DeliveryEffectsService>;
+  broadcasts: string[];
+  idleWatches: number[];
+};
+
 function inMemoryMessageStore(
   seed: DeliveryMessage[],
   { laterAgentReply = false }: { laterAgentReply?: boolean } = {},
@@ -53,11 +59,7 @@ function inMemoryMessageStore(
   return { layer: Layer.succeed(MessageStore, service), get: (id) => rows.get(id) };
 }
 
-function recordingEffects(): {
-  layer: Layer.Layer<DeliveryEffectsService>;
-  broadcasts: string[];
-  idleWatches: number[];
-} {
+function recordingEffects(): RecordingEffects {
   const broadcasts: string[] = [];
   const idleWatches: number[] = [];
   const service: DeliveryEffectsService = {

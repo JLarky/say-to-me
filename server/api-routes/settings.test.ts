@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync } from "node:fs";
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- Settings API tests intentionally send flexible JSON fixture payloads. */
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Cause, Effect, Exit } from "effect";
@@ -21,13 +22,14 @@ const {
 } = await import("../settings.ts");
 
 async function settingsRequest(method = "GET", body?: Record<string, unknown>) {
-  return dispatchEffectApiRequest(
-    new Request("http://say.local/api/settings", {
-      method,
-      headers: { "content-type": "application/json" },
-      ...(method === "PATCH" ? { body: JSON.stringify(body ?? {}) } : {}),
-    }),
-  );
+  const init: RequestInit = {
+    method,
+    headers: { "content-type": "application/json" },
+  };
+  if (method === "PATCH") {
+    init.body = JSON.stringify(body ?? {});
+  }
+  return dispatchEffectApiRequest(new Request("http://say.local/api/settings", init));
 }
 
 describe("Settings API", () => {

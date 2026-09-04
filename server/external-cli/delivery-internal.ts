@@ -1,4 +1,5 @@
 import { internalApiToken } from "../claude/internal-api-token.ts";
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- Internal worker request bodies are validated field-by-field before actions run. */
 
 type JsonRecord = Record<string, unknown>;
 
@@ -47,6 +48,7 @@ export type ExternalCliDeliveryInternalConfig<TLease extends ExternalCliDelivery
   renewDeliveryJobFromWorker: (job: TLease) => Promise<TLease | null>;
 };
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Internal response helper serializes its caller-owned payload without inspection.
 function json(body: unknown, init: ResponseInit = {}): Response {
   const headers = new Headers(init.headers);
   headers.set("content-type", "application/json");

@@ -22,7 +22,10 @@ const {
   worktrees,
 } = await import("../db/drizzle-schema.ts");
 
-async function action(spaceId: string, payload: Record<string, unknown>) {
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- These integration fixtures intentionally preserve arbitrary API response fields while asserting selected space data.
+type SpaceApiFixture = Record<string, unknown>;
+
+async function action(spaceId: string, payload: SpaceApiFixture) {
   return dispatchEffectApiRequest(
     new Request(`http://say.local/api/spaces/${spaceId}/action`, {
       method: "POST",
@@ -439,7 +442,7 @@ describe("Spaces API regressions", () => {
     });
     expect(reattachResponse?.status).toBe(200);
     const reattachedBody = (await reattachResponse!.json()) as {
-      state: { spaces: Array<{ id: string; repos: Array<Record<string, unknown>> }> };
+      state: { spaces: Array<{ id: string; repos: Array<SpaceApiFixture> }> };
     };
     const reattachedRepo = reattachedBody.state.spaces
       .find((space) => space.id === spaceId)
@@ -513,7 +516,7 @@ describe("Spaces API regressions", () => {
       state: {
         spaces: Array<{
           id: string;
-          sessions: Array<Record<string, unknown>>;
+          sessions: Array<SpaceApiFixture>;
         }>;
       };
     };
@@ -579,7 +582,7 @@ describe("Spaces API regressions", () => {
       state: {
         spaces: Array<{
           id: string;
-          sessions: Array<Record<string, unknown>>;
+          sessions: Array<SpaceApiFixture>;
         }>;
       };
     };

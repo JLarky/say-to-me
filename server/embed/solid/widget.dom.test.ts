@@ -111,7 +111,8 @@ describe("complete say-to-me-widget", () => {
           { status: 200, headers: { "content-type": "application/json" } },
         ),
     );
-    globalThis.EventSource = FakeEventSource as unknown as typeof EventSource;
+    // @ts-expect-error SAFETY: FakeEventSource is this DOM test's controlled EventSource replacement.
+    globalThis.EventSource = FakeEventSource as typeof EventSource;
     const parks: Event[] = [];
     document.addEventListener(EMBED_WIDGET_PARK_SESSION_EVENT, (event) => parks.push(event));
     const host = mount();
@@ -162,7 +163,8 @@ describe("complete say-to-me-widget", () => {
           { status: 200, headers: { "content-type": "application/json" } },
         ),
     );
-    globalThis.EventSource = FakeEventSource as unknown as typeof EventSource;
+    // @ts-expect-error SAFETY: FakeEventSource is this DOM test's controlled EventSource replacement.
+    globalThis.EventSource = FakeEventSource as typeof EventSource;
     const usageEvents: CustomEvent[] = [];
     const onUsage = (event: Event) => usageEvents.push(event as CustomEvent);
     document.addEventListener("say-to-me-insert-usage-prompt", onUsage);
@@ -188,7 +190,8 @@ describe("complete say-to-me-widget", () => {
     originalFetch = globalThis.fetch;
     originalEventSource = globalThis.EventSource;
     globalThis.fetch = vi.fn(async () => new Response(JSON.stringify(payload(2)), { status: 200 }));
-    globalThis.EventSource = FakeEventSource as unknown as typeof EventSource;
+    // @ts-expect-error SAFETY: FakeEventSource is this DOM test's controlled EventSource replacement.
+    globalThis.EventSource = FakeEventSource as typeof EventSource;
     const host = mount();
     await flush();
     await flush();
@@ -267,7 +270,8 @@ describe("complete say-to-me-widget", () => {
           { status: 200 },
         ),
     );
-    globalThis.EventSource = FakeEventSource as unknown as typeof EventSource;
+    // @ts-expect-error SAFETY: FakeEventSource is this DOM test's controlled EventSource replacement.
+    globalThis.EventSource = FakeEventSource as typeof EventSource;
     const host = mount();
     await flush();
     await flush();
@@ -403,7 +407,8 @@ describe("complete say-to-me-widget", () => {
     }
     Object.defineProperty(window, "speechSynthesis", { configurable: true, value: speech });
     globalThis.SpeechSynthesisUtterance =
-      FakeUtterance as unknown as typeof SpeechSynthesisUtterance;
+      // SAFETY: FakeUtterance is this DOM test's controlled speech constructor.
+      FakeUtterance as typeof SpeechSynthesisUtterance;
     globalThis.fetch = vi.fn(
       async (input: RequestInfo | URL) =>
         new Response(
@@ -413,7 +418,8 @@ describe("complete say-to-me-widget", () => {
           { status: 200 },
         ),
     );
-    globalThis.EventSource = FakeEventSource as unknown as typeof EventSource;
+    // @ts-expect-error SAFETY: FakeEventSource is this DOM test's controlled EventSource replacement.
+    globalThis.EventSource = FakeEventSource as typeof EventSource;
     const events: string[] = [];
     document.addEventListener("say-to-me-speech-started", () => events.push("started"));
     document.addEventListener("say-to-me-speech-ended", () => events.push("ended"));

@@ -29,6 +29,7 @@ function openCodeSession(): Session {
   return { ...session("opencode"), id: "ses_1ff836cba5b7W2IE8852hd1wwV" };
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Test helper transparently serializes controlled fixture JSON.
 function response(body: unknown, ok = true): Response {
   return new Response(JSON.stringify(body), {
     status: ok ? 200 : 400,

@@ -65,7 +65,8 @@ export async function discoverRepository(
   }
   const checkouts: GitCheckout[] = [];
   const porcelain = await git(rootPath, ["worktree", "list", "--porcelain"]);
-  let current: { path?: string; branch?: string } = {};
+  type WorktreeRecord = { path?: string; branch?: string };
+  let current: WorktreeRecord = {};
   const flush = async () => {
     if (!current.path) return;
     const checkoutPath = await realpath(current.path).catch(() => null);

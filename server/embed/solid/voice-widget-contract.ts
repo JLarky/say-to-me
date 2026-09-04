@@ -1,4 +1,5 @@
 /** Host Contract v2 for the complete `<say-to-me-widget>` element. */
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- The embed contract preserves provider-defined message payload fields for progressive UI projection. */
 
 import {
   EMBED_WIDGET_PARK_SESSION_EVENT,
@@ -44,6 +45,14 @@ export type VoiceWidgetAttributes = {
   readonly "timers-base-url"?: string;
 };
 
+type MutableVoiceWidgetAttributes = {
+  "session-id": string;
+  "notes-base-url": string;
+  "ui-base-url": string;
+  "storage-key": string;
+  "timers-base-url"?: string;
+};
+
 export type VoiceWidgetAttributeInput = Readonly<
   Partial<
     Record<
@@ -70,13 +79,7 @@ export function normalizeVoiceWidgetAttributes(
 ): VoiceWidgetAttributes {
   const sessionId = requireAttribute(input, "session-id");
   const notesBaseUrl = requireAttribute(input, "notes-base-url");
-  const result: {
-    "session-id": string;
-    "notes-base-url": string;
-    "ui-base-url": string;
-    "storage-key": string;
-    "timers-base-url"?: string;
-  } = {
+  const result: MutableVoiceWidgetAttributes = {
     "session-id": sessionId,
     "notes-base-url": notesBaseUrl,
     "ui-base-url":
@@ -109,11 +112,13 @@ export type VoiceWidgetEventDetail =
 
 export type VoiceWidgetEventType = VoiceWidgetEventDetail["type"];
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function hasBase<Type extends string, Version extends number>(
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   value: unknown,
   version: Version,
   type: Type,
@@ -126,6 +131,7 @@ function hasBase<Type extends string, Version extends number>(
   );
 }
 
+// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
 function validSessionId(value: unknown, expectedSessionId?: string): value is string {
   if (typeof value !== "string" || !value.trim()) return false;
   return expectedSessionId === undefined || value === expectedSessionId;
@@ -133,6 +139,7 @@ function validSessionId(value: unknown, expectedSessionId?: string): value is st
 
 /** Strictly parse a v1 detail and, when supplied, bind session actions to one host session. */
 export function parseVoiceWidgetEventDetail(
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   detail: unknown,
   expectedSessionId?: string,
 ): VoiceWidgetEventDetail | null {

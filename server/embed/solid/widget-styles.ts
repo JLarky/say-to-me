@@ -95,6 +95,7 @@ say-to-me-widget :is(.stm-id-btn, .stm-park-btn):focus-visible {
 
 /** Ensure exactly one stylesheet node and refresh it across HMR re-registration. */
 export function ensureWidgetStylesheet(
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Environment guard: detects whether a DOM `document` global exists (SSR/Node safety).
   doc: Document | null | undefined = typeof document !== "undefined" ? document : undefined,
 ): HTMLStyleElement | null {
   if (!doc?.head) return null;

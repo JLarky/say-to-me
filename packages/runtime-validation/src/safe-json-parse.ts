@@ -1,15 +1,26 @@
 import { type as arktype } from "arktype";
 
+// oxlint-disable anti-slop/no-unknown-parameters -- ArkType schemas must accept untrusted JSON before validation.
 export type JsonSchema<T> = ((data: unknown) => T | arktype.errors) & {
   assert: (data: unknown) => T;
 };
+// oxlint-enable anti-slop/no-unknown-parameters
+
+/** A value which JSON.parse can produce. */
+export type JsonValue =
+  | boolean
+  | null
+  | number
+  | string
+  | readonly JsonValue[]
+  | { readonly [key: string]: JsonValue };
 
 export type SafeJsonParseResult<T> =
   | { ok: true; value: T }
   | { ok: false; error: Error | arktype.errors };
 
 /** Only place in the app allowed to call JSON.parse directly (see vite.config.ts lint rules). */
-function parseJsonText(raw: string): unknown {
+function parseJsonText(raw: string): JsonValue {
   return JSON.parse(raw);
 }
 

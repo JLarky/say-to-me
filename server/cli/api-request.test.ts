@@ -20,6 +20,7 @@ import {
   resolveCliRequest,
   resolveOperation,
   resolveRequestUrl,
+  type SameOriginFetch,
   writeText,
 } from "./api-request.ts";
 
@@ -362,8 +363,9 @@ describe("headers and body helpers", () => {
 
 describe("resolveCliRequest", () => {
   it("loads openapi.json for operation ids", async () => {
-    const fetchImpl = vi.fn(async (input: URL | RequestInfo) => {
+    const fetchImpl = vi.fn<SameOriginFetch>(async (input: URL | RequestInfo) => {
       const href =
+        // oxlint-disable-next-line anti-slop/no-runtime-typeof -- input is the declared `URL | RequestInfo` (RequestInfo = Request | string) union; typeof narrows the already-typed union.
         input instanceof URL ? input.href : typeof input === "string" ? input : input.url;
       if (href.endsWith("/openapi.json")) {
         return new Response(
@@ -383,7 +385,7 @@ describe("resolveCliRequest", () => {
         baseUrl: "https://say.local:1355",
         target: { kind: "operation", operationId: "health.getHealth" },
         params: {},
-        fetchImpl: fetchImpl as unknown as typeof fetch,
+        fetchImpl,
       }),
     ).resolves.toEqual({ method: "GET", path: "/api/health" });
   });
@@ -391,23 +393,25 @@ describe("resolveCliRequest", () => {
 
 describe("executeRawApiRequest", () => {
   it("returns status, ok, and body from fetch", async () => {
-    const fetchImpl = vi.fn(async () => new Response('{"ok":true}', { status: 200 }));
+    const fetchImpl = vi.fn<SameOriginFetch>(
+      async () => new Response('{"ok":true}', { status: 200 }),
+    );
     await expect(
       executeRawApiRequest({
         baseUrl: "https://say.local:1355",
         method: "GET",
         path: "/api/health",
-        fetchImpl: fetchImpl as unknown as typeof fetch,
+        fetchImpl,
       }),
     ).resolves.toEqual({ status: 200, ok: true, body: '{"ok":true}' });
     expect(fetchImpl).toHaveBeenCalledOnce();
-    const call = fetchImpl.mock.calls[0] as unknown as [URL, RequestInit];
+    const call = fetchImpl.mock.calls[0]!;
     expect(call[0].href).toBe("https://say.local:1355/api/health");
     expect(call[1].method).toBe("GET");
   });
 
   it("forwards headers and request body", async () => {
-    const fetchImpl = vi.fn(async () => new Response('{"id":1}', { status: 200 }));
+    const fetchImpl = vi.fn<SameOriginFetch>(async () => new Response('{"id":1}', { status: 200 }));
     const headers = buildRequestHeaders([], '{"author":"agent","text":"hi"}');
     await executeRawApiRequest({
       baseUrl: "https://say.local:1355",
@@ -415,16 +419,16 @@ describe("executeRawApiRequest", () => {
       path: "/api/sessions/ses_ff03000e647805ix8IqxyDL5i7/messages",
       headers,
       body: '{"author":"agent","text":"hi"}',
-      fetchImpl: fetchImpl as unknown as typeof fetch,
+      fetchImpl,
     });
-    const call = fetchImpl.mock.calls[0] as unknown as [URL, RequestInit];
+    const call = fetchImpl.mock.calls[0]!;
     expect(call[1].method).toBe("POST");
     expect(call[1].body).toBe('{"author":"agent","text":"hi"}');
     expect((call[1].headers as Headers).get("content-type")).toBe("application/json");
   });
 
   it("preserves non-2xx bodies", async () => {
-    const fetchImpl = vi.fn(
+    const fetchImpl = vi.fn<SameOriginFetch>(
       async () => new Response('{"status":404,"error":"Not found."}', { status: 404 }),
     );
     await expect(
@@ -432,7 +436,7 @@ describe("executeRawApiRequest", () => {
         baseUrl: "https://say.local:1355",
         method: "GET",
         path: "/api/missing",
-        fetchImpl: fetchImpl as unknown as typeof fetch,
+        fetchImpl,
       }),
     ).resolves.toEqual({
       status: 404,
@@ -442,14 +446,16 @@ describe("executeRawApiRequest", () => {
   });
 
   it("uses redirect: manual so fetch does not auto-follow", async () => {
-    const fetchImpl = vi.fn(async () => new Response('{"ok":true}', { status: 200 }));
+    const fetchImpl = vi.fn<SameOriginFetch>(
+      async () => new Response('{"ok":true}', { status: 200 }),
+    );
     await executeRawApiRequest({
       baseUrl: "https://say.local:1355",
       method: "GET",
       path: "/api/health",
-      fetchImpl: fetchImpl as unknown as typeof fetch,
+      fetchImpl,
     });
-    const call = fetchImpl.mock.calls[0] as unknown as [URL, RequestInit];
+    const call = fetchImpl.mock.calls[0]!;
     expect(call[1].redirect).toBe("manual");
   });
 });
@@ -457,7 +463,7 @@ describe("executeRawApiRequest", () => {
 describe("fetchSameOrigin", () => {
   it("refuses cross-origin redirects so custom headers are not replayed", async () => {
     const secret = new Headers({ "X-Secret": "s3cr3t" });
-    const fetchImpl = vi.fn(async () => {
+    const fetchImpl = vi.fn<SameOriginFetch>(async () => {
       return new Response(null, {
         status: 302,
         headers: { Location: "http://127.0.0.1:9/steal" },
@@ -468,12 +474,12 @@ describe("fetchSameOrigin", () => {
       fetchSameOrigin(
         new URL("https://say.local:1355/api/health"),
         { method: "GET", headers: secret },
-        fetchImpl as unknown as typeof fetch,
+        fetchImpl,
       ),
     ).rejects.toThrow(/cross-origin redirect/i);
 
     expect(fetchImpl).toHaveBeenCalledOnce();
-    const call = fetchImpl.mock.calls[0] as unknown as [URL, RequestInit];
+    const call = fetchImpl.mock.calls[0]!;
     expect(call[0].href).toBe("https://say.local:1355/api/health");
     expect(call[1].redirect).toBe("manual");
     // Headers only went to the original same-origin request, never to 127.0.0.1:9.
@@ -482,8 +488,9 @@ describe("fetchSameOrigin", () => {
 
   it("follows same-origin redirects while keeping headers on that origin", async () => {
     const secret = new Headers({ "X-Secret": "s3cr3t" });
-    const fetchImpl = vi.fn(async (input: URL | RequestInfo) => {
+    const fetchImpl = vi.fn<SameOriginFetch>(async (input: URL | RequestInfo) => {
       const href =
+        // oxlint-disable-next-line anti-slop/no-runtime-typeof -- input is the declared `URL | RequestInfo` (RequestInfo = Request | string) union; typeof narrows the already-typed union.
         input instanceof URL ? input.href : typeof input === "string" ? input : input.url;
       if (href.endsWith("/api/old")) {
         return new Response(null, {
@@ -497,13 +504,13 @@ describe("fetchSameOrigin", () => {
     const response = await fetchSameOrigin(
       new URL("https://say.local:1355/api/old"),
       { method: "GET", headers: secret },
-      fetchImpl as unknown as typeof fetch,
+      fetchImpl,
     );
     expect(response.status).toBe(200);
     expect(await response.text()).toBe('{"ok":true}');
     expect(fetchImpl).toHaveBeenCalledTimes(2);
 
-    const second = fetchImpl.mock.calls[1] as unknown as [URL, RequestInit];
+    const second = fetchImpl.mock.calls[1]!;
     expect(second[0].href).toBe("https://say.local:1355/api/health");
     expect((second[1].headers as Headers).get("X-Secret")).toBe("s3cr3t");
     expect(second[1].redirect).toBe("manual");
@@ -513,8 +520,9 @@ describe("fetchSameOrigin", () => {
     "preserves %s method and body across same-origin 302",
     async (method) => {
       const body = method === "DELETE" ? undefined : '{"name":"n"}';
-      const fetchImpl = vi.fn(async (input: URL | RequestInfo) => {
+      const fetchImpl = vi.fn<SameOriginFetch>(async (input: URL | RequestInfo) => {
         const href =
+          // oxlint-disable-next-line anti-slop/no-runtime-typeof -- input is the declared `URL | RequestInfo` (RequestInfo = Request | string) union; typeof narrows the already-typed union.
           input instanceof URL ? input.href : typeof input === "string" ? input : input.url;
         if (href.endsWith("/api/old")) {
           return new Response(null, {
@@ -528,13 +536,13 @@ describe("fetchSameOrigin", () => {
       const response = await fetchSameOrigin(
         new URL("https://say.local:1355/api/old"),
         { method, body, headers: new Headers({ "X-Secret": "s3cr3t" }) },
-        fetchImpl as unknown as typeof fetch,
+        fetchImpl,
       );
       expect(response.status).toBe(200);
       expect(fetchImpl).toHaveBeenCalledTimes(2);
 
-      const first = fetchImpl.mock.calls[0] as unknown as [URL, RequestInit];
-      const second = fetchImpl.mock.calls[1] as unknown as [URL, RequestInit];
+      const first = fetchImpl.mock.calls[0]!;
+      const second = fetchImpl.mock.calls[1]!;
       expect(first[1].method).toBe(method);
       expect(first[1].body).toBe(body);
       expect(second[0].href).toBe("https://say.local:1355/api/new");
@@ -546,8 +554,9 @@ describe("fetchSameOrigin", () => {
   );
 
   it("converts POST to GET with empty body on same-origin 303", async () => {
-    const fetchImpl = vi.fn(async (input: URL | RequestInfo) => {
+    const fetchImpl = vi.fn<SameOriginFetch>(async (input: URL | RequestInfo) => {
       const href =
+        // oxlint-disable-next-line anti-slop/no-runtime-typeof -- input is the declared `URL | RequestInfo` (RequestInfo = Request | string) union; typeof narrows the already-typed union.
         input instanceof URL ? input.href : typeof input === "string" ? input : input.url;
       if (href.endsWith("/api/old")) {
         return new Response(null, {
@@ -565,13 +574,13 @@ describe("fetchSameOrigin", () => {
         body: '{"author":"agent","text":"hi"}',
         headers: new Headers({ "X-Secret": "s3cr3t" }),
       },
-      fetchImpl as unknown as typeof fetch,
+      fetchImpl,
     );
     expect(response.status).toBe(200);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
 
-    const first = fetchImpl.mock.calls[0] as unknown as [URL, RequestInit];
-    const second = fetchImpl.mock.calls[1] as unknown as [URL, RequestInit];
+    const first = fetchImpl.mock.calls[0]!;
+    const second = fetchImpl.mock.calls[1]!;
     expect(first[1].method).toBe("POST");
     expect(first[1].body).toBe('{"author":"agent","text":"hi"}');
     expect(second[0].href).toBe("https://say.local:1355/api/new");

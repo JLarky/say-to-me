@@ -30,12 +30,14 @@ const WAV_HEADER_BYTES = 44;
 export const IDLE_COMPLETION_DING_DURATION_MS = Math.round(IDLE_COMPLETION_DING.duration * 1000);
 
 function audioContextConstructor(): typeof AudioContext | undefined {
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Environment guard: detects whether a browser `window` global exists (SSR/Node safety).
   if (typeof window === "undefined") return undefined;
   const extendedWindow = window as Window & { webkitAudioContext?: typeof AudioContext };
   return window.AudioContext ?? extendedWindow.webkitAudioContext;
 }
 
 function navigatorAutoplayPolicy(): ((type: string) => string) | undefined {
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Environment guard: detects whether a browser `navigator` global exists (SSR/Node safety).
   if (typeof navigator === "undefined") return undefined;
   const extendedNavigator = navigator as Navigator & {
     getAutoplayPolicy?: (type: string) => string;
@@ -186,6 +188,7 @@ const audioCache = new WeakMap<Ding, HTMLAudioElement>();
 let sharedContext: AudioContext | null = null;
 
 function prepareAudio(ding: Ding): HTMLAudioElement | null {
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Environment guard: detects whether the browser `Audio` constructor exists (SSR/Node safety).
   if (typeof Audio === "undefined") return null;
   const cached = audioCache.get(ding);
   if (cached) return cached;

@@ -303,6 +303,7 @@ export function retryDeliveryEffect(
 
 export function attachMessageSessionEffect(
   rawId: string,
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   payload: unknown,
 ): Effect.Effect<
   MessageControlResult & { sessionId: string | null },
@@ -345,6 +346,7 @@ export function attachMessageSessionEffect(
 
 export function updateMessageStatusEffect(
   rawId: string,
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   payload: unknown,
 ): Effect.Effect<MessageControlResult, MessageControlError, MessageControlService> {
   return Effect.gen(function* () {
@@ -519,7 +521,8 @@ export function buildMessageControlsHandlers<
   R,
 >(api: HttpApi.HttpApi<Id, Groups, E, R>) {
   return HttpApiBuilder.group(
-    api as unknown as HttpApi.HttpApi<Id, typeof MessageControlsGroup, E, R>,
+    // @ts-expect-error SAFETY: Every caller passes the assembled API containing MessageControlsGroup; Effect cannot express that group-membership constraint for arbitrary Groups.
+    api as HttpApi.HttpApi<Id, typeof MessageControlsGroup, E, R>,
     "message-controls",
     (handlers) =>
       handlers

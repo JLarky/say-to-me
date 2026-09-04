@@ -1,4 +1,5 @@
-import { type as arktype } from "arktype";
+import { type as arktype, type Type } from "arktype";
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- Validation metadata stores ArkType error details without interpreting their arbitrary keys. */
 import { type Response } from "express";
 import { maxMessageLength, minMessageLength } from "./config.ts";
 
@@ -120,11 +121,7 @@ export const sessionMessageBodyKeys = arktype({
 });
 export const replyBodyKeys = arktype({ "text?": "unknown", "+": "reject" });
 
-export function rejectUnknownKeys(
-  body: unknown,
-  res: Response,
-  schema: (data: unknown) => unknown,
-): boolean {
+export function rejectUnknownKeys(body: unknown, res: Response, schema: Type): boolean {
   const result = schema(body ?? {});
   if (result instanceof arktype.errors) {
     res.status(400).json({ error: result.summary });
@@ -141,7 +138,7 @@ export function rejectFields(
     allowed,
   }: {
     unsupported: Array<{ key: string; message: string }>;
-    allowed: (data: unknown) => unknown;
+    allowed: Type;
   },
 ): boolean {
   return rejectUnsupportedFields(body, res, unsupported) || rejectUnknownKeys(body, res, allowed);

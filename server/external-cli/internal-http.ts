@@ -28,7 +28,8 @@ async function internalFetch(url: string, init: RequestInit): Promise<Response> 
         ...init,
         dispatcher: agent,
       } as Parameters<typeof undiciFetch>[1]);
-      return response as unknown as Response;
+      // @ts-expect-error SAFETY: Undici implements the Fetch Response contract returned by this local HTTPS adapter.
+      return response as Response;
     }
   }
   // Test plumbing only: production workers default to portless HTTPS.
@@ -40,9 +41,9 @@ export async function postInternalJson<T>(
   body: unknown,
   schema: JsonSchema<T>,
 ): Promise<T> {
-  const headers: Record<string, string> = { "content-type": "application/json" };
+  const headers = new Headers({ "content-type": "application/json" });
   const token = internalApiToken();
-  if (token) headers["x-say-to-me-internal-token"] = token;
+  if (token) headers.set("x-say-to-me-internal-token", token);
   const response = await internalFetch(`${internalBaseUrl()}${path}`, {
     method: "POST",
     headers,

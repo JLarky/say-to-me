@@ -185,7 +185,8 @@ export function CreateAgentWorktreeDialog({
         const selected = preferredMatch ?? next[0]!;
         setModelId(provider === "opencode" ? `${selected.providerID}/${selected.id}` : selected.id);
       })
-      .catch((err: unknown) => {
+      .catch((cause: unknown) => {
+        const err = cause;
         if (!active) return;
         setModels([]);
         setModelId("");

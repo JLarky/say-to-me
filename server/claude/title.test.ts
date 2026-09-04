@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
+import type { JsonValue } from "@say-to-me/runtime-validation";
 import { parseAiTitle } from "./title.ts";
 
-const line = (obj: unknown) => JSON.stringify(obj);
+const line = (obj: JsonValue) => JSON.stringify(obj);
 
 describe("parseAiTitle", () => {
   it("returns the aiTitle from an ai-title entry", () => {

@@ -33,7 +33,7 @@ export const noUnknownReturnsRule = defineRule({
     },
     messages: {
       unknownReturn:
-        "This function exposes `unknown` to its caller. Parse the value at its boundary and return a named domain type.",
+        "Parse untrusted output at this boundary and return a named validated type. If this is intentionally a transparent boundary adapter, keep `unknown` with a focused exemption; do not hide it with a cast or unconstrained generic.",
     },
   },
   createOnce(context) {

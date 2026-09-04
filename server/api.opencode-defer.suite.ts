@@ -17,6 +17,9 @@ import { opencodeStatusCache } from "./opencode/cache.ts";
 
 const sessionId = "ses_1dd864100ffes6uqv2NbJatAKt";
 
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Test request fixtures intentionally model arbitrary JSON accepted by the message endpoint.
+type UserMessageFixture = Record<string, unknown>;
+
 describe("say API: send-when-idle delivery", () => {
   let server: TestServer;
   let origin: string;
@@ -36,6 +39,7 @@ describe("say API: send-when-idle delivery", () => {
 
   function mockOpenCodeWithStatus(getStatus: () => string): ReturnType<typeof mockOpenCode> {
     return mockOpenCode((req, res) => {
+      // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Controlled test responder serializes fixture JSON without inspecting it.
       const respond = (payload: unknown) => {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(payload));
@@ -53,7 +57,7 @@ describe("say API: send-when-idle delivery", () => {
     });
   }
 
-  function postUserMessage(body: Record<string, unknown>): Promise<Response> {
+  function postUserMessage(body: UserMessageFixture): Promise<Response> {
     return fetch(`${origin}/api/sessions/${sessionId}/messages`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

@@ -33,7 +33,7 @@ export const noRuntimeTypeofRule = defineRule({
 		},
 		messages: {
 			runtimeTypeof:
-				"A `typeof` check narrows a representation without establishing its contract. Parse input at its I/O boundary, then branch on the domain value.",
+				"Parse untrusted input before inspecting its representation. If `typeof` is the declared union discriminator (including function or environment guards), keep it with a focused exemption; do not replace it with `instanceof Function` or property probing.",
 		},
 		schema: [
 			{

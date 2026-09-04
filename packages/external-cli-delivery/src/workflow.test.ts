@@ -20,6 +20,17 @@ const workflow = makeExternalCliDeliveryWorkflow("say-to-me/unit-external-cli", 
   failureMessage: "unit delivery failed.",
 });
 
+type InMemoryStore = {
+  layer: Layer.Layer<MessageStoreService>;
+  get: (id: number) => DeliveryMessage | undefined;
+};
+
+type RecordingEffects = {
+  layer: Layer.Layer<DeliveryEffectsService>;
+  replies: string[];
+  broadcasts: string[];
+};
+
 function userMessage(
   overrides: Partial<DeliveryMessage> & { id: number; sessionId: string; text: string },
 ): DeliveryMessage {
@@ -89,11 +100,7 @@ function inMemoryStore(seed: DeliveryMessage[]): {
   };
 }
 
-function recordingEffects(): {
-  layer: Layer.Layer<DeliveryEffectsService>;
-  replies: string[];
-  broadcasts: string[];
-} {
+function recordingEffects(): RecordingEffects {
   const replies: string[] = [];
   const broadcasts: string[] = [];
   const service: DeliveryEffectsService = {

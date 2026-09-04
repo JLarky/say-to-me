@@ -45,7 +45,7 @@ export const requireSafetyCommentForTypeAssertionRule = defineRule({
     },
     messages: {
       missingSafetyComment:
-        "This type assertion has no `SAFETY:` justification. State the checked invariant immediately before the assertion or its containing statement.",
+        "Validate untrusted values instead of asserting them. Use `SAFETY:` only for an invariant the program controls, and state why it holds immediately before the assertion; a comment does not make unchecked input safe.",
     },
   },
   createOnce(context) {

@@ -1,4 +1,5 @@
 import { createComponent } from "solid-js";
+/* oxlint-disable anti-slop/no-unsafe-dictionary-type -- Development gallery records arbitrary computed-style observations for diagnostics. */
 // @ts-expect-error -- Solid omits declarations for the direct browser runtime.
 import { createRoot as createBrowserSolidRoot } from "solid-js/dist/solid.js";
 import { render } from "solid-js/web";
@@ -126,7 +127,9 @@ export function galleryGeometryViolations(root: HTMLElement): GalleryGeometryVio
   return violations;
 }
 
-function section(title: string, description: string): { root: HTMLElement; grid: HTMLElement } {
+type GallerySection = { root: HTMLElement; grid: HTMLElement };
+
+function section(title: string, description: string): GallerySection {
   const root = document.createElement("section");
   root.className = "stm-gallery-section";
   root.append(heading("h2", title));
@@ -306,7 +309,8 @@ function installGalleryFixtureTransport(markdownHtml: string): void {
     }
   }
   (window as Window & typeof globalThis).EventSource =
-    GalleryEventSource as unknown as typeof EventSource;
+    // @ts-expect-error SAFETY: GalleryEventSource is the dev gallery's controlled browser EventSource replacement.
+    GalleryEventSource as typeof EventSource;
 }
 export function mountVoiceWidgetGallery(
   root: HTMLElement | null,

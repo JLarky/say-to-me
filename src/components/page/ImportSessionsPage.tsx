@@ -13,12 +13,12 @@ import { base64UrlDecode, importSessionsHref } from "../../utils.ts";
 
 type ImportProvider = "claude" | "codex" | "cursor" | "grok";
 
-const providerLabels: Record<ImportProvider, string> = {
+const providerLabels = {
   claude: "Claude",
   codex: "Codex",
   cursor: "Cursor",
   grok: "Grok",
-};
+} satisfies Record<ImportProvider, string>;
 
 const DiscoverableSessionSchema = type({
   sessionId: "string",
@@ -77,7 +77,8 @@ function sessionHref(sessionId: string): string {
   return `/ses/${sessionId}`;
 }
 
-function errorMessage(value: unknown, fallback: string): string {
+function errorMessage(cause: unknown, fallback: string): string {
+  const value = cause;
   if (value instanceof Error) return value.message || fallback;
   try {
     return ErrorPayload.assert(value).error || fallback;

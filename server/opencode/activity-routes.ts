@@ -1,3 +1,4 @@
+import { type as arktype } from "arktype";
 import { Deferred, Duration, Effect } from "effect";
 import { getOpenCodeActivityPreview, openCodeEventUrl } from "./activity.ts";
 import { createActivityHub } from "../activityHub.ts";
@@ -7,7 +8,13 @@ import { startSseHeartbeat, writeSseEvent } from "../sse/client.ts";
 import { createSseWebResponse } from "../sse/stream.ts";
 import { opencodeActivityStatusCache } from "./cache.ts";
 import { openCodeFetch } from "./http.ts";
-import { safeJsonParse, UnknownJson } from "@say-to-me/runtime-validation";
+import { safeJsonParse } from "@say-to-me/runtime-validation";
+
+const OpenCodeActivitySignal = arktype({
+  "properties?": {
+    "sessionID?": "string",
+  },
+});
 
 const openCodeActivityHub = createActivityHub({
   fetchSnapshot: (sessionId) => getOpenCodeActivityPreview(sessionId, 8),
@@ -36,16 +43,9 @@ const openCodeActivityHub = createActivityHub({
               ?.replace(/^data:\s*/, "");
             if (dataLine) {
               try {
-                const parsed = safeJsonParse(UnknownJson, dataLine);
-                const eventSessionId =
-                  parsed &&
-                  typeof parsed === "object" &&
-                  "properties" in parsed &&
-                  parsed.properties &&
-                  typeof parsed.properties === "object"
-                    ? (parsed.properties as { sessionID?: unknown }).sessionID
-                    : undefined;
-                if (typeof eventSessionId !== "string" || eventSessionId === sessionId) {
+                const parsed = safeJsonParse(OpenCodeActivitySignal, dataLine);
+                const eventSessionId = parsed?.properties?.sessionID;
+                if (eventSessionId === undefined || eventSessionId === sessionId) {
                   handlers.onSignal();
                 }
               } catch (error) {
@@ -75,9 +75,7 @@ export function inspectOpenCodeActivityRuntime(sessionId: string) {
 export async function getOpenCodeActivitySnapshot(sessionId: string) {
   const snapshot = await openCodeActivityHub.snapshot(sessionId);
   sessionRuntimeRegistry.updateActivitySnapshot(sessionId, snapshot);
-  if (typeof snapshot.status === "string") {
-    opencodeActivityStatusCache.set(sessionId, { status: snapshot.status, time: Date.now() });
-  }
+  opencodeActivityStatusCache.set(sessionId, { status: snapshot.status, time: Date.now() });
   return snapshot;
 }
 
@@ -102,14 +100,8 @@ export function waitForOpenCodeWorkingActivity(
           const unsubscribe = openCodeActivityHub.subscribe(sessionId, {
             onSnapshot: (snapshot) => {
               sessionRuntime.updateActivitySnapshot(snapshot);
-              const checkedAt = (snapshot.freshness as { checkedAt?: unknown } | undefined)
-                ?.checkedAt;
-              if (
-                typeof snapshot.status === "string" &&
-                workingActivityStatuses.has(snapshot.status) &&
-                typeof checkedAt === "number" &&
-                checkedAt >= deliveryStartedAt
-              ) {
+              const checkedAt = snapshot.freshness.checkedAt;
+              if (workingActivityStatuses.has(snapshot.status) && checkedAt >= deliveryStartedAt) {
                 finish(true);
               }
             },
@@ -154,8 +146,8 @@ export function createOpenCodeActivityEventsResponse(sessionId: string): Respons
           ),
       };
       const unsubscribe = openCodeActivityHub.subscribe(sessionId, listener);
-      void openCodeActivityHub.snapshot(sessionId).then(listener.onSnapshot, (caught: unknown) => {
-        const message = caught instanceof Error ? caught.message : String(caught);
+      void openCodeActivityHub.snapshot(sessionId).then(listener.onSnapshot, (cause: unknown) => {
+        const message = cause instanceof Error ? cause.message : String(cause);
         listener.onError(message);
       });
 

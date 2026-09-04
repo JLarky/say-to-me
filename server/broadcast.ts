@@ -95,7 +95,7 @@ export async function queuePayload(sessionId = "default", { forceRefresh = false
   }
   const externalCliActivity = await getExternalCliActivitySnapshot(sessionId, 8);
   const paseoUiUrls = paseoUiUrlsForSession(session);
-  return {
+  const payload = {
     revision: session.revision,
     messages: listMessages(sessionId),
     presence: listPresence(),
@@ -106,8 +106,8 @@ export async function queuePayload(sessionId = "default", { forceRefresh = false
     },
     sessions: listSessions(),
     lastNoteFirstLine: latestNoteFirstLine(sessionId),
-    ...(externalCliActivity ? { externalCliActivity } : {}),
   };
+  return externalCliActivity ? { ...payload, externalCliActivity } : payload;
 }
 
 export { sseSnapshotFrame };

@@ -327,6 +327,7 @@ export type DbJarvisCreateOperation = typeof DbJarvisCreateOperation.infer;
 export const DbCount = arktype({ count: "number" });
 export type DbCount = typeof DbCount.infer;
 
+// oxlint-disable anti-slop/no-unknown-parameters -- Raw database rows are validated at this boundary before use.
 export function validateDb<T>(
   schema: { assert: (data: unknown) => T },
   data: unknown,
@@ -340,3 +341,4 @@ export function validateDb<T>(
     );
   }
 }
+// oxlint-enable anti-slop/no-unknown-parameters

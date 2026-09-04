@@ -25,6 +25,7 @@ export function resetVoiceAudioQueue(): void {
   tail = Promise.resolve();
 }
 export function isVoiceSpeechActive(): boolean {
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Environment guard: detects whether a browser `window` global exists (SSR/Node safety).
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return false;
   return window.speechSynthesis.speaking || window.speechSynthesis.pending;
 }

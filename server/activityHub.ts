@@ -32,6 +32,7 @@ import { Duration, Effect, Fiber, PubSub, Queue, Ref, Stream } from "effect";
 export type ActivityPhase = "COLD" | "LIVE" | "HOT_IDLE" | "WARM_IDLE";
 
 /** A canonical snapshot is whatever the backend adapter returns. */
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Backend adapters own provider-specific snapshot fields; the hub only reads status.
 export type ActivitySnapshot = { status?: string | null } & Record<string, unknown>;
 
 type Broadcast<TSnapshot extends ActivitySnapshot> =
