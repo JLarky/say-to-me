@@ -814,14 +814,14 @@ export function deserializeMessage(
   };
 } {
   const { sessionRefs: _sessionRefs, ...rest } = message;
-  return {
+  const base = {
     ...rest,
     links: parseLinks(message.links),
     attachments,
     sessions: resolveMessageSessions(message, sessionIndex),
     ...extraMarkdownHtmlField(message.extraMarkdown),
-    ...(routineEvent ? { routineEvent } : {}),
   };
+  return routineEvent ? { ...base, routineEvent } : base;
 }
 
 function routineEventsByLastMessageIds(messageIds: number[]): Map<
