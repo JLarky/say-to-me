@@ -115,17 +115,29 @@ export function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export function sessionMessageRequestBody(pendingMessage: Message) {
-  return {
+type SessionMessageRequestBody = {
+  author: Message["author"];
+  text: string;
+  useCli: Message["useCli"];
+  clientMessageId: string;
+  forceOpencode?: boolean;
+  notifyOnCompletion?: boolean;
+  targetSessionId?: string;
+  images?: string[];
+};
+
+export function sessionMessageRequestBody(pendingMessage: Message): SessionMessageRequestBody {
+  const body: SessionMessageRequestBody = {
     author: pendingMessage.author,
     text: pendingMessage.text,
     useCli: pendingMessage.useCli,
     clientMessageId: String(pendingMessage.id),
-    ...(pendingMessage.forceOpencode ? { forceOpencode: true } : {}),
-    ...(typeof pendingMessage.notifyOnCompletion === "boolean"
-      ? { notifyOnCompletion: pendingMessage.notifyOnCompletion }
-      : {}),
-    ...(pendingMessage.targetSessionId ? { targetSessionId: pendingMessage.targetSessionId } : {}),
-    ...(pendingMessage.images ? { images: pendingMessage.images } : {}),
   };
+  if (pendingMessage.forceOpencode) body.forceOpencode = true;
+  if (typeof pendingMessage.notifyOnCompletion === "boolean") {
+    body.notifyOnCompletion = pendingMessage.notifyOnCompletion;
+  }
+  if (pendingMessage.targetSessionId) body.targetSessionId = pendingMessage.targetSessionId;
+  if (pendingMessage.images) body.images = pendingMessage.images;
+  return body;
 }
