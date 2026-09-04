@@ -56,15 +56,13 @@ export async function createProviderSession(
   }
 
   if (!modelID) throw new Error("Pick a model first.");
+  const baseBody = { provider, path, modelID };
+  const requestBody =
+    provider === "codex" && reasoningEffort ? { ...baseBody, reasoningEffort } : baseBody;
   const response = await fetch("/api/cli-sessions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      provider,
-      path,
-      modelID,
-      ...(provider === "codex" && reasoningEffort ? { reasoningEffort } : {}),
-    }),
+    body: JSON.stringify(requestBody),
   });
   if (!response.ok) throw await responseError(response, "Unable to create session.");
   return (await safeResponseJson(response, CliSessionPayload)).session.id;
