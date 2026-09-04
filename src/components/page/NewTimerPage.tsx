@@ -201,10 +201,10 @@ export function NewTimerPage() {
   const [searchParams] = useSearchParams();
   const requestedSessionId = searchParams.get("sessionId");
   const { sessions } = useSessions({ includeCachedStatus: true, live: true });
-  const [draft, setDraft] = useState<TimerDraft>(() => ({
-    ...emptyTimerDraft([]),
-    ...(requestedSessionId ? { sessionId: requestedSessionId } : {}),
-  }));
+  const [draft, setDraft] = useState<TimerDraft>(() => {
+    const base = emptyTimerDraft([]);
+    return requestedSessionId ? { ...base, sessionId: requestedSessionId } : base;
+  });
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
   const targetSession = sessions.find((session) => session.id === draft.sessionId);
