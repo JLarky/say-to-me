@@ -101,10 +101,7 @@ export function waitForOpenCodeWorkingActivity(
             onSnapshot: (snapshot) => {
               sessionRuntime.updateActivitySnapshot(snapshot);
               const checkedAt = snapshot.freshness.checkedAt;
-              if (
-                workingActivityStatuses.has(snapshot.status) &&
-                checkedAt >= deliveryStartedAt
-              ) {
+              if (workingActivityStatuses.has(snapshot.status) && checkedAt >= deliveryStartedAt) {
                 finish(true);
               }
             },

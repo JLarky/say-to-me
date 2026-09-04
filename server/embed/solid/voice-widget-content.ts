@@ -28,7 +28,7 @@ export type VoiceWidgetRevisionDecision = {
  */
 export function decideVoiceWidgetRevision(
   lastRevision: number,
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   payloadRevision: unknown,
 ): VoiceWidgetRevisionDecision {
   if (typeof payloadRevision !== "number" || !Number.isInteger(payloadRevision)) {

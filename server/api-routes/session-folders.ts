@@ -90,7 +90,7 @@ function getOrganizationEffect(): Effect.Effect<Organization, never, SessionOrga
 }
 
 function saveOrganizationEffect(
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   payload: unknown,
 ): Effect.Effect<{ ok: true }, OrganizationError, SessionOrganizationService> {
   return Effect.gen(function* () {

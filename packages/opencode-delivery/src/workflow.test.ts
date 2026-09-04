@@ -17,21 +17,19 @@ import {
   WorkerIdentity,
 } from "./workflow.ts";
 
-function inMemoryMessageStore(
-  seed: DeliveryMessage[],
-  { laterAgentReply = false }: { laterAgentReply?: boolean } = {},
-): {
-  layer: Layer.Layer<MessageStoreService>;
-  get: (id: number) => DeliveryMessage | undefined;
-};
-
 type RecordingEffects = {
   layer: Layer.Layer<DeliveryEffectsService>;
   broadcasts: string[];
   idleWatches: number[];
 };
 
-function inMemoryMessageStore(seed: DeliveryMessage[]): InMemoryMessageStore {
+function inMemoryMessageStore(
+  seed: DeliveryMessage[],
+  { laterAgentReply = false }: { laterAgentReply?: boolean } = {},
+): {
+  layer: Layer.Layer<MessageStoreService>;
+  get: (id: number) => DeliveryMessage | undefined;
+} {
   const rows = new Map<number, DeliveryMessage>(seed.map((m) => [m.id, m]));
   const patch = (id: number, fields: Partial<DeliveryMessage>) => {
     const current = rows.get(id);

@@ -157,7 +157,7 @@ function unknownKeyError(body: unknown, schema: Type): string | null {
 }
 
 function unsupportedFieldError(
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   body: unknown,
   fields: Array<{ key: string; message: string }>,
 ): string | null {
@@ -167,7 +167,7 @@ function unsupportedFieldError(
 
 export function createSessionMessageEffect(
   rawSessionId: string,
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   body: unknown,
 ): Effect.Effect<HttpServerResponse.HttpServerResponse, MessageCreateError, MessageCreateService> {
   return Effect.gen(function* () {
@@ -303,7 +303,7 @@ export function createSessionMessageEffect(
 }
 
 export function sayEffect(
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   body: unknown,
 ): Effect.Effect<HttpServerResponse.HttpServerResponse, MessageCreateError, MessageCreateService> {
   return Effect.gen(function* () {
@@ -351,7 +351,7 @@ export function sayEffect(
 
 export function replyEffect(
   rawId: string,
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   body: unknown,
 ): Effect.Effect<HttpServerResponse.HttpServerResponse, MessageCreateError, MessageCreateService> {
   return Effect.gen(function* () {

@@ -39,7 +39,7 @@ describe("say API: send-when-idle delivery", () => {
 
   function mockOpenCodeWithStatus(getStatus: () => string): ReturnType<typeof mockOpenCode> {
     return mockOpenCode((req, res) => {
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Controlled test responder serializes fixture JSON without inspecting it.
+      // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Controlled test responder serializes fixture JSON without inspecting it.
       const respond = (payload: unknown) => {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(payload));

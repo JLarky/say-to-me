@@ -89,6 +89,8 @@ export function subscribePaseoActivity(
   const unsubscribe = paseoActivityHub.subscribe(sessionId, limitedListener);
   void paseoActivityHub
     .snapshot(sessionId)
-    .then(limitedListener.onSnapshot, (caught) => limitedListener.onError(paseoRejectionMessage(caught)));
+    .then(limitedListener.onSnapshot, (caught) =>
+      limitedListener.onError(paseoRejectionMessage(caught)),
+    );
   return unsubscribe;
 }

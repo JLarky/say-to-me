@@ -118,7 +118,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function hasBase<Type extends string, Version extends number>(
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   value: unknown,
   version: Version,
   type: Type,
@@ -139,7 +139,7 @@ function validSessionId(value: unknown, expectedSessionId?: string): value is st
 
 /** Strictly parse a v1 detail and, when supplied, bind session actions to one host session. */
 export function parseVoiceWidgetEventDetail(
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   detail: unknown,
   expectedSessionId?: string,
 ): VoiceWidgetEventDetail | null {

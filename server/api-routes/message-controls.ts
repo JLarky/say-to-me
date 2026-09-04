@@ -303,7 +303,7 @@ export function retryDeliveryEffect(
 
 export function attachMessageSessionEffect(
   rawId: string,
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   payload: unknown,
 ): Effect.Effect<
   MessageControlResult & { sessionId: string | null },
@@ -346,7 +346,7 @@ export function attachMessageSessionEffect(
 
 export function updateMessageStatusEffect(
   rawId: string,
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- Untrusted input is narrowed by this boundary helper.
   payload: unknown,
 ): Effect.Effect<MessageControlResult, MessageControlError, MessageControlService> {
   return Effect.gen(function* () {
