@@ -1,4 +1,5 @@
 import { and, asc, eq, inArray, isNotNull, lte, or, sql } from "drizzle-orm";
+import type { SQLiteUpdateSetSource } from "drizzle-orm/sqlite-core";
 import { Clock, Effect, Fiber, Layer } from "effect";
 import { type as arktype } from "arktype";
 import { randomUUID } from "node:crypto";
@@ -558,22 +559,20 @@ export const RoutineRepositoryLive = Layer.succeed(RoutineRepository, {
       const nextTitle =
         input.title !== undefined ? input.title : (input.action?.title ?? current.title);
 
-      drizzleDb
-        .update(routines)
-        .set({
-          ...(input.ownerSessionId ? { ownerSessionId: input.ownerSessionId } : {}),
-          title: nextTitle,
-          trigger: scheduleTriggerJson(nextTrigger),
-          action: deliverPromptActionJson(nextAction),
-          nextFireAt: nextTrigger.nextFireAt,
-          ...(input.reactivateCancelled ? { status: "active" as const } : {}),
-          lockedAt: null,
-          lockedBy: null,
-          lastError: null,
-          updatedAt: nowSql(),
-        })
-        .where(eq(routines.id, id))
-        .run();
+      const updates: SQLiteUpdateSetSource<typeof routines> = {
+        title: nextTitle,
+        trigger: scheduleTriggerJson(nextTrigger),
+        action: deliverPromptActionJson(nextAction),
+        nextFireAt: nextTrigger.nextFireAt,
+        lockedAt: null,
+        lockedBy: null,
+        lastError: null,
+        updatedAt: nowSql(),
+      };
+      if (input.ownerSessionId) updates.ownerSessionId = input.ownerSessionId;
+      if (input.reactivateCancelled) updates.status = "active";
+
+      drizzleDb.update(routines).set(updates).where(eq(routines.id, id)).run();
       return loadRoutine(id);
     }),
   get: (id) => tryRoutineRepository(() => loadRoutine(id)),
