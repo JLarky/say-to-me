@@ -321,12 +321,12 @@ export async function setOpenCodeSessionModel(
   const baseUrl = openCodeBaseUrl();
   const url = new URL(`/api/session/${encodeURIComponent(sessionId)}/model`, baseUrl);
   if (directory) url.searchParams.set("directory", directory);
+  const baseModel = { providerID, id: modelID };
+  const model = variant ? { ...baseModel, variant } : baseModel;
   const response = await openCodeFetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: { providerID, id: modelID, ...(variant ? { variant } : {}) },
-    }),
+    body: JSON.stringify({ model }),
   });
   if (response.status < 200 || response.status >= 300) {
     throw new Error(`OpenCode returned HTTP ${response.status}`);
@@ -338,10 +338,9 @@ export async function getOpenCodeSessionModel(
   directory?: string | null,
 ): Promise<{ providerID: string; modelID: string; variant: string | null }> {
   const client = createOpenCodeClient();
-  const result = await client.session.get({
-    sessionID: sessionId,
-    ...(directory ? { directory } : {}),
-  });
+  const baseParams = { sessionID: sessionId };
+  const params = directory ? { ...baseParams, directory } : baseParams;
+  const result = await client.session.get(params);
   if (!result.response || result.response.status < 200 || result.response.status >= 300) {
     throw new Error(
       result.response
@@ -460,10 +459,9 @@ export async function createOpenCodeSession(
 ): Promise<{ ok: true; session: DbSession } | { ok: false; status: number; error: string }> {
   try {
     const client = createOpenCodeClient();
-    const result = await client.session.create({
-      directory,
-      ...(options.title ? { title: options.title } : {}),
-    });
+    const baseParams = { directory };
+    const params = options.title ? { ...baseParams, title: options.title } : baseParams;
+    const result = await client.session.create(params);
     // v2 SDK network failures can omit `response` entirely.
     if (!result.response || result.response.status < 200 || result.response.status >= 300) {
       return mapOpenCodeSessionCreateFailure(result);
