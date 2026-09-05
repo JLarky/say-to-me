@@ -536,14 +536,16 @@ export function SessionsPage() {
       const response = await fetch("/api/cli-sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          provider: createProvider,
-          path: trimmedPath,
-          modelID: selectedModelId,
-          ...(createProvider === "codex" && selectedReasoningEffort
-            ? { reasoningEffort: selectedReasoningEffort }
-            : {}),
-        }),
+        body: JSON.stringify(
+          createProvider === "codex" && selectedReasoningEffort
+            ? {
+                provider: createProvider,
+                path: trimmedPath,
+                modelID: selectedModelId,
+                reasoningEffort: selectedReasoningEffort,
+              }
+            : { provider: createProvider, path: trimmedPath, modelID: selectedModelId },
+        ),
       });
       const payload = await safeResponseJson(response, CliSessionPayload);
       if (!response.ok) throw new Error(errorMessage(payload, "Unable to create CLI session."));
