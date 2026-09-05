@@ -225,26 +225,30 @@ export function listSessions({
     const cachedStatus = includeCachedStatus ? getCachedOpenCodeStatus(session.id) : null;
     const enriched = enrichSessionForList(session.id, organization);
     const paseoUiUrls = paseoUiUrlsForSession(session);
-    return {
+    const base = {
       ...session,
       href: sessionHref(session.id),
       backend: detectSessionBackend(session.id),
       ...paseoUiUrls,
       opencodeTitle: enriched.opencodeTitle,
       organizePath: enriched.organizePath,
-      ...(cachedStatus ? { opencodeStatus: cachedStatus } : {}),
-      ...(includeJarvisOverviewDetails
-        ? {
-            jarvisOverviewDetails: {
-              latestMessageText,
-              latestMessageAuthor,
-              latestMessageCreatedAt,
-              latestOpencodeDeliveryStatus,
-              latestForwardStatus,
-              latestCompletionWatchStatus,
-            },
-          }
-        : {}),
+    };
+    const withStatus = cachedStatus ? { ...base, opencodeStatus: cachedStatus } : base;
+    const withJarvisDetails = includeJarvisOverviewDetails
+      ? {
+          ...withStatus,
+          jarvisOverviewDetails: {
+            latestMessageText,
+            latestMessageAuthor,
+            latestMessageCreatedAt,
+            latestOpencodeDeliveryStatus,
+            latestForwardStatus,
+            latestCompletionWatchStatus,
+          },
+        }
+      : withStatus;
+    return {
+      ...withJarvisDetails,
       opencodeAgent: enriched.opencodeAgent,
       opencodeModelProvider: enriched.opencodeModelProvider,
       opencodeModel: enriched.opencodeModel,
