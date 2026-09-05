@@ -29,14 +29,15 @@ function routine(overrides: Partial<Routine> = {}): Routine {
   const trigger =
     overrides.trigger?.kind === "session_idle"
       ? overrides.trigger
-      : { ...defaultTrigger, ...(overrides.trigger?.kind === "schedule" ? overrides.trigger : {}) };
+      : overrides.trigger?.kind === "schedule"
+        ? { ...defaultTrigger, ...overrides.trigger }
+        : defaultTrigger;
   const action =
     overrides.action?.kind === "notify_owner"
       ? overrides.action
-      : {
-          ...defaultAction,
-          ...(overrides.action?.kind === "deliver_prompt" ? overrides.action : {}),
-        };
+      : overrides.action?.kind === "deliver_prompt"
+        ? { ...defaultAction, ...overrides.action }
+        : defaultAction;
   return {
     id: 1,
     ownerSessionId: "ses_timerTarget",
@@ -98,8 +99,11 @@ function fakeRoutineLayers(initialRoutine: Routine, options: { failFire?: boolea
           : state.routine.action;
         state.routine = {
           ...state.routine,
-          ...(input.ownerSessionId !== undefined ? { ownerSessionId: input.ownerSessionId } : {}),
-          ...(input.title !== undefined ? { title: input.title } : {}),
+          ownerSessionId:
+            input.ownerSessionId !== undefined
+              ? input.ownerSessionId
+              : state.routine.ownerSessionId,
+          title: input.title !== undefined ? input.title : state.routine.title,
           trigger: nextTrigger,
           action: nextAction,
           lastError: null,
