@@ -29,14 +29,15 @@ function routine(overrides: Partial<Routine> = {}): Routine {
   const trigger =
     overrides.trigger?.kind === "session_idle"
       ? overrides.trigger
-      : { ...defaultTrigger, ...(overrides.trigger?.kind === "schedule" ? overrides.trigger : {}) };
+      : overrides.trigger?.kind === "schedule"
+        ? { ...defaultTrigger, ...overrides.trigger }
+        : defaultTrigger;
   const action =
     overrides.action?.kind === "notify_owner"
       ? overrides.action
-      : {
-          ...defaultAction,
-          ...(overrides.action?.kind === "deliver_prompt" ? overrides.action : {}),
-        };
+      : overrides.action?.kind === "deliver_prompt"
+        ? { ...defaultAction, ...overrides.action }
+        : defaultAction;
   return {
     id: 1,
     ownerSessionId: "ses_timerTarget",
@@ -96,16 +97,20 @@ function fakeRoutineLayers(initialRoutine: Routine, options: { failFire?: boolea
               message: input.action.message ?? state.routine.action.message,
             }
           : state.routine.action;
-        state.routine = {
+        const base = {
           ...state.routine,
-          ...(input.ownerSessionId !== undefined ? { ownerSessionId: input.ownerSessionId } : {}),
-          ...(input.title !== undefined ? { title: input.title } : {}),
           trigger: nextTrigger,
           action: nextAction,
           lastError: null,
           lockedAt: null,
           lockedBy: null,
         };
+        const withOwner =
+          input.ownerSessionId !== undefined
+            ? { ...base, ownerSessionId: input.ownerSessionId }
+            : base;
+        state.routine =
+          input.title !== undefined ? { ...withOwner, title: input.title } : withOwner;
         return state.routine;
       }),
     list: () => Effect.succeed([state.routine]),
