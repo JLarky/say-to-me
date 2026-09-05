@@ -325,7 +325,7 @@ export async function setOpenCodeSessionModel(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: { providerID, id: modelID, ...(variant ? { variant } : {}) },
+      model: variant ? { providerID, id: modelID, variant } : { providerID, id: modelID },
     }),
   });
   if (response.status < 200 || response.status >= 300) {
@@ -338,10 +338,9 @@ export async function getOpenCodeSessionModel(
   directory?: string | null,
 ): Promise<{ providerID: string; modelID: string; variant: string | null }> {
   const client = createOpenCodeClient();
-  const result = await client.session.get({
-    sessionID: sessionId,
-    ...(directory ? { directory } : {}),
-  });
+  const result = await client.session.get(
+    directory ? { sessionID: sessionId, directory } : { sessionID: sessionId },
+  );
   if (!result.response || result.response.status < 200 || result.response.status >= 300) {
     throw new Error(
       result.response
@@ -460,10 +459,9 @@ export async function createOpenCodeSession(
 ): Promise<{ ok: true; session: DbSession } | { ok: false; status: number; error: string }> {
   try {
     const client = createOpenCodeClient();
-    const result = await client.session.create({
-      directory,
-      ...(options.title ? { title: options.title } : {}),
-    });
+    const result = await client.session.create(
+      options.title ? { directory, title: options.title } : { directory },
+    );
     // v2 SDK network failures can omit `response` entirely.
     if (!result.response || result.response.status < 200 || result.response.status >= 300) {
       return mapOpenCodeSessionCreateFailure(result);
