@@ -157,13 +157,14 @@ export const T3AccessTokenIssuer = Context.GenericTag<T3AccessTokenIssuerService
 );
 
 function toPublicT3ServerInstance(instance: T3ServerInstanceStored): T3ServerInstance {
-  return {
+  const result: T3ServerInstance = {
     id: instance.id,
-    ...(instance.binPath ? { binPath: instance.binPath } : {}),
     baseDir: instance.baseDir,
     originUrl: instance.originUrl,
     isDev: instance.isDev,
   };
+  if (instance.binPath) result.binPath = instance.binPath;
+  return result;
 }
 
 function normalizeOptionalToken(value: string | null | undefined): string | null {
@@ -229,17 +230,13 @@ function parseStoredPaseoInstances(raw: string | null | undefined): PaseoInstanc
     const localUrl = entry.localUrl?.trim();
     const tailscaleUrl = entry.tailscaleUrl?.trim();
     const serverId = entry.serverId?.trim();
-    return [
-      {
-        id,
-        ...(serverId ? { serverId } : {}),
-        ...(localUrl ? { localUrl } : {}),
-        ...(tailscaleUrl ? { tailscaleUrl } : {}),
-        ...(binPath ? { binPath } : {}),
-        ...(home ? { home } : {}),
-        host,
-      },
-    ];
+    const instance: PaseoInstance = { id, host };
+    if (serverId) instance.serverId = serverId;
+    if (localUrl) instance.localUrl = localUrl;
+    if (tailscaleUrl) instance.tailscaleUrl = tailscaleUrl;
+    if (binPath) instance.binPath = binPath;
+    if (home) instance.home = home;
+    return [instance];
   });
 }
 
@@ -252,7 +249,10 @@ function parseStoredOpenCodeInstances(raw: string | null | undefined): OpenCodeI
     if (!id) return [];
     const localUrl = entry.localUrl?.trim();
     const tailscaleUrl = entry.tailscaleUrl?.trim();
-    return [{ id, ...(localUrl ? { localUrl } : {}), ...(tailscaleUrl ? { tailscaleUrl } : {}) }];
+    const instance: OpenCodeInstance = { id };
+    if (localUrl) instance.localUrl = localUrl;
+    if (tailscaleUrl) instance.tailscaleUrl = tailscaleUrl;
+    return [instance];
   });
 }
 
@@ -260,13 +260,10 @@ function effectiveOpenCodeInstances(instances: readonly OpenCodeInstance[]): Ope
   if (instances.length > 0) return [...instances];
   const localUrl = process.env.SAY_TO_ME_OPENCODE_LOCAL_URL?.trim();
   const tailscaleUrl = process.env.SAY_TO_ME_OPENCODE_TAILSCALE_URL?.trim();
-  return [
-    {
-      id: DEFAULT_OPENCODE_INSTANCE_ID,
-      ...(localUrl ? { localUrl } : {}),
-      ...(tailscaleUrl ? { tailscaleUrl } : {}),
-    },
-  ];
+  const instance: OpenCodeInstance = { id: DEFAULT_OPENCODE_INSTANCE_ID };
+  if (localUrl) instance.localUrl = localUrl;
+  if (tailscaleUrl) instance.tailscaleUrl = tailscaleUrl;
+  return [instance];
 }
 
 function effectivePaseoInstances(instances: readonly PaseoInstance[]): PaseoInstance[] {
@@ -402,15 +399,13 @@ export function normalizePaseoInstances(
     const serverId = typeof entry.serverId === "string" ? entry.serverId.trim() : "";
     const localUrl = typeof entry.localUrl === "string" ? entry.localUrl.trim() : "";
     const tailscaleUrl = typeof entry.tailscaleUrl === "string" ? entry.tailscaleUrl.trim() : "";
-    return {
-      id,
-      ...(serverId ? { serverId } : {}),
-      ...(localUrl ? { localUrl } : {}),
-      ...(tailscaleUrl ? { tailscaleUrl } : {}),
-      ...(binPath ? { binPath } : {}),
-      ...(home ? { home } : {}),
-      host,
-    };
+    const instance: PaseoInstance = { id, host };
+    if (serverId) instance.serverId = serverId;
+    if (localUrl) instance.localUrl = localUrl;
+    if (tailscaleUrl) instance.tailscaleUrl = tailscaleUrl;
+    if (binPath) instance.binPath = binPath;
+    if (home) instance.home = home;
+    return instance;
   });
 }
 
@@ -428,7 +423,10 @@ export function normalizeOpenCodeInstances(
     const localUrl = typeof entry.localUrl === "string" ? entry.localUrl.trim() : "";
     const tailscaleUrl = typeof entry.tailscaleUrl === "string" ? entry.tailscaleUrl.trim() : "";
     seen.add(id);
-    return { id, ...(localUrl ? { localUrl } : {}), ...(tailscaleUrl ? { tailscaleUrl } : {}) };
+    const instance: OpenCodeInstance = { id };
+    if (localUrl) instance.localUrl = localUrl;
+    if (tailscaleUrl) instance.tailscaleUrl = tailscaleUrl;
+    return instance;
   });
 }
 
