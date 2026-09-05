@@ -23,17 +23,19 @@ export async function createJarvisInSpace(input: {
   modelID?: string;
   reasoningEffort?: CodexReasoningEffort | "";
 }): Promise<JarvisCreateResult & { state: PrototypeSpacesState }> {
+  const baseBody = {
+    name: input.name,
+    provider: input.provider,
+  };
+  const bodyWithModel = input.modelID ? { ...baseBody, modelID: input.modelID } : baseBody;
+  const requestBody =
+    input.provider === "codex" && input.reasoningEffort
+      ? { ...bodyWithModel, reasoningEffort: input.reasoningEffort }
+      : bodyWithModel;
   const response = await fetch(`/api/spaces/${encodeURIComponent(input.spaceId)}/jarvis`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      name: input.name,
-      provider: input.provider,
-      ...(input.modelID ? { modelID: input.modelID } : {}),
-      ...(input.provider === "codex" && input.reasoningEffort
-        ? { reasoningEffort: input.reasoningEffort }
-        : {}),
-    }),
+    body: JSON.stringify(requestBody),
   });
   if (!response.ok) {
     let message = `Unable to create Jarvis (${response.status}).`;
