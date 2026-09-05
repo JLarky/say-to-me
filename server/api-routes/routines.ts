@@ -168,11 +168,10 @@ function parseUpdate(body: Record<string, unknown>): UpdateRoutineInput | Routin
     if (isRoutineError(dueAt)) return dueAt;
     const intervalMs = optionalIntervalField(triggerBody.intervalMs);
     if (isRoutineError(intervalMs)) return intervalMs;
-    input.trigger = {
-      kind: "schedule",
-      ...(dueAt !== undefined ? { dueAt } : {}),
-      ...(intervalMs !== undefined ? { intervalMs } : {}),
-    };
+    const trigger: NonNullable<UpdateRoutineInput["trigger"]> = { kind: "schedule" };
+    if (dueAt !== undefined) trigger.dueAt = dueAt;
+    if (intervalMs !== undefined) trigger.intervalMs = intervalMs;
+    input.trigger = trigger;
   }
 
   if (body.action !== undefined) {
@@ -187,11 +186,10 @@ function parseUpdate(body: Record<string, unknown>): UpdateRoutineInput | Routin
     if (isRoutineError(actionTitle)) return actionTitle;
     const message = optionalTextField(actionBody.message, "action.message", 1000);
     if (isRoutineError(message)) return message;
-    input.action = {
-      kind: "deliver_prompt",
-      ...(actionTitle !== undefined ? { title: actionTitle } : {}),
-      ...(message !== undefined ? { message } : {}),
-    };
+    const action: NonNullable<UpdateRoutineInput["action"]> = { kind: "deliver_prompt" };
+    if (actionTitle !== undefined) action.title = actionTitle;
+    if (message !== undefined) action.message = message;
+    input.action = action;
   }
 
   return input;
