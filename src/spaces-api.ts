@@ -203,12 +203,8 @@ export function placeSession(
   mode: "claim" | "move",
   expectedOwnerSpaceId?: string,
 ) {
-  return action(targetSpaceId, {
-    action: "placeSession",
-    sessionId,
-    mode,
-    ...(expectedOwnerSpaceId ? { expectedOwnerSpaceId } : {}),
-  });
+  const body = { action: "placeSession", sessionId, mode };
+  return action(targetSpaceId, expectedOwnerSpaceId ? { ...body, expectedOwnerSpaceId } : body);
 }
 
 const DiscoveredCheckoutSchema = arktype({
