@@ -29,6 +29,9 @@ import type { Session, SessionState } from "../../types.ts";
 // The /organize session tree. Folders + placements persist via
 // /api/session-folders; an org row survives session deletion (hidden, not shown).
 
+/** Where a drag-and-drop places a node: alongside a parent, before a sibling, or last. */
+type ResolvedDropPosition = { parentId: string | null; beforeId: string | null };
+
 function OrganizeSessionHomePreview({
   onOpen,
   onStateChange,
@@ -163,10 +166,7 @@ export function OrganizePage() {
     });
   }
 
-  function resolveDrop(
-    ref: TreeNode,
-    mode: DropMode,
-  ): { parentId: string | null; beforeId: string | null } {
+  function resolveDrop(ref: TreeNode, mode: DropMode): ResolvedDropPosition {
     if (mode === "into") return { parentId: ref.id, beforeId: null };
     if (mode === "before") return { parentId: ref.parentId, beforeId: ref.id };
     const siblings = childrenOf(ref.parentId);
