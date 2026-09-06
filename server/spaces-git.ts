@@ -15,6 +15,8 @@ export type GitRepository = {
   checkouts: GitCheckout[];
 };
 
+type WorktreeAccumulator = { path?: string; branch?: string };
+
 function expandPath(value: string): string {
   const expanded = value.startsWith("~/") ? path.join(os.homedir(), value.slice(2)) : value;
   return path.resolve(expanded);
@@ -65,7 +67,7 @@ export async function discoverRepository(
   }
   const checkouts: GitCheckout[] = [];
   const porcelain = await git(rootPath, ["worktree", "list", "--porcelain"]);
-  let current: { path?: string; branch?: string } = {};
+  let current: WorktreeAccumulator = {};
   const flush = async () => {
     if (!current.path) return;
     const checkoutPath = await realpath(current.path).catch(() => null);
