@@ -36,7 +36,9 @@ export function claudeDeliveryPrompt(
   return buildAgentVoicePromptFromMessage(job.claudeSessionId, message, options);
 }
 
-export function parseClaudeStreamLine(line: string): { isError?: boolean; text?: string } {
+export type ClaudeStreamLineResult = { isError?: boolean; text?: string };
+
+export function parseClaudeStreamLine(line: string): ClaudeStreamLineResult {
   const entry = safeJsonParse(UnknownJson, line);
   if (!entry || typeof entry !== "object") return {};
   const record = entry as Record<string, unknown>;
