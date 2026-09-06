@@ -245,14 +245,16 @@ export function validateClientUploadTargetPath(filePath: string, mimeType: strin
   return filePath;
 }
 
-export function validateTmpAttachmentPath(filePath: string): {
+export type TmpAttachmentValidation = {
   filePath: string;
   mimeType: string;
   originalName: string;
   thumbnailDataUrl: string;
   thumbnailWidth: number;
   thumbnailHeight: number;
-} {
+};
+
+export function validateTmpAttachmentPath(filePath: string): TmpAttachmentValidation {
   if (!isDirectTmpChild(filePath)) {
     throw new Error("Attachment path must be a direct child of a temp directory (e.g. /tmp).");
   }
