@@ -13,12 +13,12 @@ import { base64UrlDecode, importSessionsHref } from "../../utils.ts";
 
 type ImportProvider = "claude" | "codex" | "cursor" | "grok";
 
-const providerLabels: Record<ImportProvider, string> = {
+const providerLabels = {
   claude: "Claude",
   codex: "Codex",
   cursor: "Cursor",
   grok: "Grok",
-};
+} satisfies Record<ImportProvider, string>;
 
 const DiscoverableSessionSchema = type({
   sessionId: "string",
