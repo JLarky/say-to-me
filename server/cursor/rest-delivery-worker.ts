@@ -55,7 +55,9 @@ export function cursorAssistantText(event: unknown): string | null {
   return text.trim() ? text : null;
 }
 
-export function parseCursorJsonOutput(stdout: string): { isError?: boolean; text?: string } {
+export type CursorJsonOutput = { isError?: boolean; text?: string };
+
+export function parseCursorJsonOutput(stdout: string): CursorJsonOutput {
   // `--output-format stream-json` is NDJSON. Older `--output-format json` shipped
   // as a bare result object or an array. Accept all three; dropping the reply
   // here loses the agent's final text and skips the idle notice.
