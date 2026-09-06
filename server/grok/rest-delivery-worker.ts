@@ -33,7 +33,9 @@ export function grokDeliveryPrompt(
   return buildAgentVoicePromptFromMessage(job.grokSessionId, message, options);
 }
 
-export function parseGrokJsonOutput(stdout: string): { isError?: boolean; text?: string } {
+export type GrokJsonOutput = { isError?: boolean; text?: string };
+
+export function parseGrokJsonOutput(stdout: string): GrokJsonOutput {
   const trimmed = stdout.trim();
   if (!trimmed) return {};
   // Try JSON first (if --output-format json)
