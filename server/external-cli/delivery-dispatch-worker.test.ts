@@ -63,7 +63,9 @@ function cursorJob(messageId: number) {
 
 let sessionCounter = 0;
 
-function seedSession(text: string): { sessionId: string; messageId: number } {
+type SeededSession = { sessionId: string; messageId: number };
+
+function seedSession(text: string): SeededSession {
   sessionCounter += 1;
   const sessionId = `cur_00000000-0000-4000-8000-${String(sessionCounter).padStart(12, "0")}`;
   setSessionCwd(sessionId, scriptDir);
