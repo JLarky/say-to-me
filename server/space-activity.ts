@@ -160,10 +160,12 @@ function emptyRetention(
   };
 }
 
-export function clampActivityRangeHours(requested: number | undefined): {
+export type ActivityRangeClamp = {
   appliedRangeHours: number;
   rangeClamped: boolean;
-} {
+};
+
+export function clampActivityRangeHours(requested: number | undefined): ActivityRangeClamp {
   if (requested == null || !Number.isFinite(requested) || requested <= 0) {
     return { appliedRangeHours: DEFAULT_ACTIVITY_RANGE_HOURS, rangeClamped: false };
   }
