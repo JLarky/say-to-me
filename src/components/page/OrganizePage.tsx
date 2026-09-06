@@ -339,7 +339,7 @@ export function OrganizePage() {
 
   // Working copy → API payload. sortOrder = position among siblings (folders and
   // sessions share one order space under each parent).
-  function serialize(list: TreeNode[]): { folders: OrgFolder[]; placements: OrgPlacement[] } {
+  function serialize(list: TreeNode[]): OrganizeFoldersResponse {
     const orderIn = (parentId: string | null) => list.filter((n) => n.parentId === parentId);
     const folders: OrgFolder[] = [];
     const placements: OrgPlacement[] = [];
