@@ -14,16 +14,18 @@ export function httpApiExpressHandler(
     const protocol = req.protocol || "http";
     const host = req.get("host") ?? "127.0.0.1";
     const canHaveBody = req.method !== "GET" && req.method !== "HEAD";
-    const request = new Request(`${protocol}://${host}${req.originalUrl}`, {
-      method: req.method,
-      headers,
-      ...(canHaveBody
-        ? {
-            body: Readable.toWeb(req) as ReadableStream<Uint8Array>,
-            duplex: "half" as const,
-          }
-        : {}),
-    } as RequestInit & { duplex: "half" });
+    const baseInit = { method: req.method, headers };
+    const init = canHaveBody
+      ? {
+          ...baseInit,
+          body: Readable.toWeb(req) as ReadableStream<Uint8Array>,
+          duplex: "half" as const,
+        }
+      : baseInit;
+    const request = new Request(
+      `${protocol}://${host}${req.originalUrl}`,
+      init as RequestInit & { duplex: "half" },
+    );
 
     void handler(request)
       .then(async (response) => {
