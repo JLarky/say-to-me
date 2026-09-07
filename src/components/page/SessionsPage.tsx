@@ -533,17 +533,15 @@ export function SessionsPage() {
         return;
       }
       if (!selectedModelId) throw new Error("Pick a model first.");
+      const baseBody = { provider: createProvider, path: trimmedPath, modelID: selectedModelId };
+      const requestBody =
+        createProvider === "codex" && selectedReasoningEffort
+          ? { ...baseBody, reasoningEffort: selectedReasoningEffort }
+          : baseBody;
       const response = await fetch("/api/cli-sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          provider: createProvider,
-          path: trimmedPath,
-          modelID: selectedModelId,
-          ...(createProvider === "codex" && selectedReasoningEffort
-            ? { reasoningEffort: selectedReasoningEffort }
-            : {}),
-        }),
+        body: JSON.stringify(requestBody),
       });
       const payload = await safeResponseJson(response, CliSessionPayload);
       if (!response.ok) throw new Error(errorMessage(payload, "Unable to create CLI session."));
