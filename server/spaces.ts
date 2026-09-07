@@ -302,17 +302,14 @@ function reparentSpaceTransactional(
   const previousParent = current.parentId ?? null;
   const parentChanged = previousParent !== parentId;
   inTransaction(() => {
-    drizzleDb
-      .update(spaces)
-      .set({
-        ...(fields?.name !== undefined ? { name: fields.name } : {}),
-        ...(fields?.context !== undefined ? { context: fields.context } : {}),
-        parentId,
-        ...(parentChanged ? { sortOrder: nextSortOrderAmongSiblings(parentId) } : {}),
-        updatedAt: sql`CURRENT_TIMESTAMP`,
-      })
-      .where(eq(spaces.id, spaceId))
-      .run();
+    const baseUpdate = { parentId, updatedAt: sql`CURRENT_TIMESTAMP` };
+    const withName = fields?.name !== undefined ? { ...baseUpdate, name: fields.name } : baseUpdate;
+    const withContext =
+      fields?.context !== undefined ? { ...withName, context: fields.context } : withName;
+    const update = parentChanged
+      ? { ...withContext, sortOrder: nextSortOrderAmongSiblings(parentId) }
+      : withContext;
+    drizzleDb.update(spaces).set(update).where(eq(spaces.id, spaceId)).run();
   });
 }
 
