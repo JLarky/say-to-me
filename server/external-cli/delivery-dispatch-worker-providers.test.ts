@@ -99,7 +99,9 @@ function grokJob(messageId: number) {
 
 let sessionCounter = 0;
 
-function seedClaudeSession(text: string): { sessionId: string; messageId: number } {
+type SeededSession = { sessionId: string; messageId: number };
+
+function seedClaudeSession(text: string): SeededSession {
   sessionCounter += 1;
   const sessionId = `cc_00000000-0000-4000-8000-${String(sessionCounter).padStart(12, "0")}`;
   setSessionCwd(sessionId, scriptDir);
@@ -122,7 +124,7 @@ function seedClaudeSession(text: string): { sessionId: string; messageId: number
   return { sessionId, messageId: message.id };
 }
 
-function seedCodexSession(text: string): { sessionId: string; messageId: number } {
+function seedCodexSession(text: string): SeededSession {
   sessionCounter += 1;
   const sessionId = `cx_00000000-0000-4000-8000-${String(sessionCounter).padStart(12, "0")}`;
   setSessionCwd(sessionId, scriptDir);
@@ -145,7 +147,7 @@ function seedCodexSession(text: string): { sessionId: string; messageId: number 
   return { sessionId, messageId: message.id };
 }
 
-function seedGrokSession(text: string): { sessionId: string; messageId: number } {
+function seedGrokSession(text: string): SeededSession {
   sessionCounter += 1;
   const sessionId = `gr_00000000-0000-4000-8000-${String(sessionCounter).padStart(12, "0")}`;
   setSessionCwd(sessionId, scriptDir);
