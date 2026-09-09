@@ -10,8 +10,8 @@ const { dispatchClaudeDeliveryInternalRequest } = await import("./claude-deliver
 const base = "http://127.0.0.1/api/internal/claude-delivery";
 
 function post(path: string, body: unknown, token?: string) {
-  const headers: Record<string, string> = { "content-type": "application/json" };
-  if (token) headers["x-say-to-me-internal-token"] = token;
+  const headers = new Headers({ "content-type": "application/json" });
+  if (token) headers.set("x-say-to-me-internal-token", token);
   return dispatchClaudeDeliveryInternalRequest(
     new Request(`${base}${path}`, { method: "POST", headers, body: JSON.stringify(body) }),
   );
