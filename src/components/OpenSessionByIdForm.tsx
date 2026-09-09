@@ -28,12 +28,12 @@ type Backend =
   | "none";
 type ExternalCliProvider = "claude" | "cursor" | "codex" | "grok";
 
-const PROVIDER_PREFIX: Record<ExternalCliProvider, string> = {
+const PROVIDER_PREFIX = {
   claude: "cc_",
   cursor: "cur_",
   codex: "cx_",
   grok: "gr_",
-};
+} satisfies Record<ExternalCliProvider, string>;
 
 const pickerStyles = stylex.create({
   row: {
@@ -69,7 +69,7 @@ const formStyles = stylex.create({
   },
 });
 
-const backendHint: Record<Backend, string> = {
+const backendHint = {
   opencode: "OpenCode session — messages go to OpenCode.",
   claude: "Claude session — needs a working directory.",
   cursor: "Cursor session — needs a working directory.",
@@ -80,7 +80,7 @@ const backendHint: Record<Backend, string> = {
   "paseo-chat": "Paseo chat — import verifies the room on a configured Paseo instance.",
   voice: "Voice-only session — messages stay local and play in the app.",
   none: "Not connected to an agent — messages stay local.",
-};
+} satisfies Record<Backend, string>;
 
 function toExternalCliSessionId(input: string, provider: ExternalCliProvider): string {
   if (
