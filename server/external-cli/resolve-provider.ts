@@ -23,7 +23,9 @@ export function isBareExternalCliUuid(input: string): boolean {
   return UUID.test(input.trim());
 }
 
-function chatIdFromInput(input: string): { chatId: string; provider: ExternalCliBackend | null } {
+type ChatIdResolution = { chatId: string; provider: ExternalCliBackend | null };
+
+function chatIdFromInput(input: string): ChatIdResolution {
   const trimmed = input.trim();
   if (trimmed.startsWith("cc_")) return { chatId: trimmed.slice(3), provider: "claude" };
   if (trimmed.startsWith("cur_")) return { chatId: trimmed.slice(4), provider: "cursor" };
