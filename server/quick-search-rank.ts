@@ -22,7 +22,7 @@ export type QuickSearchMatchReason =
   | "substring-context"
   | "recent";
 
-const TIER: Record<QuickSearchMatchReason, number> = {
+const TIER = {
   "exact-id": 0,
   "exact-alias": 1,
   "exact-title": 1,
@@ -39,7 +39,7 @@ const TIER: Record<QuickSearchMatchReason, number> = {
   "substring-name": 4,
   "substring-context": 5,
   recent: 6,
-};
+} satisfies Record<QuickSearchMatchReason, number>;
 
 export function normalizeQuickSearchQuery(raw: string | undefined | null): string {
   const collapsed = (raw ?? "").normalize("NFKC").trim().replace(/\s+/g, " ");
