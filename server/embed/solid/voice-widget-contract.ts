@@ -44,6 +44,14 @@ export type VoiceWidgetAttributes = {
   readonly "timers-base-url"?: string;
 };
 
+type MutableVoiceWidgetAttributes = {
+  "session-id": string;
+  "notes-base-url": string;
+  "ui-base-url": string;
+  "storage-key": string;
+  "timers-base-url"?: string;
+};
+
 export type VoiceWidgetAttributeInput = Readonly<
   Partial<
     Record<
@@ -70,13 +78,7 @@ export function normalizeVoiceWidgetAttributes(
 ): VoiceWidgetAttributes {
   const sessionId = requireAttribute(input, "session-id");
   const notesBaseUrl = requireAttribute(input, "notes-base-url");
-  const result: {
-    "session-id": string;
-    "notes-base-url": string;
-    "ui-base-url": string;
-    "storage-key": string;
-    "timers-base-url"?: string;
-  } = {
+  const result: MutableVoiceWidgetAttributes = {
     "session-id": sessionId,
     "notes-base-url": notesBaseUrl,
     "ui-base-url":
