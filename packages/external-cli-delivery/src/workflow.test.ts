@@ -60,11 +60,7 @@ function directJob(
   };
 }
 
-function inMemoryStore(seed: DeliveryMessage[]): {
-  layer: Layer.Layer<MessageStoreService>;
-  get: (id: number) => DeliveryMessage | undefined;
-  getError: (id: number) => string | null | undefined;
-} {
+function inMemoryStore(seed: DeliveryMessage[]) {
   const rows = new Map(seed.map((row) => [row.id, row]));
   const errors = new Map<number, string | null>();
   const patch = (id: number, fields: Partial<DeliveryMessage>) => {
@@ -84,16 +80,12 @@ function inMemoryStore(seed: DeliveryMessage[]): {
   };
   return {
     layer: Layer.succeed(workflow.MessageStore, service),
-    get: (id) => rows.get(id),
-    getError: (id) => errors.get(id),
+    get: (id: number) => rows.get(id),
+    getError: (id: number) => errors.get(id),
   };
 }
 
-function recordingEffects(): {
-  layer: Layer.Layer<DeliveryEffectsService>;
-  replies: string[];
-  broadcasts: string[];
-} {
+function recordingEffects() {
   const replies: string[] = [];
   const broadcasts: string[] = [];
   const service: DeliveryEffectsService = {
