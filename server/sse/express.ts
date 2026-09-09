@@ -27,7 +27,9 @@ export function openExpressSseStream(
 ): SseClient {
   const accelBuffering = options.accelBuffering ?? true;
   const retry = options.retry ?? true;
-  const headers: Record<string, string> = { ...sseStreamHeaders };
+  const headers: typeof sseStreamHeaders & { "X-Accel-Buffering"?: string } = {
+    ...sseStreamHeaders,
+  };
   if (accelBuffering) headers["X-Accel-Buffering"] = "no";
 
   res.writeHead(200, headers);
