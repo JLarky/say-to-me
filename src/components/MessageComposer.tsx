@@ -130,10 +130,12 @@ const composer = stylex.create({
   },
 });
 
-function uploadTypeForFile(file: File): {
+type UploadFileType = {
   extension: ".png" | ".jpg" | ".jpeg" | ".webp" | ".gif" | ".mp3";
   mimeType: string;
-} {
+};
+
+function uploadTypeForFile(file: File): UploadFileType {
   if (file.type === "image/png") return { extension: ".png", mimeType: "image/png" };
   if (file.type === "image/jpeg") {
     return {
