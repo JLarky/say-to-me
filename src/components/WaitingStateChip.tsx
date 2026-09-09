@@ -26,7 +26,7 @@ const styles = stylex.create({
   },
 });
 
-const stateLabels: Record<WaitingStatePayload["state"], string> = {
+const stateLabels = {
   needs_answer: "Needs answer",
   needs_direction: "Needs direction",
   can_continue: "Can continue",
@@ -34,7 +34,7 @@ const stateLabels: Record<WaitingStatePayload["state"], string> = {
   blocked: "Blocked",
   review: "Review",
   unknown: "Unknown",
-};
+} satisfies Record<WaitingStatePayload["state"], string>;
 
 /**
  * Waiting-state chip (#116 tracer bullet): shows what the agent is waiting for
