@@ -215,7 +215,9 @@ function requiredString(args: Record<string, unknown>, key: string): string {
   return value;
 }
 
-function toolResult(value: unknown): object {
+type ToolResult = { content: Array<{ type: "text"; text: string }> };
+
+function toolResult(value: unknown): ToolResult {
   return { content: [{ text: JSON.stringify(value, null, 2), type: "text" }] };
 }
 
