@@ -25,10 +25,15 @@ type NotificationsRealtimeHandlers = {
 const NOTIFICATIONS_STALL_MS = 45_000;
 const NOTIFICATIONS_STALL_CHECK_MS = 5_000;
 
+type LivenessGuardedHandlers = {
+  handlers: NotificationsRealtimeHandlers;
+  stop: () => void;
+};
+
 function withLiveness(
   handlers: NotificationsRealtimeHandlers,
   onStall: () => void,
-): { handlers: NotificationsRealtimeHandlers; stop: () => void } {
+): LivenessGuardedHandlers {
   let lastSeenAt = Date.now();
   const timer = setInterval(() => {
     if (Date.now() - lastSeenAt > NOTIFICATIONS_STALL_MS) onStall();
