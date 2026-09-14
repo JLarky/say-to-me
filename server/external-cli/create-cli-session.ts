@@ -16,12 +16,12 @@ import { prefixedUuidSessionId } from "./prefixed-session.ts";
 import type { ExternalCliBackend } from "./session-backend.ts";
 import type { CodexReasoningEffort } from "../../src/codex-reasoning-effort.ts";
 
-const PROVIDER_MODEL_IDS: Record<ExternalCliBackend, string> = {
+const PROVIDER_MODEL_IDS = {
   claude: "anthropic",
   codex: "openai",
   cursor: "cursor",
   grok: "xai",
-};
+} satisfies Record<ExternalCliBackend, string>;
 
 const PROVIDER_SESSION = {
   claude: CLAUDE_SESSION,
