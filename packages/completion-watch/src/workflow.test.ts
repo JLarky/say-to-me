@@ -43,11 +43,13 @@ function baseMessage(
   };
 }
 
-function inMemoryCompletionStore(seed: WatchedMessage[]): {
+type InMemoryCompletionStore = {
   layer: Layer.Layer<CompletionWatchStoreService>;
   rows: Map<number, WatchedMessage>;
   dispatchAt: Map<number, number | null>;
-} {
+};
+
+function inMemoryCompletionStore(seed: WatchedMessage[]): InMemoryCompletionStore {
   const rows = new Map<number, WatchedMessage>(seed.map((row) => [row.id, { ...row }]));
   const dispatchAt = new Map<number, number | null>();
   let seq = Math.max(0, ...seed.map((row) => row.id)) + 1;
