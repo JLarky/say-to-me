@@ -13,12 +13,12 @@ export type ExternalCliWorkerEnvPrefix = "CLAUDE" | "CURSOR" | "CODEX" | "GROK";
  * so Stop stays on for the whole child lifetime. Register awaits the API map;
  * a child that never lands fails the prompt instead of hiding Stop.
  */
-export const WORKER_VERSIONS: Record<ExternalCliWorkerEnvPrefix, number> = {
+export const WORKER_VERSIONS = {
   CLAUDE: 7,
   CODEX: 5,
   GROK: 6,
   CURSOR: 8,
-};
+} satisfies Record<ExternalCliWorkerEnvPrefix, number>;
 
 export function workerVersion(prefix: ExternalCliWorkerEnvPrefix): number {
   return WORKER_VERSIONS[prefix];
