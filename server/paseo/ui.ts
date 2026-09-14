@@ -49,15 +49,16 @@ export function paseoUiUrlsForSession(session: {
   if (!instance) return null;
   try {
     const threadId = session.id.slice(3);
-    const result: { paseoUiUrl: string; paseoLocalUrl?: string; paseoTailscaleUrl?: string } = {
-      paseoUiUrl: paseoAgentUrl(instance, threadId),
-    };
-    if (instance.localUrl)
-      result.paseoLocalUrl = paseoAgentUrl(instance, threadId, instance.localUrl);
-    if (instance.tailscaleUrl) {
-      result.paseoTailscaleUrl = paseoAgentUrl(instance, threadId, instance.tailscaleUrl);
-    }
-    return result;
+    const base = { paseoUiUrl: paseoAgentUrl(instance, threadId) };
+    const withLocal = instance.localUrl
+      ? { ...base, paseoLocalUrl: paseoAgentUrl(instance, threadId, instance.localUrl) }
+      : base;
+    return instance.tailscaleUrl
+      ? {
+          ...withLocal,
+          paseoTailscaleUrl: paseoAgentUrl(instance, threadId, instance.tailscaleUrl),
+        }
+      : withLocal;
   } catch {
     return null;
   }
