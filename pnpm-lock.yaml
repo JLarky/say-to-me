@@ -20,6 +20,12 @@ importers:
       '@sinclair/typebox':
         specifier: ^0.34.52
         version: 0.34.52
+      '@specter-ts/core':
+        specifier: 0.2.1
+        version: 0.2.1(vitest@4.1.11)
+      '@standard-schema/spec':
+        specifier: ^1.1.0
+        version: 1.1.0
       '@t3-oss/env-core':
         specifier: ^0.13.11
         version: 0.13.11(typescript@7.0.2)
@@ -518,6 +524,14 @@ packages:
 
   '@sinclair/typebox@0.34.52':
     resolution: {integrity: sha512-XiMQh7qqVlxZzcVD+kkGMNGMzcTrDMLWI7S4x7z1MkCkbDPrekpZXEUK0eZqZFMuHQg2a2DZOcDIh9o5v3Gonw==}
+
+  '@specter-ts/core@0.2.1':
+    resolution: {integrity: sha512-GVEshTtHyp+UJRYyTcs+nYdlQFxGvOYOXvuDt01GgjSfu4NLdLnNPpPxZPU1DPF8kXkuQKvp+IOC8s9LYjkI8w==}
+    peerDependencies:
+      vitest: ^4.1.5
+    peerDependenciesMeta:
+      vitest:
+        optional: true
 
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
@@ -1646,6 +1660,12 @@ snapshots:
   '@polka/url@1.0.0-next.29': {}
 
   '@sinclair/typebox@0.34.52': {}
+
+  '@specter-ts/core@0.2.1(vitest@4.1.11)':
+    dependencies:
+      '@standard-schema/spec': 1.1.0
+    optionalDependencies:
+      vitest: 4.1.11(@types/node@26.5.1)(@vitest/browser-preview@4.1.11)(@voidzero-dev/vite-plus-core@0.3.2(@types/node@26.5.1)(typescript@7.0.2)(yaml@2.9.1))
 
   '@standard-schema/spec@1.1.0': {}
 

@@ -2,7 +2,7 @@
   "name": "say-to-me2",
   "version": "0.1.0",
   "private": true,
-  "description": "Local Elysia HTTP service: health, OpenAPI, and a Paseo relay WebSocket round-trip.",
+  "description": "Local Elysia HTTP service: health, OpenAPI, a Paseo relay WebSocket round-trip, and an in-process Specter heard-receipt slice.",
   "type": "module",
   "scripts": {
     "dev": "node --env-file=.env --watch src/index.ts",
@@ -22,6 +22,8 @@
     "@elysiajs/node": "^1.4.5",
     "@elysiajs/openapi": "^1.4.16",
     "@sinclair/typebox": "^0.34.52",
+    "@specter-ts/core": "0.2.1",
+    "@standard-schema/spec": "^1.1.0",
     "@t3-oss/env-core": "^0.13.11",
     "effect": "4.0.0-rc.115",
     "elysia": "^1.4.30",
