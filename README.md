@@ -114,6 +114,6 @@ oxlint.config.ts
 tools/oxlint/anti-slop/
 ```
 
-HTTP JSON in tests is decoded with [`decodeResponseJson`](src/decode-response-json.ts): `response.json()` plus an Effect `Schema`. JSON text (including WebSocket frames) uses `decodeJsonText` / `Schema.fromJsonString`. `JSON.parse` is banned by `anti-slop/no-json-parse`.
+HTTP JSON in tests is decoded with [`decodeResponseJson`](src/decode-response-json.ts): `response.json()` plus an Effect `Schema`. JSON text (including WebSocket frames) uses `decodeJsonText(text, Schema.Json)`. `JSON.parse` is banned by `anti-slop/no-json-parse`. Assertions `as unknown`, `as object`, and `as any` are banned by `anti-slop/no-broad-type-assertion`.
 
 Lint uses [anti-slop](https://github.com/dmmulroy/anti-slop) the way that project is meant to be used: the plugin is **vendored**, not an npm package. Generic rules and the Effect plugin are enabled in `oxlint.config.ts`. Provenance lives in `tools/oxlint/anti-slop/UPSTREAM.md`. To refresh, ask an agent to update anti-slop while preserving local customizations.

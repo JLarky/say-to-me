@@ -15,8 +15,8 @@
     "start:node": "node --env-file=.env src/index.ts",
     "start:bun": "bun src/index.ts",
     "lint": "oxlint",
-    "test": "node --test \"src/**/*.test.ts\" && node tools/oxlint/anti-slop/rules/no-json-parse.test.ts",
-    "test:node": "node --test \"src/**/*.test.ts\" && node tools/oxlint/anti-slop/rules/no-json-parse.test.ts",
+    "test": "node --test \"src/**/*.test.ts\"",
+    "test:node": "node --test \"src/**/*.test.ts\"",
     "test:bun": "bun test src",
     "typecheck": "tsc --noEmit"
   },

@@ -2,6 +2,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import { noArrayFilterMapRule } from "./rules/no-array-filter-map.ts";
 import { noReduceAccumulatorCopyRule } from "./rules/no-reduce-accumulator-copy.ts";
+import { noBroadTypeAssertionRule } from "./rules/no-broad-type-assertion.ts";
 import { noChainedTypeAssertionsRule } from "./rules/no-chained-type-assertions.ts";
 import { noConditionalEmptyObjectSpreadRule } from "./rules/no-conditional-empty-object-spread.ts";
 import { noJsonParseRule } from "./rules/no-json-parse.ts";
@@ -26,6 +27,7 @@ const antiSlopPlugin = eslintCompatPlugin({
 	rules: {
 		"no-array-filter-map": noArrayFilterMapRule,
 		"no-reduce-accumulator-copy": noReduceAccumulatorCopyRule,
+		"no-broad-type-assertion": noBroadTypeAssertionRule,
 		"no-chained-type-assertions": noChainedTypeAssertionsRule,
 		"no-conditional-empty-object-spread": noConditionalEmptyObjectSpreadRule,
 		"no-json-parse": noJsonParseRule,

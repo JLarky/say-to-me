@@ -2,10 +2,7 @@ import { Schema } from 'effect'
 
 export type JsonBodySource = Pick<Response, 'json'>
 
-export function decodeJsonText<S extends Schema.ConstraintDecoder<unknown>>(
-  text: string,
-  schema: S
-): S['Type'] {
+export function decodeJsonText(text: string, schema: typeof Schema.Json) {
   return Schema.decodeUnknownSync(Schema.fromJsonString(schema))(text)
 }
 
