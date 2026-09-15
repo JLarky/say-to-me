@@ -5,18 +5,18 @@
   "type": "module",
   "description": "Local Elysia HTTP service: health, OpenAPI, and a Paseo relay probe.",
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "scripts": {
-    "dev": "node --env-file=.env --import tsx --watch src/index.ts",
-    "dev:node": "node --env-file=.env --import tsx --watch src/index.ts",
+    "dev": "node --env-file=.env --watch src/index.ts",
+    "dev:node": "node --env-file=.env --watch src/index.ts",
     "dev:bun": "bun --watch src/index.ts",
-    "start": "node --env-file=.env --import tsx src/index.ts",
-    "start:node": "node --env-file=.env --import tsx src/index.ts",
+    "start": "node --env-file=.env src/index.ts",
+    "start:node": "node --env-file=.env src/index.ts",
     "start:bun": "bun src/index.ts",
     "lint": "oxlint",
-    "test": "tsx --test \"src/**/*.test.ts\"",
-    "test:node": "tsx --test \"src/**/*.test.ts\"",
+    "test": "node --test \"src/**/*.test.ts\"",
+    "test:node": "node --test \"src/**/*.test.ts\"",
     "test:bun": "bun test src",
     "typecheck": "tsc --noEmit"
   },
@@ -31,7 +31,6 @@
     "@oxlint/plugins": "1.83.0",
     "@types/node": "^26.5.1",
     "oxlint": "1.83.0",
-    "tsx": "^4.23.13",
     "typescript": "^7.0.2"
   }
 }

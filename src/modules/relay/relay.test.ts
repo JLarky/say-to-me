@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { afterEach, describe, it } from 'node:test'
-import { createApp } from '../../app'
+import { createApp } from '../../app.ts'
 
 const previousRelayUrl = process.env.RELAY_URL
 

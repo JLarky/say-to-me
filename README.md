@@ -44,7 +44,7 @@ Missing or non-http `RELAY_URL` is `503`. An unreachable or non-ok relay is `502
 
 ## Run locally
 
-Requires Node 20+ and/or Bun 1.x. Install with whichever package manager you use:
+Requires Node 24+ (native TypeScript type stripping) and/or Bun 1.x. Install with whichever package manager you use:
 
 ```sh
 pnpm install
@@ -64,7 +64,7 @@ pnpm dev:node
 # or: npm run dev:node
 ```
 
-`tsx` is loaded by Node (`--import tsx --watch`). Production-style (no watch): `pnpm start:node`. Both pass `--env-file=.env`.
+Node runs `src/index.ts` directly (`--watch` in dev). Production-style (no watch): `pnpm start:node`. Both pass `--env-file=.env`. TypeScript stays erasable (no enums, namespaces, or parameter properties).
 
 ### Bun
 
@@ -89,7 +89,7 @@ Open `http://127.0.0.1:43141/openapi` for the docs UI.
 
 ```sh
 pnpm lint
-pnpm test          # Node (tsx + node:test)
+pnpm test          # Node (node --test)
 pnpm test:bun      # Bun's test runner
 pnpm typecheck
 ```

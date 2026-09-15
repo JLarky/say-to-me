@@ -1,7 +1,7 @@
 import { Value } from '@sinclair/typebox/value'
 import { Elysia } from 'elysia'
-import { getRelayUrl, parseRelayUrl } from '../../config'
-import { RelayModel, UpstreamHealth } from './model'
+import { getRelayUrl, parseRelayUrl } from '../../config.ts'
+import { RelayModel, UpstreamHealth } from './model.ts'
 
 const probeTimeoutMs = 3_000
 

@@ -1,5 +1,5 @@
 import { Elysia } from 'elysia'
-import { HealthModel } from './model'
+import { HealthModel } from './model.ts'
 
 export const health = new Elysia({ name: 'health' }).get(
   '/health',
