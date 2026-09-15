@@ -14,7 +14,7 @@ There is no auth, database, or extra process. The live product today is still th
 | `GET /openapi/json` | Raw OpenAPI JSON |
 | `GET /` | Pointers to health, relay, and docs |
 
-Default listen address: `http://127.0.0.1:43141` (`HOST` / `PORT` override). Bind is `0.0.0.0` so both local and VM preview work.
+Default listen address: `http://127.0.0.1:43141` (`HOST` / `PORT` override via the process environment). Bind is `0.0.0.0` so both local and VM preview work. App code does not load `.env` files; use the shell or native Bun/Node env loading.
 
 ## Relay
 
@@ -102,6 +102,7 @@ src/
   app.ts                   # compose plugins + modules (no listen)
   runtime.ts               # Bun vs Node adapter
   config.ts                # HOST / PORT / RELAY_URL from process.env
+  decode-response-json.ts  # Effect Schema decoder for Response.json()
   plugins/openapi.ts       # @elysiajs/openapi (Scalar at /openapi)
   modules/health/          # local health controller + TypeBox model
   modules/relay/           # Paseo relay probe
@@ -109,4 +110,6 @@ oxlint.config.ts
 tools/oxlint/anti-slop/
 ```
 
-Lint uses [anti-slop](https://github.com/dmmulroy/anti-slop) the way that project is meant to be used: the plugin is **vendored**, not an npm package. Generic rules are enabled in `oxlint.config.ts`. The Effect rule group is not registered (this app does not depend on Effect). Provenance lives in `tools/oxlint/anti-slop/UPSTREAM.md`. To refresh, ask an agent to update anti-slop while preserving local customizations.
+HTTP JSON in tests is decoded with [`decodeResponseJson`](src/decode-response-json.ts): `response.json()` plus an Effect `Schema`.
+
+Lint uses [anti-slop](https://github.com/dmmulroy/anti-slop) the way that project is meant to be used: the plugin is **vendored**, not an npm package. Generic rules are enabled in `oxlint.config.ts`. The Effect rule group is not registered. Provenance lives in `tools/oxlint/anti-slop/UPSTREAM.md`. To refresh, ask an agent to update anti-slop while preserving local customizations.
