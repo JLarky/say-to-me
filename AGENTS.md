@@ -1,9 +1,5 @@
 # say-to-me2
 
-## Environment variables
-
-Do not parse `.env` files in app code (no `dotenv`, no `fs` read of `.env`). Native Bun/Node env loading only. `src/config.ts` may apply defaults and validation on `process.env`.
-
 ## Learning more about Effect
 
 This repository uses the Effect Typescript library.
