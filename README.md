@@ -18,7 +18,7 @@ Default listen address: `http://127.0.0.1:43141` (`HOST` / `PORT` override). Bin
 
 ## Relay
 
-Copy `.env.example` to `.env` and set `RELAY_URL` to the relay origin (HTTP only — no TLS).
+Copy `.env.example` to `.env` and set `RELAY_URL` to the relay origin (HTTP only — no TLS). Bun loads `.env` from the working directory. Node scripts pass `--env-file=.env`. The app only reads `process.env`.
 
 | Variable | Required | Default | What it is |
 |----------|----------|---------|------------|
@@ -64,7 +64,7 @@ pnpm dev:node
 # or: npm run dev:node
 ```
 
-`tsx` watches TypeScript. Production-style (no watch): `pnpm start:node`.
+`tsx` is loaded by Node (`--import tsx --watch`). Production-style (no watch): `pnpm start:node`. Both pass `--env-file=.env`.
 
 ### Bun
 
@@ -73,7 +73,7 @@ pnpm dev:bun
 # or: bun run dev:bun
 ```
 
-Bun runs `src/index.ts` directly. Production-style (no watch): `pnpm start:bun`.
+Bun runs `src/index.ts` directly and loads `.env` from the working directory. Production-style (no watch): `pnpm start:bun`.
 
 The process picks the Elysia adapter from the runtime: native on Bun, `@elysiajs/node` on Node.
 
@@ -101,7 +101,7 @@ src/
   index.ts                 # listen; runtime-selected adapter
   app.ts                   # compose plugins + modules (no listen)
   runtime.ts               # Bun vs Node adapter
-  config.ts                # HOST / PORT / RELAY_URL, loads .env
+  config.ts                # HOST / PORT / RELAY_URL from process.env
   plugins/openapi.ts       # @elysiajs/openapi (Scalar at /openapi)
   modules/health/          # local health controller + TypeBox model
   modules/relay/           # Paseo relay probe
