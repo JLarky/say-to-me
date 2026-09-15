@@ -1,7 +1,7 @@
 import { Elysia, t } from 'elysia'
-import { health } from './modules/health'
-import { createRelay } from './modules/relay'
-import { openapiPlugin } from './plugins/openapi'
+import { health } from './modules/health/index.ts'
+import { createRelay } from './modules/relay/index.ts'
+import { openapiPlugin } from './plugins/openapi.ts'
 
 type AppOptions = ConstructorParameters<typeof Elysia>[0]
 

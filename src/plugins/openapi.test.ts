@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { createApp } from '../app'
+import { createApp } from '../app.ts'
 
 const app = createApp()
 

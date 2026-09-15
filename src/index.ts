@@ -1,5 +1,5 @@
-import { createRuntimeApp } from './runtime'
-import { config } from './config'
+import { createRuntimeApp } from './runtime.ts'
+import { config } from './config.ts'
 
 const app = await createRuntimeApp()
 

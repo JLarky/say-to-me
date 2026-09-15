@@ -1,4 +1,4 @@
-import { createApp } from './app'
+import { createApp } from './app.ts'
 
 export function isBunRuntime() {
   return 'bun' in process.versions
