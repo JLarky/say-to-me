@@ -98,6 +98,8 @@ pnpm test:bun      # Bun's test runner
 pnpm typecheck
 ```
 
+GitHub Actions runs those same four commands on pushes to `new` and on pull requests targeting `new`. Workflows are written in TypeScript with [gha-ts](https://github.com/JLarky/gha-ts). After editing `.github/workflows/*.main.ts`, run `node .github/workflows/ci.main.ts` and commit the generated YAML.
+
 ## Layout
 
 ```
@@ -112,6 +114,8 @@ src/
   modules/relay/           # Paseo relay WebSocket round-trip
 oxlint.config.ts
 tools/oxlint/anti-slop/
+.github/workflows/         # gha-ts source + generated YAML
+
 ```
 
 HTTP JSON in tests is decoded with [`decodeResponseJson`](src/decode-response-json.ts): `response.json()` plus an Effect `Schema`. JSON text (including WebSocket frames) uses `decodeJsonText(text, Schema.Json)`. `JSON.parse` is banned by `anti-slop/no-json-parse`. Assertions `as unknown`, `as object`, and `as any` are banned by `anti-slop/no-broad-type-assertion`.

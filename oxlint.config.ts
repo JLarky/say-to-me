@@ -13,6 +13,7 @@ export default defineConfig({
     '.pi/**',
     '.roo/**',
     '.windsurf/**',
+    '.github/**',
     'tools/oxlint/anti-slop/**'
   ],
   jsPlugins: [
