@@ -14,7 +14,7 @@ There is no auth, database, or extra process. The live product today is still th
 | `GET /openapi/json` | Raw OpenAPI JSON |
 | `GET /` | Pointers to health, relay, and docs |
 
-Default listen address: `http://127.0.0.1:43141` (`HOST` / `PORT` override). Bind is `0.0.0.0` so both local and VM preview work.
+Default listen address: `http://127.0.0.1:43141` (`HOST` / `PORT` override via the process environment). Bind is `0.0.0.0` so both local and VM preview work. App code does not load `.env` files; use the shell or native Bun/Node env loading.
 
 ## Relay
 
