@@ -17,7 +17,7 @@
     "lint": "oxlint",
     "test": "node --test \"src/**/*.test.ts\" && node tools/oxlint/anti-slop/rules/no-json-parse.test.ts",
     "test:node": "node --test \"src/**/*.test.ts\" && node tools/oxlint/anti-slop/rules/no-json-parse.test.ts",
-    "test:bun": "bun test src && bun tools/oxlint/anti-slop/rules/no-json-parse.test.ts",
+    "test:bun": "bun test src",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
