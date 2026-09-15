@@ -2,14 +2,14 @@
 
 Local [Elysia](https://elysiajs.com/) HTTP service. It runs on **Node** and **Bun**. This checkout is not locked to either runtime.
 
-There is no auth, database, or extra process. The live product today is still the sibling `say-to-me` app; this slice adds a Paseo relay probe on top of health and OpenAPI.
+There is no auth, database, or extra process. The live product today is still the sibling `say-to-me` app; this slice adds a Paseo relay WebSocket round-trip on top of health and OpenAPI.
 
 ## Endpoints
 
 | Path | What it is |
 |------|------------|
 | `GET /health` | Local liveness: `{ "status": "ok" }` |
-| `GET /relay` | Probes the configured Paseo relay over plain HTTP and returns health plus WebSocket URLs |
+| `GET /relay` | WebSocket round-trip: e2ee_hello plus a random string echoed through the relay |
 | `GET /openapi` | Scalar UI for the generated OpenAPI docs |
 | `GET /openapi/json` | Raw OpenAPI JSON |
 | `GET /` | Pointers to health, relay, and docs |
@@ -28,7 +28,7 @@ Copy `.env.example` to `.env` and set `RELAY_URL` to the relay origin. Bun loads
 
 `.env` is gitignored. `.env.example` keeps a placeholder URL, not a real host.
 
-`GET /relay` calls `$RELAY_URL/health` and, on success, returns:
+`GET /relay` opens three v2 WebSockets that share `serverId`: a control socket (`role=server`, no `connectionId`) to register the server, plus a client ↔ server-data pair. The payload path is client ↔ server-data; the round-trip does not wait for control `connected`. It sends `{ type: "e2ee_hello", key }` where `key` is canonical Base64 of a 32-byte X25519 public key, then echoes a random string through the relay. The whole round-trip is bounded by 3 seconds and sockets are `terminate()`d on the way out. On success:
 
 ```json
 {
@@ -38,11 +38,13 @@ Copy `.env.example` to `.env` and set `RELAY_URL` to the relay origin. Bun loads
     "ws": "ws://127.0.0.1:4000/ws",
     "tls": false
   },
-  "upstream": { "status": "ok" }
+  "payload": "…",
+  "echoed": "…",
+  "serverId": "say-to-me2-…"
 }
 ```
 
-An unreachable or non-ok relay is `502`.
+A failed round-trip is `502`. Local `GET /health` does not depend on the relay.
 
 ## Run locally
 
@@ -107,7 +109,7 @@ src/
   decode-response-json.ts  # Effect Schema decoder for Response.json()
   plugins/openapi.ts       # @elysiajs/openapi (Scalar at /openapi)
   modules/health/          # local health controller + TypeBox model
-  modules/relay/           # Paseo relay probe
+  modules/relay/           # Paseo relay WebSocket round-trip
 oxlint.config.ts
 tools/oxlint/anti-slop/
 ```

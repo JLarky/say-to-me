@@ -15,9 +15,9 @@ const RelayPointers = Schema.Struct({
 const RelayOk = Schema.Struct({
   status: Schema.Literal('ok'),
   relay: RelayPointers,
-  upstream: Schema.Struct({
-    status: Schema.Literal('ok')
-  })
+  payload: Schema.String,
+  echoed: Schema.String,
+  serverId: Schema.String
 })
 
 const RelayError = Schema.Struct({
@@ -35,34 +35,33 @@ afterEach(() => {
 })
 
 describe('relay', () => {
-  it('probes the configured relay health URL', async () => {
+  it('echoes a random string through the configured relay', async () => {
     process.env.RELAY_URL = 'http://203.0.113.1:4000'
 
-    const app = createApp({}, async (input) => {
-      assert.equal(String(input), 'http://203.0.113.1:4000/health')
+    const app = createApp({}, async (baseWs) => {
+      assert.equal(baseWs, 'ws://203.0.113.1:4000/ws')
 
-      return Response.json({ status: 'ok' })
+      return {
+        serverId: 'say-to-me2-test'
+      }
     })
 
     const response = await app.handle(new Request('http://localhost/relay'))
+    const body = await decodeResponseJson(response, RelayOk)
 
     assert.equal(response.status, 200)
-    assert.deepEqual(await decodeResponseJson(response, RelayOk), {
-      status: 'ok',
-      relay: {
-        health: 'http://203.0.113.1:4000/health',
-        ws: 'ws://203.0.113.1:4000/ws',
-        tls: false
-      },
-      upstream: { status: 'ok' }
-    })
+    assert.equal(body.echoed, body.payload)
+    assert.equal(body.relay.ws, 'ws://203.0.113.1:4000/ws')
+    assert.equal(body.relay.health, 'http://203.0.113.1:4000/health')
+    assert.equal(body.relay.tls, false)
+    assert.equal(body.serverId, 'say-to-me2-test')
   })
 
-  it('returns 502 when the relay is unreachable', async () => {
+  it('returns 502 when the round-trip fails', async () => {
     process.env.RELAY_URL = 'http://203.0.113.1:4000'
 
     const app = createApp({}, async () => {
-      throw new TypeError('fetch failed')
+      throw new TypeError('websocket failed')
     })
 
     const response = await app.handle(new Request('http://localhost/relay'))
@@ -70,7 +69,7 @@ describe('relay', () => {
     assert.equal(response.status, 502)
     assert.deepEqual(await decodeResponseJson(response, RelayError), {
       status: 'error',
-      error: 'fetch failed',
+      error: 'websocket failed',
       relay: {
         health: 'http://203.0.113.1:4000/health',
         ws: 'ws://203.0.113.1:4000/ws',
