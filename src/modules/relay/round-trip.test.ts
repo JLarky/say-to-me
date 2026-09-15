@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import type { AddressInfo } from 'node:net'
 import { once } from 'node:events'
 import { describe, it } from 'node:test'
-import { Type, type Static } from '@sinclair/typebox'
+import { Type } from '@sinclair/typebox'
 import { Value } from '@sinclair/typebox/value'
 import { WebSocketServer, type WebSocket } from 'ws'
 import { relayRoundTrip } from './round-trip.ts'
@@ -54,20 +54,12 @@ function socketText(data: Buffer | ArrayBuffer | ArrayBufferView | Buffer[]) {
   }
 
   if (data instanceof ArrayBuffer) {
-    return new TextDecoder().decode(data)
+    return Buffer.from(data).toString('utf8')
   }
 
-  return new TextDecoder().decode(data)
-}
-
-function isHelloFrame(value: unknown): value is Static<typeof HelloFrame> {
-  return Value.Check(HelloFrame, value)
-}
-
-function isRoundTripFrame(
-  value: unknown
-): value is Static<typeof RoundTripFrame> {
-  return Value.Check(RoundTripFrame, value)
+  return Buffer.from(
+    new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+  ).toString('utf8')
 }
 
 function maybeCorrupt(text: string, mode: ForwardMode) {
@@ -75,35 +67,31 @@ function maybeCorrupt(text: string, mode: ForwardMode) {
     return text
   }
 
-  let parsed: ReturnType<typeof JSON.parse>
-
   try {
-    parsed = JSON.parse(text)
+    const parsed = JSON.parse(text)
+
+    if (!Value.Check(RoundTripFrame, parsed)) {
+      return text
+    }
+
+    return JSON.stringify({
+      type: 'roundtrip',
+      payload: `not-${parsed.payload}`
+    })
   } catch {
     return text
   }
-
-  if (!isRoundTripFrame(parsed)) {
-    return text
-  }
-
-  return JSON.stringify({
-    type: 'roundtrip',
-    payload: `not-${parsed.payload}`
-  })
 }
 
 function captureHello(forwarder: Forwarder, text: string) {
-  let parsed: ReturnType<typeof JSON.parse>
-
   try {
-    parsed = JSON.parse(text)
+    const parsed = JSON.parse(text)
+
+    if (Value.Check(HelloFrame, parsed) && forwarder.helloKey === '') {
+      forwarder.helloKey = parsed.key
+    }
   } catch {
     return
-  }
-
-  if (isHelloFrame(parsed) && forwarder.helloKey === '') {
-    forwarder.helloKey = parsed.key
   }
 }
 
@@ -134,6 +122,7 @@ function attachPairing(forwarder: Forwarder, mode: ForwardMode) {
 
     if (role === 'server' && connectionId === null) {
       socket.send(JSON.stringify({ type: 'connected' }))
+
       return
     }
 
@@ -149,6 +138,7 @@ function attachPairing(forwarder: Forwarder, mode: ForwardMode) {
 
     if (peer === undefined) {
       waiting.set(connectionId, socket)
+
       return
     }
 
@@ -181,6 +171,7 @@ function closeForwarder(server: WebSocketServer) {
     server.close((error) => {
       if (error) {
         reject(error)
+
         return
       }
 
@@ -205,7 +196,9 @@ function assertV2Pair(urls: string[], serverId: string) {
       url.searchParams.get('role') === 'server' &&
       url.searchParams.get('connectionId') === null
   )
+
   const client = parsed.find((url) => url.searchParams.get('role') === 'client')
+
   const serverData = parsed.find(
     (url) =>
       url.searchParams.get('role') === 'server' &&

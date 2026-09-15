@@ -55,10 +55,12 @@ function messageText(data: Buffer | ArrayBuffer | ArrayBufferView | Buffer[]) {
   }
 
   if (data instanceof ArrayBuffer) {
-    return new TextDecoder().decode(data)
+    return Buffer.from(data).toString('utf8')
   }
 
-  return new TextDecoder().decode(data)
+  return Buffer.from(
+    new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+  ).toString('utf8')
 }
 
 function parseSocketJson(data: Buffer | ArrayBuffer | ArrayBufferView | Buffer[]) {
@@ -98,6 +100,7 @@ async function waitOpen(ws: WebSocket, label: string, signal: AbortSignal) {
 
   const local = new AbortController()
   const combined = AbortSignal.any([signal, local.signal])
+
   const closed = once(ws, 'close', { signal: combined }).then(() => {
     throw new Error(`${label} websocket closed before open`)
   })
@@ -123,6 +126,7 @@ async function waitMatchingFrame<T>(
   signal: AbortSignal
 ) {
   const local = new AbortController()
+
   const closed = () => {
     local.abort()
   }
