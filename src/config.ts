@@ -1,21 +1,42 @@
 import { createEnv } from '@t3-oss/env-core'
-import { z } from 'zod'
+import { Effect, Schema } from 'effect'
 
 const defaultPort = 43141
 
-const relayUrl = z
-  .url()
-  .refine((value) => {
-    const protocol = new URL(value).protocol
+const host = Schema.toStandardSchemaV1(
+  Schema.NonEmptyString.pipe(Schema.withDecodingDefault(Effect.succeed('0.0.0.0')))
+)
 
-    return protocol === 'http:' || protocol === 'https:'
-  }, 'RELAY_URL must be an http or https URL')
+const port = Schema.toStandardSchemaV1(
+  Schema.FiniteFromString.pipe(
+    Schema.check(Schema.isInt(), Schema.isGreaterThan(0)),
+    Schema.withDecodingDefault(Effect.succeed(String(defaultPort)))
+  )
+)
+
+const relayUrl = Schema.toStandardSchemaV1(
+  Schema.String.check(
+    Schema.makeFilter((value) => {
+      try {
+        const protocol = new URL(value).protocol
+
+        if (protocol === 'http:' || protocol === 'https:') {
+          return undefined
+        }
+      } catch {
+        return 'RELAY_URL must be an http or https URL'
+      }
+
+      return 'RELAY_URL must be an http or https URL'
+    })
+  )
+)
 
 export function loadEnv(runtimeEnv: NodeJS.ProcessEnv = process.env) {
   return createEnv({
     server: {
-      HOST: z.string().min(1).default('0.0.0.0'),
-      PORT: z.coerce.number().int().positive().default(defaultPort),
+      HOST: host,
+      PORT: port,
       RELAY_URL: relayUrl
     },
     runtimeEnv,

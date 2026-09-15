@@ -1,5 +1,8 @@
+# Do not auto-install optional peers; t3-env lists zod/valibot/arktype.
+autoInstallPeers: false
 allowBuilds:
   esbuild: true
+  msgpackr-extract: false
 minimumReleaseAgeExclude:
   - '@oxlint/binding-android-arm-eabi@1.83.0'
   - '@oxlint/binding-android-arm64@1.83.0'

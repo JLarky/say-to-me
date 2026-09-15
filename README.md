@@ -20,7 +20,7 @@ Default listen address: `http://127.0.0.1:43141` (`HOST` / `PORT` override via t
 
 Copy `.env.example` to `.env` and set `RELAY_URL` to the relay origin. Bun loads `.env` from the working directory. Node scripts pass `--env-file=.env`. The app only reads `process.env`.
 
-`RELAY_URL` is validated at process start with [T3 Env](https://env.t3.gg/docs/introduction). Missing or non-http(s) values prevent listen. Local `GET /health` still does not talk to the relay, but the process will not start without a valid `RELAY_URL`.
+`RELAY_URL` is validated at process start with [T3 Env](https://env.t3.gg/docs/standard-schema) and [Effect Schema](https://effect.website/docs/schema/standard-schema/) (Standard Schema v1). There is no Zod dependency. Missing or non-http(s) values prevent listen. Local `GET /health` still does not talk to the relay, but the process will not start without a valid `RELAY_URL`.
 
 | Variable | Required | Default | What it is |
 |----------|----------|---------|------------|
@@ -103,7 +103,7 @@ src/
   index.ts                 # listen; runtime-selected adapter
   app.ts                   # compose plugins + modules (no listen)
   runtime.ts               # Bun vs Node adapter
-  config.ts                # HOST / PORT / RELAY_URL via t3-env (process.env)
+  config.ts                # HOST / PORT / RELAY_URL via t3-env + Effect Schema (process.env)
   decode-response-json.ts  # Effect Schema decoder for Response.json()
   plugins/openapi.ts       # @elysiajs/openapi (Scalar at /openapi)
   modules/health/          # local health controller + TypeBox model
@@ -114,4 +114,4 @@ tools/oxlint/anti-slop/
 
 HTTP JSON in tests is decoded with [`decodeResponseJson`](src/decode-response-json.ts): `response.json()` plus an Effect `Schema`.
 
-Lint uses [anti-slop](https://github.com/dmmulroy/anti-slop) the way that project is meant to be used: the plugin is **vendored**, not an npm package. Generic rules are enabled in `oxlint.config.ts`. The Effect rule group is not registered. Provenance lives in `tools/oxlint/anti-slop/UPSTREAM.md`. To refresh, ask an agent to update anti-slop while preserving local customizations.
+Lint uses [anti-slop](https://github.com/dmmulroy/anti-slop) the way that project is meant to be used: the plugin is **vendored**, not an npm package. Generic rules and the Effect plugin are enabled in `oxlint.config.ts`. Provenance lives in `tools/oxlint/anti-slop/UPSTREAM.md`. To refresh, ask an agent to update anti-slop while preserving local customizations.
