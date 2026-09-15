@@ -1,51 +1,44 @@
-import { Value } from '@sinclair/typebox/value'
 import { Elysia } from 'elysia'
 import { loadEnv, relayPointers } from '../../config.ts'
-import { RelayModel, UpstreamHealth } from './model.ts'
-
-const probeTimeoutMs = 3_000
-
-function isUpstreamOk(value: unknown): value is { status: 'ok' } {
-  return Value.Check(UpstreamHealth, value)
-}
+import { RelayModel } from './model.ts'
+import {
+  randomPayload,
+  relayRoundTrip,
+  type RelayRoundTripResult
+} from './round-trip.ts'
 
 function errorMessage(cause: unknown): string {
   if (cause instanceof Error) {
     return cause.message
   }
 
-  return 'relay probe failed'
+  return 'relay round-trip failed'
 }
 
-export function createRelay(relayFetch: typeof fetch = globalThis.fetch) {
+export function createRelay(
+  roundTrip?: (
+    baseWs: string,
+    payload: string
+  ) => Promise<RelayRoundTripResult>
+) {
+  const run = roundTrip ?? relayRoundTrip
+
   return new Elysia({ name: 'relay' }).get(
     '/relay',
     async ({ set }): Promise<RelayModel['ok'] | RelayModel['error']> => {
       const env = loadEnv()
       const pointers = relayPointers(env.RELAY_URL)
+      const payload = randomPayload()
 
       try {
-        const response = await relayFetch(pointers.health, {
-          signal: AbortSignal.timeout(probeTimeoutMs),
-          headers: { accept: 'application/json' }
-        })
-
-        const upstream = await response.json()
-
-        if (response.ok && isUpstreamOk(upstream)) {
-          return {
-            status: 'ok',
-            relay: pointers,
-            upstream: { status: 'ok' }
-          }
-        }
-
-        set.status = 502
+        const result = await run(pointers.ws, payload)
 
         return {
-          status: 'error',
-          error: `relay health returned HTTP ${response.status}`,
-          relay: pointers
+          status: 'ok',
+          relay: pointers,
+          payload,
+          echoed: payload,
+          serverId: result.serverId
         }
       } catch (cause) {
         set.status = 502
@@ -64,9 +57,9 @@ export function createRelay(relayFetch: typeof fetch = globalThis.fetch) {
       },
       detail: {
         tags: ['relay'],
-        summary: 'Paseo relay probe',
+        summary: 'Paseo relay round-trip',
         description:
-          'Probes RELAY_URL over HTTP. RELAY_URL is required at process start.'
+          'Opens a v2 server/client WebSocket pair, sends e2ee_hello with a 32-byte X25519 key, then echoes a random string through the relay within 3s. RELAY_URL is required at process start.'
       }
     }
   )

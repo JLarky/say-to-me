@@ -6,17 +6,13 @@ const relayPointers = t.Object({
   tls: t.Boolean()
 })
 
-export const UpstreamHealth = t.Object({
-  status: t.Literal('ok')
-})
-
 export const RelayModel = {
   ok: t.Object({
     status: t.Literal('ok'),
     relay: relayPointers,
-    upstream: t.Object({
-      status: t.Literal('ok')
-    })
+    payload: t.String(),
+    echoed: t.String(),
+    serverId: t.String()
   }),
   error: t.Object({
     status: t.Literal('error'),
