@@ -1,6 +1,6 @@
 import { Value } from '@sinclair/typebox/value'
 import { Elysia } from 'elysia'
-import { getRelayUrl, parseRelayUrl } from '../../config.ts'
+import { loadEnv, relayPointers } from '../../config.ts'
 import { RelayModel, UpstreamHealth } from './model.ts'
 
 const probeTimeoutMs = 3_000
@@ -20,32 +20,9 @@ function errorMessage(cause: unknown): string {
 export function createRelay(relayFetch: typeof fetch = globalThis.fetch) {
   return new Elysia({ name: 'relay' }).get(
     '/relay',
-    async ({ set }): Promise<
-      RelayModel['ok'] | RelayModel['error'] | RelayModel['unconfigured']
-    > => {
-      const relayUrl = getRelayUrl()
-
-      if (!relayUrl) {
-        set.status = 503
-
-        return {
-          status: 'error',
-          error: 'RELAY_URL is not set'
-        }
-      }
-
-      const parsed = parseRelayUrl(relayUrl)
-
-      if (!parsed.ok) {
-        set.status = 503
-
-        return {
-          status: 'error',
-          error: parsed.error
-        }
-      }
-
-      const pointers = parsed.pointers
+    async ({ set }): Promise<RelayModel['ok'] | RelayModel['error']> => {
+      const env = loadEnv()
+      const pointers = relayPointers(env.RELAY_URL)
 
       try {
         const response = await relayFetch(pointers.health, {
@@ -83,14 +60,13 @@ export function createRelay(relayFetch: typeof fetch = globalThis.fetch) {
     {
       response: {
         200: RelayModel.ok,
-        502: RelayModel.error,
-        503: RelayModel.unconfigured
+        502: RelayModel.error
       },
       detail: {
         tags: ['relay'],
         summary: 'Paseo relay probe',
         description:
-          'Probes RELAY_URL over plain HTTP (no TLS) and returns health plus WebSocket URLs.'
+          'Probes RELAY_URL over HTTP. RELAY_URL is required at process start.'
       }
     }
   )

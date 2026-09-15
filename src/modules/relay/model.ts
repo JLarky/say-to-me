@@ -3,7 +3,7 @@ import { t, type UnwrapSchema } from 'elysia'
 const relayPointers = t.Object({
   health: t.String(),
   ws: t.String(),
-  tls: t.Literal(false)
+  tls: t.Boolean()
 })
 
 export const UpstreamHealth = t.Object({
@@ -22,10 +22,6 @@ export const RelayModel = {
     status: t.Literal('error'),
     error: t.String(),
     relay: relayPointers
-  }),
-  unconfigured: t.Object({
-    status: t.Literal('error'),
-    error: t.String()
   })
 } as const
 

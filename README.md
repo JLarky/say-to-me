@@ -18,11 +18,13 @@ Default listen address: `http://127.0.0.1:43141` (`HOST` / `PORT` override via t
 
 ## Relay
 
-Copy `.env.example` to `.env` and set `RELAY_URL` to the relay origin (HTTP only — no TLS). Bun loads `.env` from the working directory. Node scripts pass `--env-file=.env`. The app only reads `process.env`.
+Copy `.env.example` to `.env` and set `RELAY_URL` to the relay origin. Bun loads `.env` from the working directory. Node scripts pass `--env-file=.env`. The app only reads `process.env`.
+
+`RELAY_URL` is validated at process start with [T3 Env](https://env.t3.gg/docs/introduction). Missing or non-http(s) values prevent listen. Local `GET /health` still does not talk to the relay, but the process will not start without a valid `RELAY_URL`.
 
 | Variable | Required | Default | What it is |
 |----------|----------|---------|------------|
-| `RELAY_URL` | for `GET /relay` | — | Relay origin, e.g. `http://127.0.0.1:4000` |
+| `RELAY_URL` | yes (boot) | — | Relay origin, e.g. `http://127.0.0.1:4000` |
 
 `.env` is gitignored. `.env.example` keeps a placeholder URL, not a real host.
 
@@ -40,7 +42,7 @@ Copy `.env.example` to `.env` and set `RELAY_URL` to the relay origin (HTTP only
 }
 ```
 
-Missing or non-http `RELAY_URL` is `503`. An unreachable or non-ok relay is `502`. Local `GET /health` does not depend on the relay.
+An unreachable or non-ok relay is `502`.
 
 ## Run locally
 
@@ -101,7 +103,7 @@ src/
   index.ts                 # listen; runtime-selected adapter
   app.ts                   # compose plugins + modules (no listen)
   runtime.ts               # Bun vs Node adapter
-  config.ts                # HOST / PORT / RELAY_URL from process.env
+  config.ts                # HOST / PORT / RELAY_URL via t3-env (process.env)
   decode-response-json.ts  # Effect Schema decoder for Response.json()
   plugins/openapi.ts       # @elysiajs/openapi (Scalar at /openapi)
   modules/health/          # local health controller + TypeBox model

@@ -12,11 +12,6 @@ const RelayPointers = Schema.Struct({
   tls: Schema.Literal(false)
 })
 
-const RelayUnconfigured = Schema.Struct({
-  status: Schema.Literal('error'),
-  error: Schema.String
-})
-
 const RelayOk = Schema.Struct({
   status: Schema.Literal('ok'),
   relay: RelayPointers,
@@ -40,22 +35,6 @@ afterEach(() => {
 })
 
 describe('relay', () => {
-  it('returns 503 when RELAY_URL is missing', async () => {
-    delete process.env.RELAY_URL
-
-    const app = createApp({}, async () => {
-      throw new Error('should not fetch')
-    })
-
-    const response = await app.handle(new Request('http://localhost/relay'))
-
-    assert.equal(response.status, 503)
-    assert.deepEqual(await decodeResponseJson(response, RelayUnconfigured), {
-      status: 'error',
-      error: 'RELAY_URL is not set'
-    })
-  })
-
   it('probes the configured relay health URL', async () => {
     process.env.RELAY_URL = 'http://203.0.113.1:4000'
 
