@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "First slice of say-to-me2: a local Elysia HTTP service.",
+  "description": "Local Elysia HTTP service: health, OpenAPI, and a Paseo relay probe.",
   "engines": {
     "node": ">=20"
   },

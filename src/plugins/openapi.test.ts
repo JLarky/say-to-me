@@ -5,7 +5,7 @@ import { createApp } from '../app'
 const app = createApp()
 
 describe('openapi', () => {
-  it('serves a spec that documents /health', async () => {
+  it('serves a spec that documents /health and /relay', async () => {
     const response = await app.handle(
       new Request('http://localhost/openapi/json')
     )
@@ -13,13 +13,14 @@ describe('openapi', () => {
     const spec = await response.json()
 
     assert.equal(response.status, 200)
-    assert.ok(hasDocumentedHealthPath(spec))
+    assert.ok(hasDocumentedHealthAndRelayPaths(spec))
   })
 })
 
 type OpenApiDocument = {
   paths?: {
     '/health'?: OpenApiPathItem
+    '/relay'?: OpenApiPathItem
   }
 }
 
@@ -29,9 +30,11 @@ type OpenApiPathItem = {
   }
 }
 
-function hasDocumentedHealthPath(
+function hasDocumentedHealthAndRelayPaths(
   spec: unknown
-): spec is OpenApiDocument & { paths: { '/health': OpenApiPathItem } } {
+): spec is OpenApiDocument & {
+  paths: { '/health': OpenApiPathItem; '/relay': OpenApiPathItem }
+} {
   if (spec === null) {
     return false
   }
@@ -48,5 +51,7 @@ function hasDocumentedHealthPath(
     return false
   }
 
-  return '/health' in Object(paths)
+  const pathMap = Object(paths)
+
+  return '/health' in pathMap && '/relay' in pathMap
 }
