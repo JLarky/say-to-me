@@ -31,10 +31,12 @@
     "ws": "^8.21.3"
   },
   "devDependencies": {
+    "@jlarky/gha-ts": "npm:@jsr/jlarky__gha-ts@^0.2.2",
     "@oxlint/plugins": "1.83.0",
     "@types/node": "^26.5.1",
     "@types/ws": "^8.18.1",
     "oxlint": "1.83.0",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "yaml": "^2.9.1"
   }
 }
