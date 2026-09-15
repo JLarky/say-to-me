@@ -28,6 +28,7 @@ export default defineConfig({
     'anti-slop/no-reduce-accumulator-copy': 'error',
     'anti-slop/no-chained-type-assertions': 'error',
     'anti-slop/no-conditional-empty-object-spread': 'error',
+    'anti-slop/no-json-parse': 'error',
     'anti-slop/no-known-value-widening': 'error',
     'anti-slop/no-module-mocking': 'error',
     'anti-slop/no-object-parameters': 'error',
