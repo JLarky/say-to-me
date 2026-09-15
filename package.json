@@ -3,16 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "First slice of say-to-me2: a local Elysia HTTP service.",
+  "description": "Local Elysia HTTP service: health, OpenAPI, and a Paseo relay probe.",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "dev:node": "tsx watch src/index.ts",
+    "dev": "node --env-file=.env --import tsx --watch src/index.ts",
+    "dev:node": "node --env-file=.env --import tsx --watch src/index.ts",
     "dev:bun": "bun --watch src/index.ts",
-    "start": "tsx src/index.ts",
-    "start:node": "tsx src/index.ts",
+    "start": "node --env-file=.env --import tsx src/index.ts",
+    "start:node": "node --env-file=.env --import tsx src/index.ts",
     "start:bun": "bun src/index.ts",
     "lint": "oxlint",
     "test": "tsx --test \"src/**/*.test.ts\"",
