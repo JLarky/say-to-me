@@ -6,7 +6,7 @@ export const openapiPlugin = openapi({
       title: 'say-to-me2',
       version: '0.1.0',
       description:
-        'Local Elysia service. Health, OpenAPI docs, and a Paseo relay probe. Set RELAY_URL (http, no TLS).'
+        'Local Elysia service. Health, OpenAPI docs, and a Paseo relay probe. RELAY_URL is required at boot.'
     },
     tags: [
       {
@@ -15,7 +15,8 @@ export const openapiPlugin = openapi({
       },
       {
         name: 'relay',
-        description: 'Paseo relay probe. RELAY_URL is an http origin (no TLS).'
+        description:
+          'Paseo relay health probe. RELAY_URL is an http(s) origin, validated at process start.'
       }
     ]
   }

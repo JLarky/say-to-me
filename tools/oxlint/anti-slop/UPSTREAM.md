@@ -18,5 +18,5 @@ Installed plugin path: `./tools/oxlint/anti-slop/index.ts`
 
 ## Intentional deviations
 
-- Effect plugin is not registered. This app has no direct `effect` dependency.
+- Effect plugin is registered in `oxlint.config.ts` because the app depends on `effect` (Schema for env).
 - Plugin tests were not vendored. That matches the skill asset bundle, not a local edit of rule source.
