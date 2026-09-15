@@ -2,8 +2,6 @@ import assert from 'node:assert/strict'
 import type { AddressInfo } from 'node:net'
 import { once } from 'node:events'
 import { describe, it } from 'node:test'
-import { Type } from '@sinclair/typebox'
-import { Value } from '@sinclair/typebox/value'
 import { Schema } from 'effect'
 import { WebSocketServer, type WebSocket } from 'ws'
 import { decodeJsonText } from '../../decode-response-json.ts'
@@ -18,14 +16,14 @@ type Forwarder = {
   helloKey: string
 }
 
-const HelloFrame = Type.Object({
-  type: Type.Union([Type.Literal('hello'), Type.Literal('e2ee_hello')]),
-  key: Type.String(),
+const HelloFrame = Schema.Struct({
+  type: Schema.Literals(['hello', 'e2ee_hello']),
+  key: Schema.String,
 })
 
-const RoundTripFrame = Type.Object({
-  type: Type.Literal('roundtrip'),
-  payload: Type.String(),
+const RoundTripFrame = Schema.Struct({
+  type: Schema.Literal('roundtrip'),
+  payload: Schema.String,
 })
 
 function isAddressInfo(value: AddressInfo | string): value is AddressInfo {
@@ -68,11 +66,7 @@ function maybeCorrupt(text: string, mode: ForwardMode) {
   }
 
   try {
-    const parsed = decodeJsonText(text, Schema.Json)
-
-    if (!Value.Check(RoundTripFrame, parsed)) {
-      return text
-    }
+    const parsed = decodeJsonText(text, RoundTripFrame)
 
     return JSON.stringify({
       type: 'roundtrip',
@@ -85,9 +79,9 @@ function maybeCorrupt(text: string, mode: ForwardMode) {
 
 function captureHello(forwarder: Forwarder, text: string) {
   try {
-    const parsed = decodeJsonText(text, Schema.Json)
+    const parsed = decodeJsonText(text, HelloFrame)
 
-    if (Value.Check(HelloFrame, parsed) && forwarder.helloKey === '') {
+    if (forwarder.helloKey === '') {
       forwarder.helloKey = parsed.key
     }
   } catch {
