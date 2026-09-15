@@ -1,4 +1,4 @@
-import { Effect, Schema } from 'effect'
+import { Schema } from 'effect'
 
 export type JsonBodySource = Pick<Response, 'json'>
 
@@ -6,7 +6,7 @@ export function decodeJsonText<S extends Schema.ConstraintDecoder<unknown>>(
   text: string,
   schema: S,
 ): S['Type'] {
-  return Effect.runSync(Schema.decodeUnknownEffect(Schema.fromJsonString(schema))(text))
+  return Schema.decodeUnknownSync(Schema.fromJsonString(schema))(text)
 }
 
 export async function decodeResponseJson<S extends Schema.ConstraintDecoder<unknown>>(
