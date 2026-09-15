@@ -1,8 +1,35 @@
 import assert from 'node:assert/strict'
 import { afterEach, describe, it } from 'node:test'
+import { Schema } from 'effect'
 import { createApp } from '../../app'
+import { decodeResponseJson } from '../../decode-response-json'
 
 const previousRelayUrl = process.env.RELAY_URL
+
+const RelayPointers = Schema.Struct({
+  health: Schema.String,
+  ws: Schema.String,
+  tls: Schema.Literal(false)
+})
+
+const RelayUnconfigured = Schema.Struct({
+  status: Schema.Literal('error'),
+  error: Schema.String
+})
+
+const RelayOk = Schema.Struct({
+  status: Schema.Literal('ok'),
+  relay: RelayPointers,
+  upstream: Schema.Struct({
+    status: Schema.Literal('ok')
+  })
+})
+
+const RelayError = Schema.Struct({
+  status: Schema.Literal('error'),
+  error: Schema.String,
+  relay: RelayPointers
+})
 
 afterEach(() => {
   if (previousRelayUrl === undefined) {
@@ -23,7 +50,7 @@ describe('relay', () => {
     const response = await app.handle(new Request('http://localhost/relay'))
 
     assert.equal(response.status, 503)
-    assert.deepEqual(await response.json(), {
+    assert.deepEqual(await decodeResponseJson(response, RelayUnconfigured), {
       status: 'error',
       error: 'RELAY_URL is not set'
     })
@@ -41,7 +68,7 @@ describe('relay', () => {
     const response = await app.handle(new Request('http://localhost/relay'))
 
     assert.equal(response.status, 200)
-    assert.deepEqual(await response.json(), {
+    assert.deepEqual(await decodeResponseJson(response, RelayOk), {
       status: 'ok',
       relay: {
         health: 'http://203.0.113.1:4000/health',
@@ -62,7 +89,7 @@ describe('relay', () => {
     const response = await app.handle(new Request('http://localhost/relay'))
 
     assert.equal(response.status, 502)
-    assert.deepEqual(await response.json(), {
+    assert.deepEqual(await decodeResponseJson(response, RelayError), {
       status: 'error',
       error: 'fetch failed',
       relay: {
