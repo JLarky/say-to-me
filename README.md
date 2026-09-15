@@ -106,7 +106,7 @@ src/
   app.ts                   # compose plugins + modules (no listen)
   runtime.ts               # Bun vs Node adapter
   config.ts                # HOST / PORT / RELAY_URL via t3-env + Effect Schema (process.env)
-  decode-response-json.ts  # Effect Schema decoder for Response.json()
+  decode-response-json.ts  # Effect Schema decoders for JSON text and Response.json()
   plugins/openapi.ts       # @elysiajs/openapi (Scalar at /openapi)
   modules/health/          # local health controller + TypeBox model
   modules/relay/           # Paseo relay WebSocket round-trip
@@ -114,6 +114,6 @@ oxlint.config.ts
 tools/oxlint/anti-slop/
 ```
 
-HTTP JSON in tests is decoded with [`decodeResponseJson`](src/decode-response-json.ts): `response.json()` plus an Effect `Schema`.
+HTTP JSON in tests is decoded with [`decodeResponseJson`](src/decode-response-json.ts): `response.json()` plus an Effect `Schema`. JSON text (including WebSocket frames) uses `decodeJsonText(text, Schema.Json)`. `JSON.parse` is banned by `anti-slop/no-json-parse`. Assertions `as unknown`, `as object`, and `as any` are banned by `anti-slop/no-broad-type-assertion`.
 
 Lint uses [anti-slop](https://github.com/dmmulroy/anti-slop) the way that project is meant to be used: the plugin is **vendored**, not an npm package. Generic rules and the Effect plugin are enabled in `oxlint.config.ts`. Provenance lives in `tools/oxlint/anti-slop/UPSTREAM.md`. To refresh, ask an agent to update anti-slop while preserving local customizations.

@@ -20,3 +20,4 @@ Installed plugin path: `./tools/oxlint/anti-slop/index.ts`
 
 - Effect plugin is registered in `oxlint.config.ts` because the app depends on `effect` (Schema for env).
 - Plugin tests were not vendored. That matches the skill asset bundle, not a local edit of rule source.
+- Local rules `no-json-parse` and `no-broad-type-assertion` (plus `shared/json-method.ts`) are not upstream. `no-json-parse` forbids `JSON.parse` / `JSON['parse']`; JSON text is decoded with `decodeJsonText(text, Schema.Json)` and HTTP bodies with `decodeResponseJson`. `JSON.stringify` is allowed. `no-broad-type-assertion` forbids `as unknown`, `as object`, and `as any`. Preserve these on anti-slop updates.

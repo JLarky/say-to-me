@@ -2,7 +2,9 @@ import { randomBytes, generateKeyPairSync } from 'node:crypto'
 import { on, once } from 'node:events'
 import { Type, type Static } from '@sinclair/typebox'
 import { Value } from '@sinclair/typebox/value'
+import { Schema } from 'effect'
 import { WebSocket } from 'ws'
+import { decodeJsonText } from '../../decode-response-json.ts'
 
 export const roundTripTimeoutMs = 3_000
 
@@ -65,7 +67,7 @@ function messageText(data: Buffer | ArrayBuffer | ArrayBufferView | Buffer[]) {
 
 function parseSocketJson(data: Buffer | ArrayBuffer | ArrayBufferView | Buffer[]) {
   try {
-    return JSON.parse(messageText(data))
+    return decodeJsonText(messageText(data), Schema.Json)
   } catch {
     return undefined
   }

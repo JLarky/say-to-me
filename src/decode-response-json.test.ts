@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { Schema } from 'effect'
-import { decodeResponseJson } from './decode-response-json.ts'
+import {
+  decodeJsonText,
+  decodeResponseJson
+} from './decode-response-json.ts'
 
 const HealthBody = Schema.Struct({
   status: Schema.Literal('ok')
@@ -12,6 +15,18 @@ function jsonResponse(body: string): Response {
     headers: { 'content-type': 'application/json' }
   })
 }
+
+describe('decodeJsonText', () => {
+  it('returns decoded json', () => {
+    assert.deepEqual(decodeJsonText(JSON.stringify({ status: 'ok' }), Schema.Json), {
+      status: 'ok'
+    })
+  })
+
+  it('throws when the text is not json', () => {
+    assert.throws(() => decodeJsonText('not-json', Schema.Json))
+  })
+})
 
 describe('decodeResponseJson', () => {
   it('returns decoded json when it matches the schema', async () => {

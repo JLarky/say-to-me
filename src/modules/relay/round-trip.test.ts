@@ -4,7 +4,9 @@ import { once } from 'node:events'
 import { describe, it } from 'node:test'
 import { Type } from '@sinclair/typebox'
 import { Value } from '@sinclair/typebox/value'
+import { Schema } from 'effect'
 import { WebSocketServer, type WebSocket } from 'ws'
+import { decodeJsonText } from '../../decode-response-json.ts'
 import { relayRoundTrip } from './round-trip.ts'
 
 type ForwardMode = 'pipe' | 'mismatch' | 'hang'
@@ -68,7 +70,7 @@ function maybeCorrupt(text: string, mode: ForwardMode) {
   }
 
   try {
-    const parsed = JSON.parse(text)
+    const parsed = decodeJsonText(text, Schema.Json)
 
     if (!Value.Check(RoundTripFrame, parsed)) {
       return text
@@ -85,7 +87,7 @@ function maybeCorrupt(text: string, mode: ForwardMode) {
 
 function captureHello(forwarder: Forwarder, text: string) {
   try {
-    const parsed = JSON.parse(text)
+    const parsed = decodeJsonText(text, Schema.Json)
 
     if (Value.Check(HelloFrame, parsed) && forwarder.helloKey === '') {
       forwarder.helloKey = parsed.key
