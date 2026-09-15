@@ -10,12 +10,12 @@ export const roundTripTimeoutMs = 3_000
 
 const HelloFrame = Type.Object({
   type: Type.Union([Type.Literal('hello'), Type.Literal('e2ee_hello')]),
-  key: Type.String()
+  key: Type.String(),
 })
 
 const RoundTripFrame = Type.Object({
   type: Type.Literal('roundtrip'),
-  payload: Type.String()
+  payload: Type.String(),
 })
 
 export type RelayRoundTripResult = {
@@ -60,9 +60,7 @@ function messageText(data: Buffer | ArrayBuffer | ArrayBufferView | Buffer[]) {
     return Buffer.from(data).toString('utf8')
   }
 
-  return Buffer.from(
-    new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
-  ).toString('utf8')
+  return Buffer.from(new Uint8Array(data.buffer, data.byteOffset, data.byteLength)).toString('utf8')
 }
 
 function parseSocketJson(data: Buffer | ArrayBuffer | ArrayBufferView | Buffer[]) {
@@ -77,9 +75,7 @@ function isHelloFrame(value: unknown): value is Static<typeof HelloFrame> {
   return Value.Check(HelloFrame, value)
 }
 
-function isRoundTripFrame(
-  value: unknown
-): value is Static<typeof RoundTripFrame> {
+function isRoundTripFrame(value: unknown): value is Static<typeof RoundTripFrame> {
   return Value.Check(RoundTripFrame, value)
 }
 
@@ -125,7 +121,7 @@ async function waitMatchingFrame<T>(
   ws: WebSocket,
   label: string,
   match: (value: unknown) => value is T,
-  signal: AbortSignal
+  signal: AbortSignal,
 ) {
   const local = new AbortController()
 
@@ -137,7 +133,7 @@ async function waitMatchingFrame<T>(
 
   try {
     for await (const event of on(ws, 'message', {
-      signal: AbortSignal.any([signal, local.signal])
+      signal: AbortSignal.any([signal, local.signal]),
     })) {
       const parsed = parseSocketJson(event[0])
 
@@ -181,7 +177,7 @@ function socketUrl(
   baseWs: string,
   role: 'server' | 'client',
   serverId: string,
-  connectionId?: string
+  connectionId?: string,
 ) {
   const url = new URL(baseWs)
 
@@ -199,7 +195,7 @@ function socketUrl(
 export async function relayRoundTrip(
   baseWs: string,
   payload: string,
-  timeoutMs = roundTripTimeoutMs
+  timeoutMs = roundTripTimeoutMs,
 ): Promise<RelayRoundTripResult> {
   const serverId = randomId('say-to-me2')
   const connectionId = randomId('clt')
@@ -207,19 +203,15 @@ export async function relayRoundTrip(
   const signal = AbortSignal.timeout(timeoutMs)
   const control = new WebSocket(socketUrl(baseWs, 'server', serverId))
 
-  const client = new WebSocket(
-    socketUrl(baseWs, 'client', serverId, connectionId)
-  )
+  const client = new WebSocket(socketUrl(baseWs, 'client', serverId, connectionId))
 
-  const serverData = new WebSocket(
-    socketUrl(baseWs, 'server', serverId, connectionId)
-  )
+  const serverData = new WebSocket(socketUrl(baseWs, 'server', serverId, connectionId))
 
   try {
     await Promise.all([
       waitOpen(control, 'server-control', signal),
       waitOpen(serverData, 'server-data', signal),
-      waitOpen(client, 'client', signal)
+      waitOpen(client, 'client', signal),
     ])
 
     const hello = waitHello(serverData, key, signal)

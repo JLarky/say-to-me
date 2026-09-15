@@ -4,14 +4,14 @@ import { Effect, Schema } from 'effect'
 const defaultPort = 43141
 
 const host = Schema.toStandardSchemaV1(
-  Schema.NonEmptyString.pipe(Schema.withDecodingDefault(Effect.succeed('0.0.0.0')))
+  Schema.NonEmptyString.pipe(Schema.withDecodingDefault(Effect.succeed('0.0.0.0'))),
 )
 
 const port = Schema.toStandardSchemaV1(
   Schema.FiniteFromString.pipe(
     Schema.check(Schema.isInt(), Schema.isGreaterThan(0)),
-    Schema.withDecodingDefault(Effect.succeed(String(defaultPort)))
-  )
+    Schema.withDecodingDefault(Effect.succeed(String(defaultPort))),
+  ),
 )
 
 const relayUrl = Schema.toStandardSchemaV1(
@@ -28,8 +28,8 @@ const relayUrl = Schema.toStandardSchemaV1(
       }
 
       return 'RELAY_URL must be an http or https URL'
-    })
-  )
+    }),
+  ),
 )
 
 export function loadEnv(runtimeEnv: NodeJS.ProcessEnv = process.env) {
@@ -37,10 +37,10 @@ export function loadEnv(runtimeEnv: NodeJS.ProcessEnv = process.env) {
     server: {
       HOST: host,
       PORT: port,
-      RELAY_URL: relayUrl
+      RELAY_URL: relayUrl,
     },
     runtimeEnv,
-    emptyStringAsUndefined: true
+    emptyStringAsUndefined: true,
   })
 }
 
@@ -57,6 +57,6 @@ export function relayPointers(relayUrl: string): RelayPointers {
   return {
     health: `${parsed.origin}/health`,
     ws: `${tls ? 'wss:' : 'ws:'}//${parsed.host}/ws`,
-    tls
+    tls,
   }
 }

@@ -14,20 +14,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-        with:
-          version: "10"
-      - uses: actions/setup-node@v4
+      - uses: voidzero-dev/setup-vp@v1
         with:
           node-version: "24"
-          cache: pnpm
+          cache: true
       - uses: oven-sh/setup-bun@v2
-      - run: pnpm install --frozen-lockfile
+      - run: vp install
       - name: Check generated workflows are in sync
         run: |-
           for f in .github/workflows/*.main.ts; do node "$f"; done
           git diff --exit-code .github/workflows/
-      - run: pnpm lint
-      - run: pnpm typecheck
-      - run: pnpm test
-      - run: pnpm test:bun
+      - run: vp check
+      - run: vp run test
+      - run: vp run test:bun

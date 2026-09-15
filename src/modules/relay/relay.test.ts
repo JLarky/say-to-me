@@ -9,7 +9,7 @@ const previousRelayUrl = process.env.RELAY_URL
 const RelayPointers = Schema.Struct({
   health: Schema.String,
   ws: Schema.String,
-  tls: Schema.Literal(false)
+  tls: Schema.Literal(false),
 })
 
 const RelayOk = Schema.Struct({
@@ -17,13 +17,13 @@ const RelayOk = Schema.Struct({
   relay: RelayPointers,
   payload: Schema.String,
   echoed: Schema.String,
-  serverId: Schema.String
+  serverId: Schema.String,
 })
 
 const RelayError = Schema.Struct({
   status: Schema.Literal('error'),
   error: Schema.String,
-  relay: RelayPointers
+  relay: RelayPointers,
 })
 
 afterEach(() => {
@@ -42,7 +42,7 @@ describe('relay', () => {
       assert.equal(baseWs, 'ws://203.0.113.1:4000/ws')
 
       return {
-        serverId: 'say-to-me2-test'
+        serverId: 'say-to-me2-test',
       }
     })
 
@@ -73,8 +73,8 @@ describe('relay', () => {
       relay: {
         health: 'http://203.0.113.1:4000/health',
         ws: 'ws://203.0.113.1:4000/ws',
-        tls: false
-      }
+        tls: false,
+      },
     })
   })
 })

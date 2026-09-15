@@ -2,11 +2,8 @@
   "name": "say-to-me2",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
   "description": "Local Elysia HTTP service: health, OpenAPI, and a Paseo relay WebSocket round-trip.",
-  "engines": {
-    "node": ">=24"
-  },
+  "type": "module",
   "scripts": {
     "dev": "node --env-file=.env --watch src/index.ts",
     "dev:node": "node --env-file=.env --watch src/index.ts",
@@ -14,7 +11,8 @@
     "start": "node --env-file=.env src/index.ts",
     "start:node": "node --env-file=.env src/index.ts",
     "start:bun": "bun src/index.ts",
-    "lint": "oxlint",
+    "check": "vp check",
+    "lint": "vp lint",
     "test": "node --test \"src/**/*.test.ts\"",
     "test:node": "node --test \"src/**/*.test.ts\"",
     "test:bun": "bun test src",
@@ -37,6 +35,11 @@
     "@types/ws": "^8.18.1",
     "oxlint": "1.83.0",
     "typescript": "^7.0.2",
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vite-plus": "latest",
     "yaml": "^2.9.1"
+  },
+  "engines": {
+    "node": ">=24"
   }
 }

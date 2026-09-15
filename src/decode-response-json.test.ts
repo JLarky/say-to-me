@@ -1,25 +1,22 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { Schema } from 'effect'
-import {
-  decodeJsonText,
-  decodeResponseJson
-} from './decode-response-json.ts'
+import { decodeJsonText, decodeResponseJson } from './decode-response-json.ts'
 
 const HealthBody = Schema.Struct({
-  status: Schema.Literal('ok')
+  status: Schema.Literal('ok'),
 })
 
 function jsonResponse(body: string): Response {
   return new Response(body, {
-    headers: { 'content-type': 'application/json' }
+    headers: { 'content-type': 'application/json' },
   })
 }
 
 describe('decodeJsonText', () => {
   it('returns decoded json', () => {
     assert.deepEqual(decodeJsonText(JSON.stringify({ status: 'ok' }), Schema.Json), {
-      status: 'ok'
+      status: 'ok',
     })
   })
 
@@ -33,7 +30,7 @@ describe('decodeResponseJson', () => {
     const response = jsonResponse(JSON.stringify({ status: 'ok' }))
 
     assert.deepEqual(await decodeResponseJson(response, HealthBody), {
-      status: 'ok'
+      status: 'ok',
     })
   })
 

@@ -1,5 +1,7 @@
 # say-to-me2
 
+Static checks go through Vite+: `vp check` (or `pnpm check`) formats, lints, and type-checks. Tests stay on Node's runner — `pnpm test` is `node --test "src/**/*.test.ts"`. Do not replace that with `vp test`.
+
 ## Learning more about Effect
 
 This repository uses the Effect Typescript library.

@@ -1,5 +1,7 @@
 # Do not auto-install optional peers; t3-env lists zod/valibot/arktype.
 autoInstallPeers: false
+overrides:
+  vite: npm:@voidzero-dev/vite-plus-core@latest
 allowBuilds:
   esbuild: true
   msgpackr-extract: false

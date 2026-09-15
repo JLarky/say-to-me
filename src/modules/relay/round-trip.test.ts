@@ -20,12 +20,12 @@ type Forwarder = {
 
 const HelloFrame = Type.Object({
   type: Type.Union([Type.Literal('hello'), Type.Literal('e2ee_hello')]),
-  key: Type.String()
+  key: Type.String(),
 })
 
 const RoundTripFrame = Type.Object({
   type: Type.Literal('roundtrip'),
-  payload: Type.String()
+  payload: Type.String(),
 })
 
 function isAddressInfo(value: AddressInfo | string): value is AddressInfo {
@@ -59,9 +59,7 @@ function socketText(data: Buffer | ArrayBuffer | ArrayBufferView | Buffer[]) {
     return Buffer.from(data).toString('utf8')
   }
 
-  return Buffer.from(
-    new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
-  ).toString('utf8')
+  return Buffer.from(new Uint8Array(data.buffer, data.byteOffset, data.byteLength)).toString('utf8')
 }
 
 function maybeCorrupt(text: string, mode: ForwardMode) {
@@ -78,7 +76,7 @@ function maybeCorrupt(text: string, mode: ForwardMode) {
 
     return JSON.stringify({
       type: 'roundtrip',
-      payload: `not-${parsed.payload}`
+      payload: `not-${parsed.payload}`,
     })
   } catch {
     return text
@@ -160,7 +158,7 @@ async function listenForwarder(mode: ForwardMode): Promise<Forwarder> {
     baseWs: `ws://127.0.0.1:${listeningPort(server)}/ws`,
     server,
     urls: [],
-    helloKey: ''
+    helloKey: '',
   }
 
   attachPairing(forwarder, mode)
@@ -195,26 +193,21 @@ function assertV2Pair(urls: string[], serverId: string) {
 
   const control = parsed.find(
     (url) =>
-      url.searchParams.get('role') === 'server' &&
-      url.searchParams.get('connectionId') === null
+      url.searchParams.get('role') === 'server' && url.searchParams.get('connectionId') === null,
   )
 
   const client = parsed.find((url) => url.searchParams.get('role') === 'client')
 
   const serverData = parsed.find(
     (url) =>
-      url.searchParams.get('role') === 'server' &&
-      url.searchParams.get('connectionId') !== null
+      url.searchParams.get('role') === 'server' && url.searchParams.get('connectionId') !== null,
   )
 
   assert.ok(control)
   assert.ok(client)
   assert.ok(serverData)
 
-  assert.equal(
-    client.searchParams.get('connectionId'),
-    serverData.searchParams.get('connectionId')
-  )
+  assert.equal(client.searchParams.get('connectionId'), serverData.searchParams.get('connectionId'))
 }
 
 function assertCanonicalX25519Key(key: string) {
@@ -245,7 +238,7 @@ describe('relayRoundTrip', () => {
     try {
       await assert.rejects(
         () => relayRoundTrip(forwarder.baseWs, 'round-trip-payload'),
-        /relay echoed a different payload/
+        /relay echoed a different payload/,
       )
     } finally {
       await closeForwarder(forwarder.server)
@@ -259,7 +252,7 @@ describe('relayRoundTrip', () => {
     try {
       await assert.rejects(
         () => relayRoundTrip(forwarder.baseWs, 'round-trip-payload', 200),
-        /relay round-trip timed out/
+        /relay round-trip timed out/,
       )
       assert.ok(Date.now() - started < 1000)
     } finally {

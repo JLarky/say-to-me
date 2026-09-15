@@ -8,7 +8,7 @@ export function decodeJsonText(text: string, schema: typeof Schema.Json) {
 
 export async function decodeResponseJson<S extends Schema.ConstraintDecoder<unknown>>(
   response: JsonBodySource,
-  schema: S
+  schema: S,
 ): Promise<S['Type']> {
   return Schema.decodeUnknownSync(schema)(await response.json())
 }

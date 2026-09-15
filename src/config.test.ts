@@ -12,8 +12,8 @@ describe('env', () => {
       loadEnv({
         HOST: '0.0.0.0',
         PORT: '43141',
-        RELAY_URL: ''
-      })
+        RELAY_URL: '',
+      }),
     )
   })
 
@@ -22,8 +22,8 @@ describe('env', () => {
       loadEnv({
         HOST: '0.0.0.0',
         PORT: '43141',
-        RELAY_URL: 'ftp://203.0.113.1:4000'
-      })
+        RELAY_URL: 'ftp://203.0.113.1:4000',
+      }),
     )
   })
 
@@ -31,7 +31,7 @@ describe('env', () => {
     const env = loadEnv({
       HOST: '0.0.0.0',
       PORT: '43141',
-      RELAY_URL: 'http://203.0.113.1:4000'
+      RELAY_URL: 'http://203.0.113.1:4000',
     })
 
     assert.equal(env.RELAY_URL, 'http://203.0.113.1:4000')
@@ -40,7 +40,7 @@ describe('env', () => {
 
   it('defaults HOST and PORT when they are omitted', () => {
     const env = loadEnv({
-      RELAY_URL: 'http://203.0.113.1:4000'
+      RELAY_URL: 'http://203.0.113.1:4000',
     })
 
     assert.equal(env.HOST, '0.0.0.0')

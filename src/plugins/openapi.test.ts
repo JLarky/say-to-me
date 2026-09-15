@@ -9,15 +9,13 @@ const app = createApp()
 const OpenApiHealthAndRelayDocument = Schema.Struct({
   paths: Schema.Struct({
     '/health': Schema.JsonObject,
-    '/relay': Schema.JsonObject
-  })
+    '/relay': Schema.JsonObject,
+  }),
 })
 
 describe('openapi', () => {
   it('serves a spec that documents /health and /relay', async () => {
-    const response = await app.handle(
-      new Request('http://localhost/openapi/json')
-    )
+    const response = await app.handle(new Request('http://localhost/openapi/json'))
 
     assert.equal(response.status, 200)
 
