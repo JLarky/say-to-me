@@ -8,10 +8,7 @@ type AppOptions = ConstructorParameters<typeof Elysia>[0]
 
 export function createApp(
   options: AppOptions = {},
-  roundTrip?: (
-    baseWs: string,
-    payload: string
-  ) => Promise<RelayRoundTripResult>
+  roundTrip?: (baseWs: string, payload: string) => Promise<RelayRoundTripResult>,
 ) {
   return new Elysia(options)
     .use(openapiPlugin)
@@ -23,7 +20,7 @@ export function createApp(
         name: 'say-to-me2' as const,
         health: '/health',
         relay: '/relay',
-        openapi: '/openapi'
+        openapi: '/openapi',
       }),
       {
         response: {
@@ -31,16 +28,15 @@ export function createApp(
             name: t.Literal('say-to-me2'),
             health: t.String(),
             relay: t.String(),
-            openapi: t.String()
-          })
+            openapi: t.String(),
+          }),
         },
         detail: {
           tags: ['ops'],
           summary: 'Service index',
-          description:
-            'Pointers to health, the Paseo relay round-trip, and OpenAPI documentation.'
-        }
-      }
+          description: 'Pointers to health, the Paseo relay round-trip, and OpenAPI documentation.',
+        },
+      },
     )
 }
 

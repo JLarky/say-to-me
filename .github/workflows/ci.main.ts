@@ -1,7 +1,7 @@
 #!/usr/bin/env -S node --no-warnings
 import YAML from "yaml";
 import { workflow } from "@jlarky/gha-ts/workflow-types";
-import { checkout, setupBun, setupNode } from "@jlarky/gha-ts/actions";
+import { checkout, setupBun } from "@jlarky/gha-ts/actions";
 import { generateWorkflow } from "@jlarky/gha-ts/cli";
 
 const wf = workflow({
@@ -16,20 +16,18 @@ const wf = workflow({
       steps: [
         checkout(),
         {
-          uses: "pnpm/action-setup@v4",
-          with: { version: "10" },
+          uses: "voidzero-dev/setup-vp@v1",
+          with: { "node-version": "24", cache: true },
         },
-        setupNode({ "node-version": "24", cache: "pnpm" }),
         setupBun(),
-        { run: "pnpm install --frozen-lockfile" },
+        { run: "vp install" },
         {
           name: "Check generated workflows are in sync",
           run: 'for f in .github/workflows/*.main.ts; do node "$f"; done\ngit diff --exit-code .github/workflows/',
         },
-        { run: "pnpm lint" },
-        { run: "pnpm typecheck" },
-        { run: "pnpm test" },
-        { run: "pnpm test:bun" },
+        { run: "vp check" },
+        { run: "vp run test" },
+        { run: "vp run test:bun" },
       ],
     },
   },

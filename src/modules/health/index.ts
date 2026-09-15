@@ -6,12 +6,12 @@ export const health = new Elysia({ name: 'health' }).get(
   (): HealthModel['response'] => ({ status: 'ok' }),
   {
     response: {
-      200: HealthModel.response
+      200: HealthModel.response,
     },
     detail: {
       tags: ['ops'],
       summary: 'Health check',
-      description: 'Returns ok when this process is serving requests.'
-    }
-  }
+      description: 'Returns ok when this process is serving requests.',
+    },
+  },
 )

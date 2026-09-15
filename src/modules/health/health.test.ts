@@ -7,7 +7,7 @@ import { decodeResponseJson } from '../../decode-response-json.ts'
 const app = createApp()
 
 const HealthResponse = Schema.Struct({
-  status: Schema.Literal('ok')
+  status: Schema.Literal('ok'),
 })
 
 describe('health', () => {
@@ -16,7 +16,7 @@ describe('health', () => {
 
     assert.equal(response.status, 200)
     assert.deepEqual(await decodeResponseJson(response, HealthResponse), {
-      status: 'ok'
+      status: 'ok',
     })
   })
 })

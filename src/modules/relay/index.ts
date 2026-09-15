@@ -1,11 +1,7 @@
 import { Elysia } from 'elysia'
 import { loadEnv, relayPointers } from '../../config.ts'
 import { RelayModel } from './model.ts'
-import {
-  randomPayload,
-  relayRoundTrip,
-  type RelayRoundTripResult
-} from './round-trip.ts'
+import { randomPayload, relayRoundTrip, type RelayRoundTripResult } from './round-trip.ts'
 
 function errorMessage(cause: unknown): string {
   if (cause instanceof Error) {
@@ -16,10 +12,7 @@ function errorMessage(cause: unknown): string {
 }
 
 export function createRelay(
-  roundTrip?: (
-    baseWs: string,
-    payload: string
-  ) => Promise<RelayRoundTripResult>
+  roundTrip?: (baseWs: string, payload: string) => Promise<RelayRoundTripResult>,
 ) {
   const run = roundTrip ?? relayRoundTrip
 
@@ -38,7 +31,7 @@ export function createRelay(
           relay: pointers,
           payload,
           echoed: payload,
-          serverId: result.serverId
+          serverId: result.serverId,
         }
       } catch (cause) {
         set.status = 502
@@ -46,22 +39,22 @@ export function createRelay(
         return {
           status: 'error',
           error: errorMessage(cause),
-          relay: pointers
+          relay: pointers,
         }
       }
     },
     {
       response: {
         200: RelayModel.ok,
-        502: RelayModel.error
+        502: RelayModel.error,
       },
       detail: {
         tags: ['relay'],
         summary: 'Paseo relay round-trip',
         description:
-          'Opens a v2 server/client WebSocket pair, sends e2ee_hello with a 32-byte X25519 key, then echoes a random string through the relay within 3s. RELAY_URL is required at process start.'
-      }
-    }
+          'Opens a v2 server/client WebSocket pair, sends e2ee_hello with a 32-byte X25519 key, then echoes a random string through the relay within 3s. RELAY_URL is required at process start.',
+      },
+    },
   )
 }
 
