@@ -102,6 +102,7 @@ src/
   app.ts                   # compose plugins + modules (no listen)
   runtime.ts               # Bun vs Node adapter
   config.ts                # HOST / PORT / RELAY_URL from process.env
+  safe-parse-json.ts       # Effect Schema decoder for Response.json()
   plugins/openapi.ts       # @elysiajs/openapi (Scalar at /openapi)
   modules/health/          # local health controller + TypeBox model
   modules/relay/           # Paseo relay probe
@@ -109,4 +110,6 @@ oxlint.config.ts
 tools/oxlint/anti-slop/
 ```
 
-Lint uses [anti-slop](https://github.com/dmmulroy/anti-slop) the way that project is meant to be used: the plugin is **vendored**, not an npm package. Generic rules are enabled in `oxlint.config.ts`. The Effect rule group is not registered (this app does not depend on Effect). Provenance lives in `tools/oxlint/anti-slop/UPSTREAM.md`. To refresh, ask an agent to update anti-slop while preserving local customizations.
+HTTP JSON in tests is decoded with [`safeParseJSON`](src/safe-parse-json.ts): `response.json()` plus an Effect `Schema`. Install Effect with `vp install effect@rc` (currently `effect@4` RC).
+
+Lint uses [anti-slop](https://github.com/dmmulroy/anti-slop) the way that project is meant to be used: the plugin is **vendored**, not an npm package. Generic rules are enabled in `oxlint.config.ts`. The Effect rule group is not registered. Provenance lives in `tools/oxlint/anti-slop/UPSTREAM.md`. To refresh, ask an agent to update anti-slop while preserving local customizations.
