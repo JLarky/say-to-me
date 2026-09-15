@@ -50,10 +50,10 @@ A failed round-trip is `502`. Local `GET /health` does not depend on the relay.
 
 [`@specter-ts/core@0.2.1`](https://github.com/devagrawal09/specter) owns the domain in-process. Core has no HTTP. This checkout does not add pair or login routes. A later `paseo daemon pair` login flow can commit here after a successful pair; this slice is not the pairing protocol (no QR, link, or daemon talk).
 
-| Specter                      | Input            | Result                                          |
-| ---------------------------- | ---------------- | ----------------------------------------------- |
-| command `recordPair`         | `{ clientId }`   | appends `client-paired` (idempotent per client) |
-| query `pairedClientsQuery`   | `{}`             | `{ clients: [{ clientId, pairedAt }] }`         |
+| Specter                    | Input          | Result                                          |
+| -------------------------- | -------------- | ----------------------------------------------- |
+| command `recordPair`       | `{ clientId }` | appends `client-paired` (idempotent per client) |
+| query `pairedClientsQuery` | `{}`           | `{ clients: [{ clientId, pairedAt }] }`         |
 
 `clientId` is a stable client identity. `pairedAt` is when the successful pair was recorded. The event log is in-memory (process lifetime; resets on restart). Tests call Specter directly.
 

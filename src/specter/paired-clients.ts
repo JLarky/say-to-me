@@ -75,10 +75,7 @@ export function createPairedClientsSpecterApp() {
     transaction: (sliceName, run) => typedStores.transaction(sliceName, (store) => run(store)),
   }
 
-  const recordPair = createCommandSlice(
-    'recordPair',
-    'Records that a pair succeeded.',
-  )
+  const recordPair = createCommandSlice('recordPair', 'Records that a pair succeeded.')
     .schema(PairClient)
     .store(stores)
     .apply(applyPairedClients)
