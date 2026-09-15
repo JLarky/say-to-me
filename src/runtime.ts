@@ -1,7 +1,7 @@
 import { createApp } from './app'
 
 export function isBunRuntime() {
-  return typeof process.versions.bun === 'string'
+  return 'bun' in process.versions
 }
 
 export async function createRuntimeApp() {
@@ -10,5 +10,6 @@ export async function createRuntimeApp() {
   }
 
   const { node } = await import('@elysiajs/node')
+
   return createApp({ adapter: node() })
 }
