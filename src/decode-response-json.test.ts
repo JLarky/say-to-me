@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { Schema } from 'effect'
-import { safeParseJSON } from './safe-parse-json.ts'
+import { decodeResponseJson } from './decode-response-json.ts'
 
 const HealthBody = Schema.Struct({
   status: Schema.Literal('ok')
@@ -13,11 +13,11 @@ function jsonResponse(body: string): Response {
   })
 }
 
-describe('safeParseJSON', () => {
+describe('decodeResponseJson', () => {
   it('returns decoded json when it matches the schema', async () => {
     const response = jsonResponse(JSON.stringify({ status: 'ok' }))
 
-    assert.deepEqual(await safeParseJSON(response, HealthBody), {
+    assert.deepEqual(await decodeResponseJson(response, HealthBody), {
       status: 'ok'
     })
   })
@@ -25,6 +25,6 @@ describe('safeParseJSON', () => {
   it('rejects json that does not match the schema', async () => {
     const response = jsonResponse(JSON.stringify({ status: 'nope' }))
 
-    await assert.rejects(() => safeParseJSON(response, HealthBody))
+    await assert.rejects(() => decodeResponseJson(response, HealthBody))
   })
 })

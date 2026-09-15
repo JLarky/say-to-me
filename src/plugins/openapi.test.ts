@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { Schema } from 'effect'
 import { createApp } from '../app.ts'
-import { safeParseJSON } from '../safe-parse-json.ts'
+import { decodeResponseJson } from '../decode-response-json.ts'
 
 const app = createApp()
 
@@ -21,7 +21,7 @@ describe('openapi', () => {
 
     assert.equal(response.status, 200)
 
-    const spec = await safeParseJSON(response, OpenApiHealthAndRelayDocument)
+    const spec = await decodeResponseJson(response, OpenApiHealthAndRelayDocument)
 
     assert.ok(spec.paths['/health'])
     assert.ok(spec.paths['/relay'])

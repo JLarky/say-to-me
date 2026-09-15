@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { Schema } from 'effect'
 import { createApp } from '../../app.ts'
-import { safeParseJSON } from '../../safe-parse-json.ts'
+import { decodeResponseJson } from '../../decode-response-json.ts'
 
 const app = createApp()
 
@@ -15,7 +15,7 @@ describe('health', () => {
     const response = await app.handle(new Request('http://localhost/health'))
 
     assert.equal(response.status, 200)
-    assert.deepEqual(await safeParseJSON(response, HealthResponse), {
+    assert.deepEqual(await decodeResponseJson(response, HealthResponse), {
       status: 'ok'
     })
   })
