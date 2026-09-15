@@ -110,6 +110,6 @@ oxlint.config.ts
 tools/oxlint/anti-slop/
 ```
 
-HTTP JSON in tests is decoded with [`decodeResponseJson`](src/decode-response-json.ts): `response.json()` plus an Effect `Schema`. Install Effect with `vp install effect@rc` (currently `effect@4` RC).
+HTTP JSON in tests is decoded with [`decodeResponseJson`](src/decode-response-json.ts): `response.json()` plus an Effect `Schema`.
 
 Lint uses [anti-slop](https://github.com/dmmulroy/anti-slop) the way that project is meant to be used: the plugin is **vendored**, not an npm package. Generic rules are enabled in `oxlint.config.ts`. The Effect rule group is not registered. Provenance lives in `tools/oxlint/anti-slop/UPSTREAM.md`. To refresh, ask an agent to update anti-slop while preserving local customizations.
