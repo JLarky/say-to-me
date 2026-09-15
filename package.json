@@ -53,6 +53,7 @@
     "@say-to-me/runtime-validation": "0.1.0",
     "@say-to-me/session-utils": "0.1.0",
     "@sinclair/typebox": "^0.34.52",
+    "@specter-ts/core": "0.2.1",
     "@stylexjs/stylex": "^0.18.3",
     "@vitejs/plugin-react": "latest",
     "arktype": "^2.2.0",

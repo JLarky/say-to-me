@@ -116,6 +116,24 @@ scripts/say-to-me usage timers
 scripts/say-to-me usage api
 ```
 
+### Heard receipts (Specter)
+
+After the browser speaks an agent reply, the server can record that the operator
+already heard it. Specter (`@specter-ts/core@0.2.1`) owns that domain in-process:
+command `recordHeard` and query `heardQuery`. Specter core has no HTTP; the existing
+Effect HttpApi is only the transport.
+
+```sh
+# with the dev host running (`vp run dev`)
+curl -s -X POST "http://127.0.0.1:$PORT/api/sessions/default/heard" \
+  -H 'content-type: application/json' \
+  -d '{"messageId":"42"}'
+curl -s "http://127.0.0.1:$PORT/api/sessions/default/heard"
+```
+
+Receipts live in an in-memory event log for the process lifetime (they reset on restart).
+Focused checks: `vp test --project shared-modules server/specter/heard.test.ts server/api-routes/heard.test.ts`.
+
 To boot a **second** process from a worktree (custom port, separate sqlite, never live
 5411 / `say.local`) and drive it with `say-to-me api --server` plus `agent-browser`, see
 [`docs/isolated-e2e.md`](docs/isolated-e2e.md).

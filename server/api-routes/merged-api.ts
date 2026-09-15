@@ -20,6 +20,7 @@ import {
   MessageCreateGroup,
   MessageCreateLive,
 } from "./message-create.ts";
+import { buildHeardHandlers, HeardGroup, HeardLive } from "./heard.ts";
 import { buildNotesHandlers, NotesGroup, NotesLive } from "./notes.ts";
 import {
   buildNotificationsHandlers,
@@ -149,6 +150,7 @@ export const SayToMeApi = HttpApi.make("say-to-me")
   .add(SessionContextGroup)
   .add(CliSessionsGroup)
   .add(NotesGroup)
+  .add(HeardGroup)
   .add(MessageControlsGroup)
   .add(DevSessionsGroup)
   .add(OpenCodeActivityPreviewGroup)
@@ -197,6 +199,7 @@ const SayToMeHandlers = Layer.mergeAll(
   buildSessionContextHandlers(SayToMeApi),
   buildCliSessionsHandlers(SayToMeApi),
   buildNotesHandlers(SayToMeApi),
+  buildHeardHandlers(SayToMeApi),
   buildMessageControlsHandlers(SayToMeApi),
   buildDevSessionsHandlers(SayToMeApi),
   buildOpenCodeActivityPreviewHandlers(SayToMeApi),
@@ -230,6 +233,7 @@ const SayToMeLive = Layer.mergeAll(
   NotificationsLive,
   PushLive,
   NotesLive,
+  HeardLive,
   MessageControlLive,
   SessionOrganizationLive,
   SessionModelSessionLive,
