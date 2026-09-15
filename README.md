@@ -55,7 +55,7 @@ curl -s http://127.0.0.1:43141/openapi/json | head
 Open `http://127.0.0.1:43141/openapi` for the docs UI.
 
 ```sh
-pnpm lint          # Oxlint + vendored anti-slop rules
+pnpm lint
 pnpm test          # Node (tsx + node:test)
 pnpm test:bun      # Bun's test runner
 pnpm typecheck
@@ -71,8 +71,8 @@ src/
   config.ts                # HOST / PORT
   plugins/openapi.ts       # @elysiajs/openapi (Scalar at /openapi)
   modules/health/          # health controller + TypeBox model
-oxlint.config.ts           # Oxlint + vendored anti-slop
-tools/oxlint/anti-slop/    # vendored https://github.com/dmmulroy/anti-slop
+oxlint.config.ts
+tools/oxlint/anti-slop/
 ```
 
 Lint uses [anti-slop](https://github.com/dmmulroy/anti-slop) the way that project is meant to be used: the plugin is **vendored**, not an npm package. Generic rules are enabled in `oxlint.config.ts`. The Effect rule group is not registered (this app does not depend on Effect). Provenance lives in `tools/oxlint/anti-slop/UPSTREAM.md`. To refresh, ask an agent to update anti-slop while preserving local customizations.
