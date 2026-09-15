@@ -19,7 +19,9 @@ const RoundTripFrame = Schema.Struct({
 const SocketFrame = Schema.Union([HelloFrame, RoundTripFrame])
 
 type HelloFrame = typeof HelloFrame.Type
+
 type RoundTripFrame = typeof RoundTripFrame.Type
+
 type SocketFrame = typeof SocketFrame.Type
 
 export type RelayRoundTripResult = {
