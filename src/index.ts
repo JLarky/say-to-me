@@ -1,12 +1,14 @@
 import { createRuntimeApp } from './runtime'
-import { config } from './config'
+import { loadEnv } from './config'
+
+const env = loadEnv()
 
 const app = await createRuntimeApp()
 
 app.listen(
   {
-    port: config.port,
-    hostname: config.hostname
+    port: env.PORT,
+    hostname: env.HOST
   },
   ({ hostname, port }) => {
     const host = hostname === '0.0.0.0' ? '127.0.0.1' : hostname

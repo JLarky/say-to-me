@@ -1,18 +1,22 @@
 import { Elysia, t } from 'elysia'
 import { health } from './modules/health'
 import { createRelay } from './modules/relay'
+import type { RelayRoundTripResult } from './modules/relay/round-trip'
 import { openapiPlugin } from './plugins/openapi'
 
 type AppOptions = ConstructorParameters<typeof Elysia>[0]
 
 export function createApp(
   options: AppOptions = {},
-  relayFetch: typeof fetch = globalThis.fetch
+  roundTrip?: (
+    baseWs: string,
+    payload: string
+  ) => Promise<RelayRoundTripResult>
 ) {
   return new Elysia(options)
     .use(openapiPlugin)
     .use(health)
-    .use(createRelay(relayFetch))
+    .use(createRelay(roundTrip))
     .get(
       '/',
       () => ({
@@ -34,7 +38,7 @@ export function createApp(
           tags: ['ops'],
           summary: 'Service index',
           description:
-            'Pointers to health, the Paseo relay probe, and OpenAPI documentation.'
+            'Pointers to health, the Paseo relay round-trip, and OpenAPI documentation.'
         }
       }
     )

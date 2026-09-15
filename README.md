@@ -9,7 +9,7 @@ There is no auth, database, or extra process. The live product today is still th
 | Path | What it is |
 |------|------------|
 | `GET /health` | Local liveness: `{ "status": "ok" }` |
-| `GET /relay` | Probes the configured Paseo relay over plain HTTP and returns health plus WebSocket URLs |
+| `GET /relay` | WebSocket round-trip: e2ee_hello + random string echo |
 | `GET /openapi` | Scalar UI for the generated OpenAPI docs |
 | `GET /openapi/json` | Raw OpenAPI JSON |
 | `GET /` | Pointers to health, relay, and docs |
@@ -18,15 +18,17 @@ Default listen address: `http://127.0.0.1:43141` (`HOST` / `PORT` override). Bin
 
 ## Relay
 
-Copy `.env.example` to `.env` and set `RELAY_URL` to the relay origin (HTTP only — no TLS). Bun loads `.env` from the working directory. Node scripts pass `--env-file=.env`. The app only reads `process.env`.
+Copy `.env.example` to `.env` and set `RELAY_URL` to the relay origin. Bun loads `.env` from the working directory. Node scripts pass `--env-file=.env`. The app only reads `process.env`.
 
 | Variable | Required | Default | What it is |
 |----------|----------|---------|------------|
-| `RELAY_URL` | for `GET /relay` | — | Relay origin, e.g. `http://127.0.0.1:4000` |
+| `RELAY_URL` | yes (boot) | — | Relay origin, e.g. `http://127.0.0.1:4000` |
 
 `.env` is gitignored. `.env.example` keeps a placeholder URL, not a real host.
 
-`GET /relay` calls `$RELAY_URL/health` and, on success, returns:
+`RELAY_URL` is validated at process start with [T3 Env](https://env.t3.gg/docs/introduction). Missing or non-http(s) values prevent listen. Local `GET /health` still does not talk to the relay, but the process will not start without a valid `RELAY_URL`.
+
+`GET /relay` opens a v2 WebSocket pair (`role=server` + `role=client`, shared `serverId`), sends `{ type: "e2ee_hello", key }` where `key` is canonical Base64 of a 32-byte X25519 public key (Elixir drops anything else with `1008`), then echoes a random string through the relay. On success:
 
 ```json
 {
@@ -36,11 +38,13 @@ Copy `.env.example` to `.env` and set `RELAY_URL` to the relay origin (HTTP only
     "ws": "ws://127.0.0.1:4000/ws",
     "tls": false
   },
-  "upstream": { "status": "ok" }
+  "payload": "…",
+  "echoed": "…",
+  "serverId": "say-to-me2-…"
 }
 ```
 
-Missing or non-http `RELAY_URL` is `503`. An unreachable or non-ok relay is `502`. Local `GET /health` does not depend on the relay.
+A failed round-trip is `502`.
 
 ## Run locally
 
@@ -101,10 +105,10 @@ src/
   index.ts                 # listen; runtime-selected adapter
   app.ts                   # compose plugins + modules (no listen)
   runtime.ts               # Bun vs Node adapter
-  config.ts                # HOST / PORT / RELAY_URL from process.env
+  config.ts                # HOST / PORT / RELAY_URL via t3-env (process.env)
   plugins/openapi.ts       # @elysiajs/openapi (Scalar at /openapi)
   modules/health/          # local health controller + TypeBox model
-  modules/relay/           # Paseo relay probe
+  modules/relay/           # Paseo relay WebSocket round-trip
 oxlint.config.ts
 tools/oxlint/anti-slop/
 ```
