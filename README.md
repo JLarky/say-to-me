@@ -18,16 +18,15 @@ Default listen address: `http://127.0.0.1:43141` (`HOST` / `PORT` override). Bin
 
 ## Relay
 
-Copy `.env.example` to `.env` and set the relay **IP** (not a hostname). The relay is HTTP/WebSocket only — no TLS.
+Copy `.env.example` to `.env` and set `RELAY_URL` to the relay origin (HTTP only — no TLS).
 
 | Variable | Required | Default | What it is |
 |----------|----------|---------|------------|
-| `RELAY_IP` | for `GET /relay` | — | Relay IPv4 address |
-| `RELAY_PORT` | no | `4000` | Relay listen port |
+| `RELAY_URL` | for `GET /relay` | — | Relay origin, e.g. `http://127.0.0.1:4000` |
 
-`.env` is gitignored. `.env.example` keeps a placeholder IP, not a real one.
+`.env` is gitignored. `.env.example` keeps a placeholder URL, not a real host.
 
-`GET /relay` calls `http://$RELAY_IP:$RELAY_PORT/health` and, on success, returns:
+`GET /relay` calls `$RELAY_URL/health` and, on success, returns:
 
 ```json
 {
@@ -41,7 +40,7 @@ Copy `.env.example` to `.env` and set the relay **IP** (not a hostname). The rel
 }
 ```
 
-Missing `RELAY_IP` is `503`. An unreachable or non-ok relay is `502`. Local `GET /health` does not depend on the relay.
+Missing or non-http `RELAY_URL` is `503`. An unreachable or non-ok relay is `502`. Local `GET /health` does not depend on the relay.
 
 ## Run locally
 
@@ -55,7 +54,7 @@ pnpm install
 
 ```sh
 cp .env.example .env
-# set RELAY_IP to the relay IPv4 address
+# set RELAY_URL to the relay origin, e.g. http://127.0.0.1:4000
 ```
 
 ### Node
@@ -102,7 +101,7 @@ src/
   index.ts                 # listen; runtime-selected adapter
   app.ts                   # compose plugins + modules (no listen)
   runtime.ts               # Bun vs Node adapter
-  config.ts                # HOST / PORT / RELAY_IP / RELAY_PORT, loads .env
+  config.ts                # HOST / PORT / RELAY_URL, loads .env
   plugins/openapi.ts       # @elysiajs/openapi (Scalar at /openapi)
   modules/health/          # local health controller + TypeBox model
   modules/relay/           # Paseo relay probe

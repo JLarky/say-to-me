@@ -1,6 +1,6 @@
 import { Value } from '@sinclair/typebox/value'
 import { Elysia } from 'elysia'
-import { getRelayConfig, relayUrls } from '../../config'
+import { getRelayUrl, parseRelayUrl } from '../../config'
 import { RelayModel, UpstreamHealth } from './model'
 
 const probeTimeoutMs = 3_000
@@ -23,27 +23,32 @@ export function createRelay(relayFetch: typeof fetch = globalThis.fetch) {
     async ({ set }): Promise<
       RelayModel['ok'] | RelayModel['error'] | RelayModel['unconfigured']
     > => {
-      const relay = getRelayConfig()
+      const relayUrl = getRelayUrl()
 
-      if (!relay.ip) {
+      if (!relayUrl) {
         set.status = 503
 
         return {
           status: 'error',
-          error: 'RELAY_IP is not set'
+          error: 'RELAY_URL is not set'
         }
       }
 
-      const urls = relayUrls(relay)
+      const parsed = parseRelayUrl(relayUrl)
 
-      const pointers = {
-        health: urls.health,
-        ws: urls.ws,
-        tls: false as const
+      if (!parsed.ok) {
+        set.status = 503
+
+        return {
+          status: 'error',
+          error: parsed.error
+        }
       }
 
+      const pointers = parsed.pointers
+
       try {
-        const response = await relayFetch(urls.health, {
+        const response = await relayFetch(pointers.health, {
           signal: AbortSignal.timeout(probeTimeoutMs),
           headers: { accept: 'application/json' }
         })
@@ -85,7 +90,7 @@ export function createRelay(relayFetch: typeof fetch = globalThis.fetch) {
         tags: ['relay'],
         summary: 'Paseo relay probe',
         description:
-          'Probes the configured Paseo relay over plain HTTP (no TLS) and returns health plus WebSocket URLs.'
+          'Probes RELAY_URL over plain HTTP (no TLS) and returns health plus WebSocket URLs.'
       }
     }
   )

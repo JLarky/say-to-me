@@ -2,27 +2,19 @@ import assert from 'node:assert/strict'
 import { afterEach, describe, it } from 'node:test'
 import { createApp } from '../../app'
 
-const previousRelayIp = process.env.RELAY_IP
-
-const previousRelayPort = process.env.RELAY_PORT
+const previousRelayUrl = process.env.RELAY_URL
 
 afterEach(() => {
-  if (previousRelayIp === undefined) {
-    delete process.env.RELAY_IP
+  if (previousRelayUrl === undefined) {
+    delete process.env.RELAY_URL
   } else {
-    process.env.RELAY_IP = previousRelayIp
-  }
-
-  if (previousRelayPort === undefined) {
-    delete process.env.RELAY_PORT
-  } else {
-    process.env.RELAY_PORT = previousRelayPort
+    process.env.RELAY_URL = previousRelayUrl
   }
 })
 
 describe('relay', () => {
-  it('returns 503 when RELAY_IP is missing', async () => {
-    delete process.env.RELAY_IP
+  it('returns 503 when RELAY_URL is missing', async () => {
+    delete process.env.RELAY_URL
 
     const app = createApp({}, async () => {
       throw new Error('should not fetch')
@@ -33,13 +25,12 @@ describe('relay', () => {
     assert.equal(response.status, 503)
     assert.deepEqual(await response.json(), {
       status: 'error',
-      error: 'RELAY_IP is not set'
+      error: 'RELAY_URL is not set'
     })
   })
 
   it('probes the configured relay health URL', async () => {
-    process.env.RELAY_IP = '203.0.113.1'
-    process.env.RELAY_PORT = '4000'
+    process.env.RELAY_URL = 'http://203.0.113.1:4000'
 
     const app = createApp({}, async (input) => {
       assert.equal(String(input), 'http://203.0.113.1:4000/health')
@@ -62,7 +53,7 @@ describe('relay', () => {
   })
 
   it('returns 502 when the relay is unreachable', async () => {
-    process.env.RELAY_IP = '203.0.113.1'
+    process.env.RELAY_URL = 'http://203.0.113.1:4000'
 
     const app = createApp({}, async () => {
       throw new TypeError('fetch failed')
