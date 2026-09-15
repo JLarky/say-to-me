@@ -1,4 +1,5 @@
 const defaultPort = 43141
+
 const parsedPort = Number(process.env.PORT ?? defaultPort)
 
 if (!Number.isInteger(parsedPort) || parsedPort <= 0) {
