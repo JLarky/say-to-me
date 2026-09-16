@@ -1,22 +1,28 @@
 import { randomBytes, generateKeyPairSync } from 'node:crypto'
 import { on, once } from 'node:events'
-import { Type, type Static } from '@sinclair/typebox'
-import { Value } from '@sinclair/typebox/value'
 import { Schema } from 'effect'
 import { WebSocket } from 'ws'
 import { decodeJsonText } from '../../decode-response-json.ts'
 
 export const roundTripTimeoutMs = 3_000
 
-const HelloFrame = Type.Object({
-  type: Type.Union([Type.Literal('hello'), Type.Literal('e2ee_hello')]),
-  key: Type.String(),
+const HelloFrame = Schema.Struct({
+  type: Schema.Literals(['hello', 'e2ee_hello']),
+  key: Schema.String,
 })
 
-const RoundTripFrame = Type.Object({
-  type: Type.Literal('roundtrip'),
-  payload: Type.String(),
+const RoundTripFrame = Schema.Struct({
+  type: Schema.Literal('roundtrip'),
+  payload: Schema.String,
 })
+
+const SocketFrame = Schema.Union([HelloFrame, RoundTripFrame])
+
+type HelloFrame = typeof HelloFrame.Type
+
+type RoundTripFrame = typeof RoundTripFrame.Type
+
+type SocketFrame = typeof SocketFrame.Type
 
 export type RelayRoundTripResult = {
   serverId: string
@@ -65,18 +71,18 @@ function messageText(data: Buffer | ArrayBuffer | ArrayBufferView | Buffer[]) {
 
 function parseSocketJson(data: Buffer | ArrayBuffer | ArrayBufferView | Buffer[]) {
   try {
-    return decodeJsonText(messageText(data), Schema.Json)
+    return decodeJsonText(messageText(data), SocketFrame)
   } catch {
     return undefined
   }
 }
 
-function isHelloFrame(value: unknown): value is Static<typeof HelloFrame> {
-  return Value.Check(HelloFrame, value)
+function isHelloFrame(value: SocketFrame): value is HelloFrame {
+  return value.type === 'hello' || value.type === 'e2ee_hello'
 }
 
-function isRoundTripFrame(value: unknown): value is Static<typeof RoundTripFrame> {
-  return Value.Check(RoundTripFrame, value)
+function isRoundTripFrame(value: SocketFrame): value is RoundTripFrame {
+  return value.type === 'roundtrip'
 }
 
 function rethrowCause(cause: unknown): never {
@@ -117,10 +123,10 @@ async function waitOpen(ws: WebSocket, label: string, signal: AbortSignal) {
   }
 }
 
-async function waitMatchingFrame<T>(
+async function waitMatchingFrame<T extends SocketFrame>(
   ws: WebSocket,
   label: string,
-  match: (value: unknown) => value is T,
+  match: (value: SocketFrame) => value is T,
   signal: AbortSignal,
 ) {
   const local = new AbortController()

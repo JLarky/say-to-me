@@ -18,6 +18,6 @@ Installed plugin path: `./tools/oxlint/anti-slop/index.ts`
 
 ## Intentional deviations
 
-- Effect plugin is registered in `oxlint.config.ts` because the app depends on `effect` (Schema for env).
+- Effect plugin is registered in the `lint` block of `vite.config.ts` because the app depends on `effect` (Schema for env).
 - Plugin tests were not vendored. That matches the skill asset bundle, not a local edit of rule source.
-- Local rules `no-json-parse` and `no-broad-type-assertion` (plus `shared/json-method.ts`) are not upstream. `no-json-parse` forbids `JSON.parse` / `JSON['parse']`; JSON text is decoded with `decodeJsonText(text, Schema.Json)` and HTTP bodies with `decodeResponseJson`. `JSON.stringify` is allowed. `no-broad-type-assertion` forbids `as unknown`, `as object`, and `as any`. Preserve these on anti-slop updates.
+- Local rules `no-json-parse`, `no-schema-json`, and `no-broad-type-assertion` (plus `shared/json-method.ts` and `shared/schema-json.ts`) are not upstream. `no-json-parse` forbids `JSON.parse` / `JSON['parse']`; JSON text is decoded with `decodeJsonText` and a real schema (object, struct, or union of known shapes), and HTTP bodies with `decodeResponseJson`. `JSON.stringify` is allowed. `no-schema-json` forbids Effect `Schema.Json` / `Schema['Json']` (not `Schema.JsonObject`); it is as untyped as `as unknown`. `no-broad-type-assertion` forbids `as unknown`, `as object`, and `as any`. Preserve these on anti-slop updates.

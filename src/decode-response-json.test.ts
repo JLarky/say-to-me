@@ -14,14 +14,18 @@ function jsonResponse(body: string): Response {
 }
 
 describe('decodeJsonText', () => {
-  it('returns decoded json', () => {
-    assert.deepEqual(decodeJsonText(JSON.stringify({ status: 'ok' }), Schema.Json), {
+  it('returns decoded json when it matches the schema', () => {
+    assert.deepEqual(decodeJsonText(JSON.stringify({ status: 'ok' }), HealthBody), {
       status: 'ok',
     })
   })
 
   it('throws when the text is not json', () => {
-    assert.throws(() => decodeJsonText('not-json', Schema.Json))
+    assert.throws(() => decodeJsonText('not-json', HealthBody))
+  })
+
+  it('throws when json does not match the schema', () => {
+    assert.throws(() => decodeJsonText(JSON.stringify({ status: 'nope' }), HealthBody))
   })
 })
 

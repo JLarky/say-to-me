@@ -8,11 +8,11 @@ export const noJsonParseRule = defineRule({
     type: "problem",
     docs: {
       description:
-        "Disallow JSON.parse; decode JSON text with `decodeJsonText(text, Schema.Json)` or HTTP bodies with `decodeResponseJson`.",
+        "Disallow JSON.parse; decode JSON text with `decodeJsonText` and a real schema, or HTTP bodies with `decodeResponseJson`.",
     },
     messages: {
       jsonParse:
-        "Replace `JSON.parse` with `decodeJsonText(text, Schema.Json)` or `decodeResponseJson` for HTTP bodies. Do not decode JSON into an untyped value.",
+        "Replace `JSON.parse` with `decodeJsonText` and a real schema (object, struct, or union of known shapes), or `decodeResponseJson` for HTTP bodies. Do not decode JSON into an untyped value.",
     },
   },
   createOnce(context) {
