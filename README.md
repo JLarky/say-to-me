@@ -2,7 +2,7 @@
 
 Local [Elysia](https://elysiajs.com/) HTTP service. It runs on **Node** and **Bun**. This checkout is not locked to either runtime.
 
-There is no auth, database, or extra process. The live product today is still the sibling `say-to-me` app; this slice adds a Paseo relay WebSocket round-trip on top of health and OpenAPI, plus an in-process Specter heard-receipt command and query.
+There is no auth, database, or extra process. The live product today is still the sibling `say-to-me` app; this slice adds a Paseo relay WebSocket round-trip on top of health and OpenAPI, plus an in-process Specter command that records a successful pair and a query that lists paired clients.
 
 ## Endpoints
 
@@ -46,16 +46,16 @@ Copy `.env.example` to `.env` and set `RELAY_URL` to the relay origin. Bun loads
 
 A failed round-trip is `502`. Local `GET /health` does not depend on the relay.
 
-## Heard receipts (Specter)
+## Paired clients (Specter)
 
-[`@specter-ts/core@0.2.1`](https://github.com/devagrawal09/specter) owns the domain in-process. Core has no HTTP. This checkout does not add heard routes.
+[`@specter-ts/core@0.2.1`](https://github.com/devagrawal09/specter) owns the domain in-process. Core has no HTTP. This checkout does not add pair or login routes. A later `paseo daemon pair` login flow can commit here after a successful pair; this slice is not the pairing protocol (no QR, link, or daemon talk).
 
-| Specter               | Input                      | Result                                        |
-| --------------------- | -------------------------- | --------------------------------------------- |
-| command `recordHeard` | `{ sessionId, messageId }` | appends `message-heard` (idempotent per pair) |
-| query `heardQuery`    | `{ sessionId }`            | `{ receipts: [{ messageId, heardAt }] }`      |
+| Specter                    | Input          | Result                                          |
+| -------------------------- | -------------- | ----------------------------------------------- |
+| command `recordPair`       | `{ clientId }` | appends `client-paired` (idempotent per client) |
+| query `pairedClientsQuery` | `{}`           | `{ clients: [{ clientId, pairedAt }] }`         |
 
-`sessionId` is a payload field on the command/query, not an HTTP session resource. The event log is in-memory (process lifetime; resets on restart). Tests call Specter directly.
+`clientId` is a stable client identity. `pairedAt` is when the successful pair was recorded. The event log is in-memory (process lifetime; resets on restart). Tests call Specter directly.
 
 ## Run locally
 
@@ -123,7 +123,7 @@ src/
   plugins/openapi.ts       # @elysiajs/openapi (Scalar at /openapi)
   modules/health/          # local health controller + TypeBox model
   modules/relay/           # Paseo relay WebSocket round-trip
-  specter/                 # in-process recordHeard + heardQuery
+  specter/                 # in-process recordPair + pairedClientsQuery
 vite.config.ts             # Vite+ `vp check` (fmt, lint, typecheck)
 tools/oxlint/anti-slop/
 .github/workflows/         # gha-ts source + generated YAML
