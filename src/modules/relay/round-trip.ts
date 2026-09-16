@@ -1,8 +1,18 @@
-import { randomBytes, generateKeyPairSync } from 'node:crypto'
-import { on, once } from 'node:events'
+import { randomBytes } from 'node:crypto'
 import { Schema } from 'effect'
 import { WebSocket } from 'ws'
-import { decodeJsonText } from '../../decode-response-json.ts'
+import {
+  randomId,
+  rethrowCause,
+  socketUrl,
+  waitMatchingFrame,
+  waitOpen,
+  x25519PublicKeyB64,
+} from './ws.ts'
+
+export function randomPayload() {
+  return randomBytes(16).toString('hex')
+}
 
 export const roundTripTimeoutMs = 3_000
 
@@ -28,55 +38,6 @@ export type RelayRoundTripResult = {
   serverId: string
 }
 
-function x25519PublicKeyB64() {
-  const { publicKey } = generateKeyPairSync('x25519')
-  const jwk = publicKey.export({ format: 'jwk' })
-
-  if (!('x' in jwk) || jwk.x === undefined) {
-    throw new Error('X25519 public key is missing')
-  }
-
-  const raw = Buffer.from(jwk.x, 'base64url')
-
-  if (raw.byteLength !== 32) {
-    throw new Error('X25519 public key must be 32 bytes')
-  }
-
-  return raw.toString('base64')
-}
-
-function randomId(prefix: string) {
-  return `${prefix}-${randomBytes(8).toString('hex')}`
-}
-
-export function randomPayload() {
-  return randomBytes(16).toString('hex')
-}
-
-function messageText(data: Buffer | ArrayBuffer | ArrayBufferView | Buffer[]) {
-  if (Array.isArray(data)) {
-    throw new Error('websocket message is not text')
-  }
-
-  if (Buffer.isBuffer(data)) {
-    return data.toString('utf8')
-  }
-
-  if (data instanceof ArrayBuffer) {
-    return Buffer.from(data).toString('utf8')
-  }
-
-  return Buffer.from(new Uint8Array(data.buffer, data.byteOffset, data.byteLength)).toString('utf8')
-}
-
-function parseSocketJson(data: Buffer | ArrayBuffer | ArrayBufferView | Buffer[]) {
-  try {
-    return decodeJsonText(messageText(data), SocketFrame)
-  } catch {
-    return undefined
-  }
-}
-
 function isHelloFrame(value: SocketFrame): value is HelloFrame {
   return value.type === 'hello' || value.type === 'e2ee_hello'
 }
@@ -85,88 +46,8 @@ function isRoundTripFrame(value: SocketFrame): value is RoundTripFrame {
   return value.type === 'roundtrip'
 }
 
-function rethrowCause(cause: unknown): never {
-  if (cause instanceof Error) {
-    throw cause
-  }
-
-  throw new Error('relay round-trip failed')
-}
-
-async function waitOpen(ws: WebSocket, label: string, signal: AbortSignal) {
-  if (ws.readyState === WebSocket.OPEN) {
-    return
-  }
-
-  if (ws.readyState !== WebSocket.CONNECTING) {
-    throw new Error(`${label} websocket closed before open`)
-  }
-
-  const local = new AbortController()
-  const combined = AbortSignal.any([signal, local.signal])
-
-  const closed = once(ws, 'close', { signal: combined }).then(() => {
-    throw new Error(`${label} websocket closed before open`)
-  })
-
-  try {
-    await Promise.race([once(ws, 'open', { signal: combined }), closed])
-  } catch (cause) {
-    if (signal.aborted) {
-      throw new Error(`Timed out opening ${label} websocket`)
-    }
-
-    rethrowCause(cause)
-  } finally {
-    local.abort()
-    void closed.catch(() => undefined)
-  }
-}
-
-async function waitMatchingFrame<T extends SocketFrame>(
-  ws: WebSocket,
-  label: string,
-  match: (value: SocketFrame) => value is T,
-  signal: AbortSignal,
-) {
-  const local = new AbortController()
-
-  const closed = () => {
-    local.abort()
-  }
-
-  ws.once('close', closed)
-
-  try {
-    for await (const event of on(ws, 'message', {
-      signal: AbortSignal.any([signal, local.signal]),
-    })) {
-      const parsed = parseSocketJson(event[0])
-
-      if (parsed === undefined) {
-        continue
-      }
-
-      if (match(parsed)) {
-        return parsed
-      }
-    }
-  } catch {
-    if (signal.aborted) {
-      throw new Error(`Timed out waiting for ${label}`)
-    }
-
-    throw new Error(`${label} websocket closed`)
-  } finally {
-    ws.off('close', closed)
-    local.abort()
-  }
-
-  throw new Error(`${label} websocket closed`)
-}
-
 async function waitHello(ws: WebSocket, key: string, signal: AbortSignal) {
-  const hello = await waitMatchingFrame(ws, 'e2ee_hello', isHelloFrame, signal)
+  const hello = await waitMatchingFrame(ws, 'e2ee_hello', SocketFrame, isHelloFrame, signal)
 
   if (hello.key !== key) {
     throw new Error('hello key mismatch')
@@ -176,26 +57,7 @@ async function waitHello(ws: WebSocket, key: string, signal: AbortSignal) {
 }
 
 function waitRoundTrip(ws: WebSocket, label: string, signal: AbortSignal) {
-  return waitMatchingFrame(ws, label, isRoundTripFrame, signal)
-}
-
-function socketUrl(
-  baseWs: string,
-  role: 'server' | 'client',
-  serverId: string,
-  connectionId?: string,
-) {
-  const url = new URL(baseWs)
-
-  url.searchParams.set('role', role)
-  url.searchParams.set('serverId', serverId)
-  url.searchParams.set('v', '2')
-
-  if (connectionId !== undefined) {
-    url.searchParams.set('connectionId', connectionId)
-  }
-
-  return url.toString()
+  return waitMatchingFrame(ws, label, SocketFrame, isRoundTripFrame, signal)
 }
 
 export async function relayRoundTrip(

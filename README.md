@@ -2,7 +2,7 @@
 
 Local [Elysia](https://elysiajs.com/) HTTP service. It runs on **Node** and **Bun**. This checkout is not locked to either runtime.
 
-There is no auth, database, or extra process. The live product today is still the sibling `say-to-me` app; this slice adds a Paseo relay WebSocket round-trip on top of health and OpenAPI, plus an in-process Specter command that records a successful pair and a query that lists paired clients.
+There is no auth, database, or extra process. The live product today is still the sibling `say-to-me` app; this slice adds a relay WebSocket round-trip on top of health and OpenAPI, plus an in-process Specter command that records a successful pair and a query that lists paired clients.
 
 ## Endpoints
 
@@ -122,7 +122,7 @@ src/
   decode-response-json.ts  # Effect Schema decoders for JSON text and Response.json()
   plugins/openapi.ts       # @elysiajs/openapi (Scalar at /openapi)
   modules/health/          # local health controller + TypeBox model
-  modules/relay/           # Paseo relay WebSocket round-trip
+  modules/relay/           # relay WebSocket round-trip
   specter/                 # in-process recordPair + pairedClientsQuery
 vite.config.ts             # Vite+ `vp check` (fmt, lint, typecheck)
 tools/oxlint/anti-slop/
