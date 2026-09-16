@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "description": "Local Elysia HTTP service: health, OpenAPI, a relay WebSocket round-trip, and an in-process Specter paired-clients slice.",
+  "bin": {
+    "say-to-me2": "./bin/say-to-me2"
+  },
   "type": "module",
   "scripts": {
     "dev": "node --env-file=.env --watch src/index.ts",

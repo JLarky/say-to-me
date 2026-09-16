@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cli="$root/src/cli.ts"
+
+node_args=()
+if [[ -f .env ]]; then
+  node_args+=(--env-file=.env)
+elif [[ -f "$root/.env" ]]; then
+  node_args+=(--env-file="$root/.env")
+fi
+
+exec node "${node_args[@]}" "$cli" "$@"
