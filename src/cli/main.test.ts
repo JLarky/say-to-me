@@ -7,6 +7,7 @@ import { cliUsage } from './argv.ts'
 import { runCli } from './main.ts'
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../..')
+
 const binPath = join(repoRoot, 'bin/say-to-me2')
 
 describe('runCli', () => {
