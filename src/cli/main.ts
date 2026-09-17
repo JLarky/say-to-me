@@ -1,4 +1,10 @@
 import { parseArgv } from './argv.ts'
+import {
+  defaultPairNewRequest,
+  formatPairNewSuccess,
+  pairNew,
+  type PairNewRequest,
+} from './pair-new.ts'
 
 export type CliIo = {
   writeStdout: (text: string) => void
@@ -14,7 +20,11 @@ export const processCliIo: CliIo = {
   },
 }
 
-export function runCli(argv: ReadonlyArray<string>, io: CliIo): number {
+export async function runCli(
+  argv: ReadonlyArray<string>,
+  io: CliIo,
+  pair: PairNewRequest = defaultPairNewRequest(),
+): Promise<number> {
   const parsed = parseArgv(argv)
 
   if (parsed.kind === 'help') {
@@ -23,11 +33,25 @@ export function runCli(argv: ReadonlyArray<string>, io: CliIo): number {
     return 0
   }
 
-  io.writeStderr(`${parsed.message}\n`)
+  if (parsed.kind === 'error') {
+    io.writeStderr(`${parsed.message}\n`)
 
-  return 1
+    return 1
+  }
+
+  const outcome = await pairNew(pair)
+
+  if (!outcome.ok) {
+    io.writeStderr(`${outcome.message}\n`)
+
+    return 1
+  }
+
+  io.writeStdout(formatPairNewSuccess(outcome))
+
+  return 0
 }
 
-export function runCliProcess(argv: ReadonlyArray<string>): number {
+export async function runCliProcess(argv: ReadonlyArray<string>): Promise<number> {
   return runCli(argv, processCliIo)
 }
