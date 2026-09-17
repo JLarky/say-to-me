@@ -14,23 +14,23 @@ const port = Schema.toStandardSchemaV1(
   ),
 )
 
-const relayUrl = Schema.toStandardSchemaV1(
-  Schema.String.check(
-    Schema.makeFilter((value) => {
-      try {
-        const protocol = new URL(value).protocol
+export const RelayUrl = Schema.String.check(
+  Schema.makeFilter((value) => {
+    try {
+      const protocol = new URL(value).protocol
 
-        if (protocol === 'http:' || protocol === 'https:') {
-          return undefined
-        }
-      } catch {
-        return 'RELAY_URL must be an http or https URL'
+      if (protocol === 'http:' || protocol === 'https:') {
+        return undefined
       }
+    } catch {
+      return 'must be an http or https URL'
+    }
 
-      return 'RELAY_URL must be an http or https URL'
-    }),
-  ),
+    return 'must be an http or https URL'
+  }),
 )
+
+const relayUrl = Schema.toStandardSchemaV1(RelayUrl)
 
 export function loadEnv(runtimeEnv: NodeJS.ProcessEnv = process.env) {
   return createEnv({
