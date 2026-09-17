@@ -17,8 +17,7 @@ export const counter = new Elysia({ name: 'counter' }).get(
     detail: {
       tags: ['ops'],
       summary: 'Click counter',
-      description:
-        'HTML page with a lift-html/solid custom element. The count stays in the tab.',
+      description: 'HTML page with a lift-html/solid custom element. The count stays in the tab.',
     },
   },
 )
