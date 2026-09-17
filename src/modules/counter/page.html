@@ -98,11 +98,6 @@
         cursor: pointer;
       }
 
-      say-to-me2-counter button:disabled {
-        opacity: 0.45;
-        cursor: wait;
-      }
-
       say-to-me2-counter button:focus-visible {
         outline: 3px solid var(--ink);
         outline-offset: 3px;
@@ -116,46 +111,7 @@
     </style>
   </head>
   <body>
-    <main>
-      <h1>Click counter</h1>
-      <p class="lede">
-        Served by this say-to-me2 process. The count lives in the tab, driven by a
-        <a href="https://lift-html.js.org/examples/solid-counter/">lift-html/solid</a>
-        custom element.
-      </p>
-      <say-to-me2-counter>
-        <button type="button" data-dec disabled aria-label="Decrease count">−</button>
-        <output aria-live="polite">0</output>
-        <button type="button" data-inc disabled aria-label="Increase count">+</button>
-      </say-to-me2-counter>
-      <p class="hint">Plus and minus. Nothing is stored on the server.</p>
-    </main>
-    <script type="module">
-      import { liftSolid } from 'https://esm.sh/@lift-html/solid@0.0.6'
-      import { createEffect, createSignal } from 'https://esm.sh/solid-js'
-
-      liftSolid('say-to-me2-counter', {
-        init() {
-          const dec = this.querySelector('[data-dec]')
-          const inc = this.querySelector('[data-inc]')
-          const output = this.querySelector('output')
-          if (
-            !(dec instanceof HTMLButtonElement) ||
-            !(inc instanceof HTMLButtonElement) ||
-            !output
-          ) {
-            throw new Error('<say-to-me2-counter> needs decrease, increase, and an output')
-          }
-          dec.disabled = false
-          inc.disabled = false
-          const [count, setCount] = createSignal(0)
-          dec.onclick = () => setCount((n) => n - 1)
-          inc.onclick = () => setCount((n) => n + 1)
-          createEffect(() => {
-            output.textContent = String(count())
-          })
-        },
-      })
-    </script>
+    <div id="app"></div>
+    <script type="module" src="/counter.js"></script>
   </body>
 </html>
