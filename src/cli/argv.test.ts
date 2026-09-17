@@ -37,9 +37,23 @@ describe('parseArgv', () => {
     }
   })
 
-  it('prints help for --help, -h, and help', () => {
-    assert.deepEqual(parseArgv(['--help']), { kind: 'help' })
-    assert.deepEqual(parseArgv(['-h']), { kind: 'help' })
-    assert.deepEqual(parseArgv(['help']), { kind: 'help' })
+  it('prints help for --help and -h', () => {
+    assert.deepEqual(parseArgv(['--help']), { kind: 'help', message: cliUsage })
+    assert.deepEqual(parseArgv(['-h']), { kind: 'help', message: cliUsage })
+  })
+
+  it('rejects help as an unknown command', () => {
+    const parsed = parseArgv(['help'])
+
+    assert.equal(parsed.kind, 'error')
+
+    if (parsed.kind === 'error') {
+      assert.match(parsed.message, /unknown command: help/)
+    }
+  })
+
+  it('lists -h and --help on a <command> usage line', () => {
+    assert.match(cliUsage, /Usage: say-to-me2 <command>/)
+    assert.match(cliUsage, /-h, --help/)
   })
 })

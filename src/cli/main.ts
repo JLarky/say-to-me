@@ -1,4 +1,4 @@
-import { cliUsage, parseArgv } from './argv.ts'
+import { parseArgv } from './argv.ts'
 
 export type CliIo = {
   writeStdout: (text: string) => void
@@ -18,7 +18,7 @@ export function runCli(argv: ReadonlyArray<string>, io: CliIo): number {
   const parsed = parseArgv(argv)
 
   if (parsed.kind === 'help') {
-    io.writeStdout(`${cliUsage}\n`)
+    io.writeStdout(`${parsed.message}\n`)
 
     return 0
   }
