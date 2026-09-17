@@ -2,7 +2,7 @@
 
 Local [Elysia](https://elysiajs.com/) HTTP service. It runs on **Node** and **Bun**. This checkout is not locked to either runtime.
 
-There is no auth, database, or extra process. The live product today is still the sibling `say-to-me` app; this slice adds a relay WebSocket round-trip on top of health and OpenAPI, plus an in-process Specter command that records a successful pair and a query that lists paired clients.
+There is no auth, database, or extra process. The live product today is still the sibling `say-to-me` app; this slice adds a relay WebSocket round-trip on top of health and OpenAPI, plus an in-process Specter command that records a successful pair and a query that lists paired clients. Pairing from this repo is `./bin/say-to-me2 pair new` (later the same CLI can be installed as `say-to-me2 pair new`).
 
 ## Endpoints
 
@@ -48,14 +48,40 @@ A failed round-trip is `502`. Local `GET /health` does not depend on the relay.
 
 ## Paired clients (Specter)
 
-[`@specter-ts/core@0.2.1`](https://github.com/devagrawal09/specter) owns the domain in-process. Core has no HTTP. This checkout does not add pair or login routes. A later `paseo daemon pair` login flow can commit here after a successful pair; this slice is not the pairing protocol (no QR, link, or daemon talk).
+[`@specter-ts/core@0.2.1`](https://github.com/devagrawal09/specter) owns the domain in-process. Core has no HTTP. This checkout does not add pair or login HTTP routes. `./bin/say-to-me2 pair new` issues a pairing code on `RELAY_URL`, then `recordPair`.
 
 | Specter                    | Input          | Result                                          |
 | -------------------------- | -------------- | ----------------------------------------------- |
 | command `recordPair`       | `{ clientId }` | appends `client-paired` (idempotent per client) |
 | query `pairedClientsQuery` | `{}`           | `{ clients: [{ clientId, pairedAt }] }`         |
 
-`clientId` is a stable client identity. `pairedAt` is when the successful pair was recorded. The event log is in-memory (process lifetime; resets on restart). Tests call Specter directly.
+`clientId` is a stable client identity. `pairedAt` is when the successful pair was recorded. The event log is in-memory (process lifetime; resets on restart). Tests call Specter directly. The CLI records the `clientId` minted into the pairing code.
+
+## Pair CLI
+
+`./bin/say-to-me2 pair new` issues a native pairing code against **our** relay (`RELAY_URL`, same v2 WebSocket the HTTP `/relay` probe uses), then commits with Specter `recordPair({ clientId })`. This is daemon + client pairing. It does not call `paseo`.
+
+The pairing code is a base64url payload `{ v: 1, clientId, serverId, key, relay }`. `clientId` is the new client (`clt-…`). `serverId` is this daemon on the relay (`say-to-me2-…`). `key` is the X25519 public key used in `e2ee_hello`. `relay` is the `RELAY_URL` origin the code was issued on. A later client will connect with that `serverId` and `connectionId=clientId`.
+
+Issuing is not local-only: the CLI registers the daemon on the relay, completes `e2ee_hello`, and echoes `{ type: "pair", clientId }` through the client ↔ server-data sockets. Then it records the pair.
+
+```sh
+cp .env.example .env
+# set RELAY_URL to our relay origin, e.g. http://127.0.0.1:4000
+RELAY_URL=http://127.0.0.1:4000 ./bin/say-to-me2 pair new
+```
+
+On success:
+
+```
+paired clt-…
+code <base64url>
+relay http://127.0.0.1:4000
+```
+
+Empty argv, unknown commands, missing `RELAY_URL`, an empty code, or a relay that does not complete the pair echo exit `1` on stderr.
+
+The Specter log is in-memory in this CLI process, so the record is for the pair commit path (and tests), not a durable store.
 
 ## Run locally
 
@@ -114,15 +140,18 @@ GitHub Actions uses [gha-ts](https://github.com/JLarky/gha-ts) and, like `main`,
 ## Layout
 
 ```
+bin/say-to-me2             # `./bin/say-to-me2 pair new`
 src/
   index.ts                 # listen; runtime-selected adapter
   app.ts                   # compose plugins + modules (no listen)
   runtime.ts               # Bun vs Node adapter
+  cli.ts                   # CLI entry (`pair new`)
+  cli/                     # argv, pair new, Specter record
   config.ts                # HOST / PORT / RELAY_URL via t3-env + Effect Schema (process.env)
   decode-response-json.ts  # Effect Schema decoders for JSON text and Response.json()
   plugins/openapi.ts       # @elysiajs/openapi (Scalar at /openapi)
   modules/health/          # local health controller + TypeBox model
-  modules/relay/           # relay WebSocket round-trip
+  modules/relay/           # relay WebSocket round-trip and pairing code issue
   specter/                 # in-process recordPair + pairedClientsQuery
 vite.config.ts             # Vite+ `vp check` (fmt, lint, typecheck)
 tools/oxlint/anti-slop/

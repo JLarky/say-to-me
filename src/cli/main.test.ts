@@ -13,10 +13,10 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../..')
 const binPath = join(repoRoot, 'bin/say-to-me2')
 
 describe('runCli', () => {
-  it('prints usage on an empty command line', () => {
+  it('prints usage on an empty command line', async () => {
     let stderr = ''
 
-    const code = runCli([], {
+    const code = await runCli([], {
       writeStdout() {},
       writeStderr(text) {
         stderr += text
@@ -27,10 +27,10 @@ describe('runCli', () => {
     assert.equal(stderr, `${cliUsage}\n`)
   })
 
-  it('prints help on --help', () => {
+  it('prints help on --help', async () => {
     let stdout = ''
 
-    const code = runCli(['--help'], {
+    const code = await runCli(['--help'], {
       writeStdout(text) {
         stdout += text
       },
@@ -41,10 +41,10 @@ describe('runCli', () => {
     assert.equal(stdout, `${cliUsage}\n`)
   })
 
-  it('prints unknown command on stderr', () => {
+  it('prints unknown command on stderr', async () => {
     let stderr = ''
 
-    const code = runCli(['status'], {
+    const code = await runCli(['status'], {
       writeStdout() {},
       writeStderr(text) {
         stderr += text
