@@ -2,24 +2,46 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Elysia } from 'elysia'
+import { counterScriptSrc, readCounterDev } from './counter-dev.ts'
 
 const counterDir = dirname(fileURLToPath(import.meta.url))
 
 const counterPage = readFileSync(join(counterDir, 'page.html'), 'utf8')
 
+function isEnoent(error: unknown): error is Error & { code: string } {
+  return error instanceof Error && 'code' in error && error.code === 'ENOENT'
+}
+
 function counterScript(): Response {
-  return new Response(readFileSync(join(counterDir, 'dist/counter.js'), 'utf8'), {
-    headers: {
-      'content-type': 'text/javascript; charset=utf-8',
-    },
-  })
+  try {
+    return new Response(readFileSync(join(counterDir, 'dist/counter.js'), 'utf8'), {
+      headers: {
+        'content-type': 'text/javascript; charset=utf-8',
+      },
+    })
+  } catch (error) {
+    if (isEnoent(error)) {
+      return new Response('counter script is not built', {
+        status: 503,
+        headers: {
+          'content-type': 'text/plain; charset=utf-8',
+        },
+      })
+    }
+
+    throw error
+  }
+}
+
+function counterPageHtml() {
+  return counterPage.replace('src="/counter.js"', `src="${counterScriptSrc(readCounterDev())}"`)
 }
 
 export const counter = new Elysia({ name: 'counter' })
   .get(
     '/counter',
     () =>
-      new Response(counterPage, {
+      new Response(counterPageHtml(), {
         headers: {
           'content-type': 'text/html; charset=utf-8',
         },

@@ -12,7 +12,11 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "forceConsistentCasingInFileNames": true,
-    "types": []
+    "types": ["vite/client"]
   },
-  "include": ["src/modules/counter/counter.tsx"]
+  "include": [
+    "src/modules/counter/counter.tsx",
+    "src/modules/counter/counter-view.tsx",
+    "src/modules/counter/counter-hmr.ts"
+  ]
 }

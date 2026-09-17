@@ -19,6 +19,13 @@ const agentIgnorePatterns = [
 
 export default defineConfig({
   publicDir: false,
+  server: {
+    cors: true,
+    strictPort: true,
+    hmr: {
+      path: '/__vite_hmr',
+    },
+  },
   plugins: lazyPlugins(async () => {
     const { default: solid } = await import('vite-plugin-solid')
 
@@ -45,7 +52,7 @@ export default defineConfig({
   // Lint rules live here (formerly oxlint.config.ts). Vite+ `vp check` / CI use this block.
   lint: {
     options: { typeAware: true, typeCheck: true },
-    ignorePatterns: [...agentIgnorePatterns, 'src/**/*.tsx'],
+    ignorePatterns: [...agentIgnorePatterns, 'src/**/*.tsx', 'src/modules/counter/counter-hmr.ts'],
     jsPlugins: [
       { name: 'anti-slop', specifier: './tools/oxlint/anti-slop/index.ts' },
       {

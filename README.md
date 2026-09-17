@@ -82,14 +82,44 @@ pnpm dev:node
 # or: npm run dev:node
 ```
 
-The click counter is Solid JSX (`src/modules/counter/counter.tsx`). Node cannot strip that, so compile it with Vite+ first (`vite-plugin-solid`, not the `tsx` package):
+The click counter is Solid JSX (`src/modules/counter/counter-view.tsx`, bundled from `counter.tsx`). Node cannot strip that, so compile it with Vite+ first (`vite-plugin-solid`, not the `tsx` package):
 
 ```sh
 vp build
 # or: pnpm build:counter
 ```
 
-That writes `src/modules/counter/dist/counter.js`, which `GET /counter.js` serves. Then Node runs `src/index.ts` directly (`--watch` in dev). Production-style (no watch): `pnpm start:node`. Both pass `--env-file=.env`. Server TypeScript stays erasable (no enums, namespaces, or parameter properties).
+That writes `src/modules/counter/dist/counter.js`, which `GET /counter.js` serves. Then Node runs `src/index.ts` directly (`--watch` in `pnpm dev`). Production-style (no watch): `pnpm start:node`. Both pass `--env-file=.env`. Server TypeScript stays erasable (no enums, namespaces, or parameter properties).
+
+`pnpm dev` and `pnpm dev:node` use `node --watch`. That restarts the Node process when server files change. It is not HMR. The browser still loads `/counter.js` from the last `vp build`.
+
+#### Run the click counter with HMR
+
+Two DEV setups transform Solid JSX for the browser. `pnpm start` and `pnpm start:node` do not start Vite.
+
+**In-process Vite.** Vite `createServer` runs in middleware mode on the same Node `http.Server` as Elysia. There is no second listen port.
+
+```sh
+PORT=43191 pnpm dev:hmr
+```
+
+Open `http://127.0.0.1:43191/counter`. The page imports `/src/modules/counter/counter-hmr.ts` from this origin, not `/counter.js`. Edit `src/modules/counter/counter-view.tsx` and the browser should update without a full reload.
+
+**Sibling Vite process.** Start Vite on 43192, then proxy Vite module URLs and the HMR websocket through Elysia.
+
+```sh
+pnpm dev:hmr:vite
+```
+
+In a second terminal:
+
+```sh
+PORT=43191 pnpm dev:hmr:proxy
+```
+
+Open `http://127.0.0.1:43191/counter`, not port 43192. On this Vite+ build, `/@vite/client` sets `hmrPort` to `null`, so the browser opens `ws://<page-host>:<page-port>/__vite_hmr` through the Elysia proxy. `server.hmr.clientPort` is not required.
+
+Production is unchanged. Run `vp build`, then `pnpm start:node`. `GET /counter` loads `/counter.js`.
 
 ### Bun
 
@@ -132,11 +162,11 @@ src/
   decode-response-json.ts  # Effect Schema decoders for JSON text and Response.json()
   plugins/openapi.ts       # @elysiajs/openapi (Scalar at /openapi)
   modules/health/          # local health controller + TypeBox model
-  modules/counter/         # lift-html/solid click counter (Solid JSX + HTML shell)
+  modules/counter/         # lift-html/solid click counter (Solid JSX + HTML shell + optional Vite HMR)
   modules/relay/           # relay WebSocket round-trip
   specter/                 # in-process recordPair + pairedClientsQuery
 vite.config.ts             # Vite+ `vp check` and `vp build` of the Solid JSX counter
-tsconfig.counter.json      # jsxImportSource solid-js for counter.tsx
+tsconfig.counter.json      # jsxImportSource solid-js for counter JSX entries
 tools/oxlint/anti-slop/
 .github/workflows/         # gha-ts source + generated YAML
 
