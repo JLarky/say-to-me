@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, it } from 'node:test'
 import { fileURLToPath } from 'node:url'
@@ -74,5 +76,24 @@ describe('bin/say-to-me2', () => {
 
     assert.equal(result.status, 1)
     assert.match(result.stderr, /unknown command: status/)
+  })
+
+  it('resolves src/cli.ts through a .bin-style symlink', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'say-to-me2-bin-'))
+
+    const shim = join(dir, '.bin', 'say-to-me2')
+
+    try {
+      mkdirSync(join(dir, '.bin'))
+      symlinkSync(binPath, shim)
+
+      const result = spawnSync(shim, ['--help'], { encoding: 'utf8' })
+
+      assert.equal(result.status, 0, result.stderr)
+      assert.equal(result.stdout, `${cliUsage}\n`)
+      assert.equal(result.stderr, '')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
