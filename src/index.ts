@@ -16,5 +16,6 @@ app.listen(
     console.log(`health   http://${host}:${port}/health`)
     console.log(`relay    http://${host}:${port}/relay`)
     console.log(`openapi  http://${host}:${port}/openapi`)
+    console.log(`counter  http://${host}:${port}/counter`)
   },
 )

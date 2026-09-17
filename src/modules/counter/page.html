@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Click counter · say-to-me2</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f4f1ea;
+        --ink: #1c1915;
+        --muted: #5c564c;
+        --card: #fffcf7;
+        --line: #d9d0c3;
+        --accent: #0f6e56;
+        --accent-ink: #f7fff9;
+        --shadow: 0 18px 40px rgb(28 25 21 / 8%);
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #161411;
+          --ink: #f4efe6;
+          --muted: #b7b0a4;
+          --card: #211e1a;
+          --line: #3a342c;
+          --accent: #5dcaa8;
+          --accent-ink: #10241c;
+          --shadow: 0 18px 40px rgb(0 0 0 / 35%);
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        font-family:
+          'Iowan Old Style', Palatino, 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+        background:
+          radial-gradient(1200px 600px at 10% -10%, rgb(15 110 86 / 12%), transparent), var(--bg);
+        color: var(--ink);
+      }
+
+      main {
+        width: min(28rem, calc(100% - 2rem));
+        margin: 0 auto;
+        padding: max(2rem, env(safe-area-inset-top)) 0 max(2rem, env(safe-area-inset-bottom));
+        display: grid;
+        gap: 1.25rem;
+        align-content: center;
+        min-height: 100dvh;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(1.75rem, 5vw, 2.25rem);
+        letter-spacing: -0.03em;
+      }
+
+      .lede {
+        margin: 0;
+        color: var(--muted);
+        font-size: 1.05rem;
+        line-height: 1.45;
+      }
+
+      say-to-me2-counter {
+        display: grid;
+        grid-template-columns: 3.5rem 1fr 3.5rem;
+        gap: 0.75rem;
+        align-items: center;
+        padding: 1.25rem;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 1.25rem;
+        box-shadow: var(--shadow);
+      }
+
+      say-to-me2-counter output {
+        font-variant-numeric: tabular-nums;
+        font-size: clamp(2.5rem, 10vw, 3.5rem);
+        text-align: center;
+        line-height: 1;
+      }
+
+      say-to-me2-counter button {
+        min-width: 3.5rem;
+        min-height: 3.5rem;
+        border: 0;
+        border-radius: 999px;
+        background: var(--accent);
+        color: var(--accent-ink);
+        font: inherit;
+        font-size: 1.75rem;
+        cursor: pointer;
+      }
+
+      say-to-me2-counter button:disabled {
+        opacity: 0.45;
+        cursor: wait;
+      }
+
+      say-to-me2-counter button:focus-visible {
+        outline: 3px solid var(--ink);
+        outline-offset: 3px;
+      }
+
+      .hint {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Click counter</h1>
+      <p class="lede">
+        Served by this say-to-me2 process. The count lives in the tab, driven by a
+        <a href="https://lift-html.js.org/examples/solid-counter/">lift-html/solid</a>
+        custom element.
+      </p>
+      <say-to-me2-counter>
+        <button type="button" data-dec disabled aria-label="Decrease count">−</button>
+        <output aria-live="polite">0</output>
+        <button type="button" data-inc disabled aria-label="Increase count">+</button>
+      </say-to-me2-counter>
+      <p class="hint">Plus and minus. Nothing is stored on the server.</p>
+    </main>
+    <script type="module">
+      import { liftSolid } from 'https://esm.sh/@lift-html/solid@0.0.6'
+      import { createEffect, createSignal } from 'https://esm.sh/solid-js'
+
+      liftSolid('say-to-me2-counter', {
+        init() {
+          const dec = this.querySelector('[data-dec]')
+          const inc = this.querySelector('[data-inc]')
+          const output = this.querySelector('output')
+          if (
+            !(dec instanceof HTMLButtonElement) ||
+            !(inc instanceof HTMLButtonElement) ||
+            !output
+          ) {
+            throw new Error('<say-to-me2-counter> needs decrease, increase, and an output')
+          }
+          dec.disabled = false
+          inc.disabled = false
+          const [count, setCount] = createSignal(0)
+          dec.onclick = () => setCount((n) => n - 1)
+          inc.onclick = () => setCount((n) => n + 1)
+          createEffect(() => {
+            output.textContent = String(count())
+          })
+        },
+      })
+    </script>
+  </body>
+</html>
