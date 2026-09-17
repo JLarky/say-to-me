@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+wrapper="${BASH_SOURCE[0]}"
+while [[ -L "$wrapper" ]]; do
+  wrapper_dir="$(cd "$(dirname "$wrapper")" && pwd)"
+  wrapper="$(readlink "$wrapper")"
+  if [[ "$wrapper" != /* ]]; then
+    wrapper="$wrapper_dir/$wrapper"
+  fi
+done
+
+root="$(cd "$(dirname "$wrapper")/.." && pwd)"
+cli="$root/src/cli.ts"
+
+node_args=()
+if [[ -f .env ]]; then
+  node_args+=(--env-file=.env)
+elif [[ -f "$root/.env" ]]; then
+  node_args+=(--env-file="$root/.env")
+fi
+
+if [[ ${#node_args[@]} -gt 0 ]]; then
+  exec node "${node_args[@]}" "$cli" "$@"
+else
+  exec node "$cli" "$@"
+fi
