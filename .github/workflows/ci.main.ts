@@ -26,6 +26,7 @@ const wf = workflow({
           run: 'for f in .github/workflows/*.main.ts; do node "$f"; done\ngit diff --exit-code .github/workflows/',
         },
         { run: "vp check" },
+        { run: "vp build" },
         { run: "vp run test" },
         { run: "vp run test:bun" },
       ],

@@ -12,7 +12,8 @@ There is no auth, database, or extra process. The live product today is still th
 | `GET /relay`        | WebSocket round-trip: e2ee_hello plus a random string echoed through the relay |
 | `GET /openapi`      | Scalar UI for the generated OpenAPI docs                                       |
 | `GET /openapi/json` | Raw OpenAPI JSON                                                               |
-| `GET /counter`      | HTML click counter: lift-html/solid custom element in this process             |
+| `GET /counter`      | HTML click counter: lift-html/solid custom element written in Solid JSX        |
+| `GET /counter.js`   | Vite+ (`vp build`) bundle of `src/modules/counter/counter.tsx`                 |
 | `GET /`             | Pointers to health, relay, docs, and the counter                               |
 
 Default listen address: `http://127.0.0.1:43141` (`HOST` / `PORT` override via the process environment). Bind is `0.0.0.0` so both local and VM preview work. App code does not load `.env` files; use the shell or native Bun/Node env loading.
@@ -81,7 +82,44 @@ pnpm dev:node
 # or: npm run dev:node
 ```
 
-Node runs `src/index.ts` directly (`--watch` in dev). Production-style (no watch): `pnpm start:node`. Both pass `--env-file=.env`. TypeScript stays erasable (no enums, namespaces, or parameter properties).
+The click counter is Solid JSX (`src/modules/counter/counter-view.tsx`, bundled from `counter.tsx`). Node cannot strip that, so compile it with Vite+ first (`vite-plugin-solid`, not the `tsx` package):
+
+```sh
+vp build
+# or: pnpm build:counter
+```
+
+That writes `src/modules/counter/dist/counter.js`, which `GET /counter.js` serves. Then Node runs `src/index.ts` directly (`--watch` in `pnpm dev`). Production-style (no watch): `pnpm start:node`. Both pass `--env-file=.env`. Server TypeScript stays erasable (no enums, namespaces, or parameter properties).
+
+`pnpm dev` and `pnpm dev:node` use `node --watch`. That restarts the Node process when server files change. It is not HMR. The browser still loads `/counter.js` from the last `vp build`.
+
+#### Run the click counter with HMR
+
+Two DEV setups transform Solid JSX for the browser. `pnpm start` and `pnpm start:node` do not start Vite.
+
+**In-process Vite.** Vite `createServer` runs in middleware mode on the same Node `http.Server` as Elysia. There is no second listen port.
+
+```sh
+PORT=43191 pnpm dev:hmr
+```
+
+Open `http://127.0.0.1:43191/counter`. The page imports `/src/modules/counter/counter-hmr.ts` from this origin, not `/counter.js`. Edit `src/modules/counter/counter-view.tsx` and the browser should update without a full reload.
+
+**Sibling Vite process.** Start Vite on 43192, then proxy Vite module URLs and the HMR websocket through Elysia.
+
+```sh
+pnpm dev:hmr:vite
+```
+
+In a second terminal:
+
+```sh
+PORT=43191 pnpm dev:hmr:proxy
+```
+
+Open `http://127.0.0.1:43191/counter`, not port 43192. On this Vite+ build, `/@vite/client` sets `hmrPort` to `null`, so the browser opens `ws://<page-host>:<page-port>/__vite_hmr` through the Elysia proxy. `server.hmr.clientPort` is not required.
+
+Production is unchanged. Run `vp build`, then `pnpm start:node`. `GET /counter` loads `/counter.js`.
 
 ### Bun
 
@@ -106,11 +144,12 @@ Open `http://127.0.0.1:43141/counter` for the lift-html/solid click counter. Ope
 
 ```sh
 pnpm check         # vp check: format, lint, typecheck
+vp build           # Solid JSX → src/modules/counter/dist/counter.js
 pnpm test          # Node (node --test)
 pnpm test:bun      # Bun's test runner
 ```
 
-GitHub Actions uses [gha-ts](https://github.com/JLarky/gha-ts) and, like `main`, runs `vp check` (not `pnpm lint`) on pushes to `new` and pull requests targeting `new`. Tests stay on `vp run test` and `vp run test:bun`. After editing `.github/workflows/*.main.ts`, run `node .github/workflows/ci.main.ts` and commit the generated YAML.
+GitHub Actions uses [gha-ts](https://github.com/JLarky/gha-ts) and, like `main`, runs `vp check` (not `pnpm lint`) on pushes to `new` and pull requests targeting `new`. It also runs `vp build` so the counter script exists, then `vp run test` and `vp run test:bun`. After editing `.github/workflows/*.main.ts`, run `node .github/workflows/ci.main.ts` and commit the generated YAML.
 
 ## Layout
 
@@ -123,10 +162,11 @@ src/
   decode-response-json.ts  # Effect Schema decoders for JSON text and Response.json()
   plugins/openapi.ts       # @elysiajs/openapi (Scalar at /openapi)
   modules/health/          # local health controller + TypeBox model
-  modules/counter/         # lift-html/solid click counter HTML
+  modules/counter/         # lift-html/solid click counter (Solid JSX + HTML shell + optional Vite HMR)
   modules/relay/           # relay WebSocket round-trip
   specter/                 # in-process recordPair + pairedClientsQuery
-vite.config.ts             # Vite+ `vp check` (fmt, lint, typecheck)
+vite.config.ts             # Vite+ `vp check` and `vp build` of the Solid JSX counter
+tsconfig.counter.json      # jsxImportSource solid-js for counter JSX entries
 tools/oxlint/anti-slop/
 .github/workflows/         # gha-ts source + generated YAML
 

@@ -16,5 +16,6 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["node"]
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["src", "vite.config.ts"],
+  "exclude": ["src/**/*.tsx", "src/modules/counter/counter-hmr.ts", "src/modules/counter/dist"]
 }

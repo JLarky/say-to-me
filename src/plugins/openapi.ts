@@ -6,7 +6,7 @@ export const openapiPlugin = openapi({
       title: 'say-to-me2',
       version: '0.1.0',
       description:
-        'Local Elysia service. Health, OpenAPI docs, a relay WebSocket round-trip, and a lift-html/solid click counter. RELAY_URL is required at boot.',
+        'Local Elysia service. Health, OpenAPI docs, a relay WebSocket round-trip, and a lift-html/solid click counter in Solid JSX. RELAY_URL is required at boot.',
     },
     tags: [
       {
