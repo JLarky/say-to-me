@@ -1,4 +1,5 @@
 import { Elysia, t } from 'elysia'
+import { counter } from './modules/counter/index.ts'
 import { health } from './modules/health/index.ts'
 import { createRelay } from './modules/relay/index.ts'
 import type { RelayRoundTripResult } from './modules/relay/round-trip.ts'
@@ -13,6 +14,7 @@ export function createApp(
   return new Elysia(options)
     .use(openapiPlugin)
     .use(health)
+    .use(counter)
     .use(createRelay(roundTrip))
     .get(
       '/',
@@ -21,6 +23,7 @@ export function createApp(
         health: '/health',
         relay: '/relay',
         openapi: '/openapi',
+        counter: '/counter',
       }),
       {
         response: {
@@ -29,12 +32,14 @@ export function createApp(
             health: t.String(),
             relay: t.String(),
             openapi: t.String(),
+            counter: t.String(),
           }),
         },
         detail: {
           tags: ['ops'],
           summary: 'Service index',
-          description: 'Pointers to health, the Paseo relay round-trip, and OpenAPI documentation.',
+          description:
+            'Pointers to health, the relay round-trip, OpenAPI documentation, and the click counter.',
         },
       },
     )

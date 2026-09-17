@@ -12,7 +12,8 @@ There is no auth, database, or extra process. The live product today is still th
 | `GET /relay`        | WebSocket round-trip: e2ee_hello plus a random string echoed through the relay |
 | `GET /openapi`      | Scalar UI for the generated OpenAPI docs                                       |
 | `GET /openapi/json` | Raw OpenAPI JSON                                                               |
-| `GET /`             | Pointers to health, relay, and docs                                            |
+| `GET /counter`      | HTML click counter: lift-html/solid custom element in this process             |
+| `GET /`             | Pointers to health, relay, docs, and the counter                               |
 
 Default listen address: `http://127.0.0.1:43141` (`HOST` / `PORT` override via the process environment). Bind is `0.0.0.0` so both local and VM preview work. App code does not load `.env` files; use the shell or native Bun/Node env loading.
 
@@ -101,7 +102,7 @@ curl -s http://127.0.0.1:43141/relay
 curl -s http://127.0.0.1:43141/openapi/json | head
 ```
 
-Open `http://127.0.0.1:43141/openapi` for the docs UI.
+Open `http://127.0.0.1:43141/counter` for the lift-html/solid click counter. Open `http://127.0.0.1:43141/openapi` for the docs UI.
 
 ```sh
 pnpm check         # vp check: format, lint, typecheck
@@ -122,6 +123,7 @@ src/
   decode-response-json.ts  # Effect Schema decoders for JSON text and Response.json()
   plugins/openapi.ts       # @elysiajs/openapi (Scalar at /openapi)
   modules/health/          # local health controller + TypeBox model
+  modules/counter/         # lift-html/solid click counter HTML
   modules/relay/           # relay WebSocket round-trip
   specter/                 # in-process recordPair + pairedClientsQuery
 vite.config.ts             # Vite+ `vp check` (fmt, lint, typecheck)

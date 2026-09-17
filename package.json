@@ -2,7 +2,7 @@
   "name": "say-to-me2",
   "version": "0.1.0",
   "private": true,
-  "description": "Local Elysia HTTP service: health, OpenAPI, a relay WebSocket round-trip, and an in-process Specter paired-clients slice.",
+  "description": "Local Elysia HTTP service: health, OpenAPI, a relay WebSocket round-trip, an in-process Specter paired-clients slice, and a lift-html/solid click counter.",
   "bin": {
     "say-to-me2": "./bin/say-to-me2"
   },
