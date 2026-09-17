@@ -1,14 +1,6 @@
 import { render } from 'solid-js/web'
 import { CounterPage, registerCounter } from './counter-view.tsx'
 
-type CounterHotData = {
-  dispose?: () => void
-}
-
-function hotDispose(data: CounterHotData) {
-  return data.dispose
-}
-
 registerCounter()
 
 const root = document.getElementById('app')
@@ -19,9 +11,7 @@ if (!root) {
 
 const hot = import.meta.hot
 
-if (hot) {
-  hotDispose(hot.data)?.()
-}
+hot?.data.dispose?.()
 
 const dispose = render(CounterPage, root)
 

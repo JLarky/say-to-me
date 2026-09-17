@@ -1,5 +1,9 @@
-import { request as httpRequest, type IncomingMessage, type ServerResponse } from 'node:http'
-import type { Server as HttpServer } from 'node:http'
+import {
+  request as httpRequest,
+  type IncomingMessage,
+  type Server as HttpServer,
+  type ServerResponse,
+} from 'node:http'
 import type { Duplex } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
@@ -15,7 +19,7 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../..')
 
 type CounterHmr = Exclude<CounterDev, { kind: 'prod' }>
 
-type UpgradeListener = (req: IncomingMessage, socket: Duplex, head: Buffer) => void
+type ServerListener = ReturnType<HttpServer['listeners']>[number]
 
 export async function attachCounterHmr(counterDev: CounterHmr, listenInfo: CounterHmrListenInfo) {
   const httpServer = readNodeHttpServer(listenInfo)
@@ -35,9 +39,7 @@ function requestPathname(url: string | undefined) {
 
 function isViteDevPath(pathname: string) {
   return (
-    pathname.startsWith('/@vite') ||
-    pathname.startsWith('/@fs') ||
-    pathname.startsWith('/@id') ||
+    pathname.startsWith('/@') ||
     pathname.startsWith('/src/') ||
     pathname.startsWith('/node_modules/') ||
     pathname === viteHmrPath ||
@@ -190,13 +192,29 @@ function putViteHttpInFront(
   })
 }
 
+function putViteUpgradeInFront(httpServer: HttpServer, before: ServerListener[]) {
+  const after = httpServer.listeners('upgrade').slice()
+  const viteUpgrade = after.filter((listener) => !before.includes(listener))
+
+  httpServer.removeAllListeners('upgrade')
+  httpServer.on('upgrade', (req, socket, head) => {
+    const chosen = isViteDevPath(requestPathname(req.url)) ? viteUpgrade : before
+
+    for (const listener of chosen) {
+      listener.call(httpServer, req, socket, head)
+    }
+  })
+}
+
 async function attachViteMiddleware(httpServer: HttpServer) {
+  const elysiaUpgrade = httpServer.listeners('upgrade').slice()
+
   const vite = await createServer({
     configFile: join(repoRoot, 'vite.config.ts'),
     appType: 'custom',
     server: {
-      middlewareMode: true,
-      hmr: {
+      middlewareMode: { server: httpServer },
+      ws: {
         path: viteHmrPath,
         server: httpServer,
       },
@@ -206,6 +224,7 @@ async function attachViteMiddleware(httpServer: HttpServer) {
   putViteHttpInFront(httpServer, (req, res, next) => {
     vite.middlewares(req, res, next)
   })
+  putViteUpgradeInFront(httpServer, elysiaUpgrade)
 }
 
 function attachViteProxy(httpServer: HttpServer, origin: string) {
@@ -229,9 +248,7 @@ function attachViteProxy(httpServer: HttpServer, origin: string) {
     }
 
     for (const listener of elysiaUpgrade) {
-      // SAFETY: Node's upgrade listeners receive (req, socket, head) on this http.Server.
-      const upgrade = listener as UpgradeListener
-      upgrade.call(httpServer, req, socket, head)
+      listener.call(httpServer, req, socket, head)
     }
   })
 }

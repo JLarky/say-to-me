@@ -22,7 +22,7 @@ export default defineConfig({
   server: {
     cors: true,
     strictPort: true,
-    hmr: {
+    ws: {
       path: '/__vite_hmr',
     },
   },

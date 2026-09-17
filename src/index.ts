@@ -32,7 +32,7 @@ app.listen(
     }
 
     const { attachCounterHmr } = await import('./modules/counter/vite-dev.ts')
-    // SAFETY: @elysiajs/node spreads the srvx server into the listen callback as node.server and raw.node.server.
+    // SAFETY: @elysiajs/node spreads srvx as node.server and raw.node.server on this callback.
     await attachCounterHmr(counterDev, serverInfo as CounterHmrListenInfo)
   },
 )
